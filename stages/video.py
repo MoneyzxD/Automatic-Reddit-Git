@@ -163,7 +163,13 @@ class VideoRenderer:
         self.width    = config.get("width", 1080)
         self.height   = config.get("height", 1920)
         self.bg_color = config.get("background_color", "#0D0D0D")
-        self.bg_file  = Path(config.get("background_file", ""))
+        # ATENCAO: Path("") vira Path("."), que e truthy E existe (e o
+        # diretorio atual). Sem este guarda, background_file vazio no
+        # settings.yaml fazia o FFmpeg tentar abrir um DIRETORIO como video
+        # ("Error opening input: Is a directory", codigo 235) e derrubava o
+        # render para o fallback de fundo solido — perdendo o card do hook.
+        _bg_file_cfg  = str(config.get("background_file", "") or "").strip()
+        self.bg_file  = Path(_bg_file_cfg) if _bg_file_cfg else None
         self.bg_dir   = Path(config.get("background_dir", "background/Shorts"))
         self.preset   = config.get("preset", "fast")
         # Provider de background: decide se o arquivo vem da pasta local ou
@@ -400,7 +406,7 @@ class VideoRenderer:
         crf, fps, audio_bitrate = _pick_fingerprint(self.config)
 
         bg_video = self._select_background()
-        if bg_video is None and self.bg_file and self.bg_file.exists():
+        if bg_video is None and self.bg_file and self.bg_file.is_file():
             logger.info("Usando background_file do settings: %s", self.bg_file.name)
             bg_video = self.bg_file
 
@@ -462,12 +468,16 @@ class VideoRenderer:
                     hook_duration  = 0.0,
                 )
 
-            # Fallback 2: fundo sólido
+            # Fallback 2: fundo sólido — PRESERVANDO o card do hook.
+            # Antes o card era descartado aqui, entao um erro de background
+            # custava tambem a abertura do video (visto em producao: video
+            # saiu so com fundo preto, sem card).
             if bg_video:
-                logger.warning("Tentando fallback com fundo sólido...")
+                logger.warning("Tentando fallback com fundo sólido (mantendo card)...")
                 cmd_fb    = self._build_color_command(
                     audio_path, subtitle_path, output_path,
                     color, w, h, fps, crf, audio_bitrate,
+                    card_path=card_path, hook_duration=hook_duration,
                 )
                 result_fb = subprocess.run(
                     cmd_fb, capture_output=True, text=True, timeout=600,

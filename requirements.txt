@@ -25,8 +25,13 @@ edge-tts>=6.1.9          # Microsoft Edge TTS gratuito (neural, sem auth)
 gTTS>=2.4.0              # Google TTS gratuito (fallback)
 
 # ── Legendas ─────────────────────────────────────────────────────────────
-openai-whisper>=20231117 # transcrição local gratuita (OpenAI)
-stable-ts>=2.14.0        # alinhamento preciso por palavra
+# faster-whisper e o motor PRINCIPAL de timing (stages/word_timing.py).
+# Sem ele o pipeline cai para estimativa por silabas e as legendas ficam
+# DESSINCRONIZADAS do audio — falha silenciosa, o video sai "pronto" mas
+# com legenda fora de hora (aconteceu na primeira execucao no GitHub Actions).
+faster-whisper>=1.0.0    # timing word-level real (CTranslate2, leve, sem torch)
+openai-whisper>=20231117 # fallback secundario em stages/subtitle.py
+stable-ts>=2.14.0        # alinhamento preciso por palavra (fallback)
 pysrt>=1.1.2             # manipulação de arquivos SRT
 
 # ── Vídeo ────────────────────────────────────────────────────────────────
@@ -46,6 +51,14 @@ Pillow>=10.0.0           # geração de imagens (gratuito)
 python-dotenv>=1.0.0     # carrega variáveis de ambiente do .env
 loguru>=0.7.0            # logging avançado (opcional — substitui utils/logger.py)
 APScheduler>=3.10.0      # agendamento diário automático (scheduler.py)
+pytz>=2024.1             # fusos horarios das janelas de postagem (scheduler/scheduling.py)
+
+# ── Notificacoes Telegram ────────────────────────────────────────────────
+# Sem este pacote, TODO alerta do pipeline vira no-op silencioso: avisos de
+# validacao insistente, resumo de execucao, alerta de fallback e o kit de
+# postagem do TikTok simplesmente nao saem (visto na primeira execucao no
+# GitHub Actions: "python-telegram-bot nao instalado").
+python-telegram-bot>=20.7
 
 # ────────────────────────────────────────────────────────────────────────
 # OPCIONAL — GPU para Whisper mais rápido

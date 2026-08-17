@@ -647,7 +647,11 @@ class TitleGenerator:
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.85,
-                max_tokens=150,
+                # 400 e nao 150: os modelos gpt-oss gastam parte do orcamento
+                # "pensando" antes de escrever. Com 150 o raciocinio consumia
+                # tudo, o conteudo voltava vazio e o titulo caia para regras
+                # (visto em producao: titulo cortado "por interromper...").
+                max_tokens=400,
             )
             title = self._clean_title(resp.choices[0].message.content.strip())
             if title and len(title) > 3:
@@ -679,7 +683,11 @@ class TitleGenerator:
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.88,
-                max_tokens=150,
+                # 400 e nao 150: os modelos gpt-oss gastam parte do orcamento
+                # "pensando" antes de escrever. Com 150 o raciocinio consumia
+                # tudo, o conteudo voltava vazio e o titulo caia para regras
+                # (visto em producao: titulo cortado "por interromper...").
+                max_tokens=400,
             )
             hook = self._clean_title(
                 resp.choices[0].message.content.strip(),
@@ -715,7 +723,11 @@ class TitleGenerator:
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.85,
-                max_tokens=150,
+                # 400 e nao 150: os modelos gpt-oss gastam parte do orcamento
+                # "pensando" antes de escrever. Com 150 o raciocinio consumia
+                # tudo, o conteudo voltava vazio e o titulo caia para regras
+                # (visto em producao: titulo cortado "por interromper...").
+                max_tokens=400,
             )
             closing = self._clean_title(
                 resp.choices[0].message.content.strip(),
