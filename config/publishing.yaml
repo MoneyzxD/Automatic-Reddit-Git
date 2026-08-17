@@ -1,0 +1,258 @@
+
+# publishing.yaml
+# Configuracao completa do sistema de publicacao automatizada.
+# Separado do settings.yaml para manter responsabilidades claras:
+#   settings.yaml   → pipeline de geracao de conteudo
+#   publishing.yaml → scheduler, upload, anti-block, crescimento
+
+# ── CONFIGURACAO GLOBAL ───────────────────────────────────────────────────────
+
+global:
+  enabled: false                  # true quando pronto para producao
+  platforms:
+    - youtube
+    - tiktok
+  delete_after_upload: true       # apaga video local apos upload confirmado
+  retry_attempts: 3               # tentativas por plataforma em caso de falha
+  retry_delay_minutes: 30         # espera entre tentativas (backoff fixo)
+  queue_check_interval_minutes: 5 # frequencia de verificacao da fila
+
+# ── CTA FIXO POR IDIOMA ───────────────────────────────────────────────────────
+# Aparece na descrição de todos os vídeos após o resumo da história.
+
+channel_cta:
+  pt: "Inscreva-se no canal e ative o sino para não perder nenhuma história!"
+  en: "Subscribe and hit the bell so you never miss a story!"
+  es: "¡Suscríbete y activa la campana para no perderte ninguna historia!"
+
+# ── CANAIS POR IDIOMA ─────────────────────────────────────────────────────────
+
+channels:
+  pt:
+    enabled: true
+    timezone: "America/Sao_Paulo"
+    account_created: "2026-04-27"   # usado pelo growth_plan automatico
+    posting_windows_by_weekday:
+      mon: { start: "11:00", end: "21:00" }
+      tue: { start: "12:00", end: "22:00" }
+      wed: { start: "10:00", end: "20:00" }
+      thu: { start: "13:00", end: "22:00" }
+      fri: { start: "11:00", end: "23:00" }
+      sat: { start: "10:00", end: "22:00" }
+      sun: { start: "12:00", end: "21:00" }
+    max_uploads_per_day: 1          # sobrescrito pelo growth_plan
+    min_interval_minutes: 360       # sobrescrito pelo growth_plan
+    random_delay_minutes: 30        # delay aleatorio anti-padrao
+    youtube:
+      enabled: true
+      channel_id: ""                # preencher apos criar canal
+      credentials_file: "secrets/youtube_credentials.json"  # um client OAuth so, compartilhado; cada idioma tem seu proprio token
+    tiktok:
+      enabled: true
+      account_id: ""                # preencher apos criar conta
+      credentials_file: "secrets/tiktok_pt.json"
+
+  en:
+    enabled: true
+    timezone: "America/New_York"
+    account_created: "2026-04-27"
+    posting_windows_by_weekday:
+      mon: { start: "10:00", end: "22:00" }
+      tue: { start: "11:00", end: "22:00" }
+      wed: { start: "10:00", end: "21:00" }
+      thu: { start: "12:00", end: "22:00" }
+      fri: { start: "10:00", end: "23:00" }
+      sat: { start: "11:00", end: "22:00" }
+      sun: { start: "12:00", end: "21:00" }
+    max_uploads_per_day: 1
+    min_interval_minutes: 360
+    random_delay_minutes: 30
+    youtube:
+      enabled: true
+      channel_id: ""
+      credentials_file: "secrets/youtube_credentials.json"
+    tiktok:
+      enabled: true
+      account_id: ""
+      credentials_file: "secrets/tiktok_en.json"
+
+  es:
+    enabled: true
+    timezone: "Europe/Madrid"
+    account_created: "2026-04-27"
+    posting_windows_by_weekday:
+      mon: { start: "11:00", end: "22:00" }
+      tue: { start: "12:00", end: "22:00" }
+      wed: { start: "11:00", end: "21:00" }
+      thu: { start: "13:00", end: "23:00" }
+      fri: { start: "11:00", end: "23:00" }
+      sat: { start: "10:00", end: "22:00" }
+      sun: { start: "12:00", end: "21:00" }
+    max_uploads_per_day: 1
+    min_interval_minutes: 360
+    random_delay_minutes: 30
+    youtube:
+      enabled: true
+      channel_id: ""
+      credentials_file: "secrets/youtube_credentials.json"
+    tiktok:
+      enabled: true
+      account_id: ""
+      credentials_file: "secrets/tiktok_es.json"
+
+# ── PLANO DE CRESCIMENTO PROGRESSIVO ─────────────────────────────────────────
+# Aplicado automaticamente baseado em account_created de cada canal.
+# O runner.py calcula a semana atual e aplica os limites corretos.
+
+growth_plan:
+  enabled: true
+  week_1:    { max_uploads_per_day: 1, min_interval_minutes: 360 }
+  week_2:    { max_uploads_per_day: 1, min_interval_minutes: 240 }
+  week_3:    { max_uploads_per_day: 2, min_interval_minutes: 180 }
+  week_4:    { max_uploads_per_day: 2, min_interval_minutes: 120 }
+  week_5_plus: { max_uploads_per_day: 3, min_interval_minutes: 90 }
+
+# ── ANTI-BLOCK — CAMADA 2: FINGERPRINT DE VIDEO ───────────────────────────────
+# Variacoes aplicadas no video.py a cada renderizacao.
+# Imperceptiveis visualmente mas geram arquivos com fingerprint unico.
+
+video_fingerprint_variation:
+  enabled: true
+  crf_range: [21, 25]                         # qualidade visual identica
+  fps_options: [29, 30]                       # alterna entre 29 e 30fps
+  audio_bitrate_options: ["188k", "192k", "196k"]
+  remove_exif: true                           # remove metadata do FFmpeg
+
+# ── ANTI-BLOCK — CAMADA 3: HASHTAGS ──────────────────────────────────────────
+# Pool por idioma. O metadata.py sorteia pick_from_rotation hashtags
+# diferentes a cada video, combinadas com as core (sempre presentes).
+
+hashtag_pools:
+  pt:
+    core: ["#shorts", "#reddit"]
+    rotation:
+      - "#historias"
+      - "#desabafo"
+      - "#familia"
+      - "#drama"
+      - "#relacionamentos"
+      - "#conselho"
+      - "#viral"
+      - "#storytime"
+      - "#redditstories"
+      - "#vidareal"
+      - "#reflexao"
+      - "#verdade"
+      - "#conflito"
+      - "#limite"
+      - "#justica"
+    pick_from_rotation: 4
+
+  en:
+    core: ["#shorts", "#reddit"]
+    rotation:
+      - "#stories"
+      - "#family"
+      - "#drama"
+      - "#storytime"
+      - "#viral"
+      - "#redditstories"
+      - "#advice"
+      - "#relationships"
+      - "#confession"
+      - "#truth"
+      - "#aita"
+      - "#conflict"
+      - "#boundaries"
+      - "#realstory"
+      - "#justice"
+    pick_from_rotation: 4
+
+  es:
+    core: ["#shorts", "#reddit"]
+    rotation:
+      - "#historias"
+      - "#familia"
+      - "#drama"
+      - "#desahogo"
+      - "#viral"
+      - "#storytime"
+      - "#consejos"
+      - "#relaciones"
+      - "#verdad"
+      - "#reflexion"
+      - "#conflicto"
+      - "#limites"
+      - "#justicia"
+      - "#confesion"
+      - "#realidad"
+    pick_from_rotation: 4
+
+# ── ANTI-BLOCK — CAMADA 5: COMPORTAMENTO POS-UPLOAD ──────────────────────────
+# Apos upload confirmado, o uploader.py edita o video trocando 1 hashtag.
+# Simula comportamento humano — bots raramente editam apos publicar.
+
+post_upload_edit:
+  enabled: true
+  delay_hours_min: 2
+  delay_hours_max: 6
+  action: "rotate_one_hashtag"    # troca 1 hashtag do pool
+
+# ── PIPELINE JOB ─────────────────────────────────────────────────────────────
+# Horario em que o runner.py dispara o pipeline de geracao de conteudo.
+# Roda antes da janela de postagem para garantir videos prontos na fila.
+
+pipeline_job:
+  enabled: true
+  schedule_time: "06:00"          # horario local do servidor (UTC na Oracle)
+  languages: ["pt", "en", "es"]  # ordem de processamento
+  stories_per_run: 1              # historias por idioma por execucao
+
+# ── USER AGENTS PARA ROTACAO ──────────────────────────────────────────────────
+# Usados pelo uploader.py nas chamadas de API.
+
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) AppleWebKit/605.1.15 Safari/605.1.15"
+
+# ── THINK TIME ENTRE CHAMADAS API ────────────────────────────────────────────
+# Simula comportamento humano entre steps do upload.
+
+api_think_time:
+  min_seconds: 1.5
+  max_seconds: 4.0
+
+# ── TELEGRAM ─────────────────────────────────────────────────────────────────
+
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  chats:
+    pt: "${TELEGRAM_CHAT_ID_PTBR}"
+    en: "${TELEGRAM_CHAT_ID_EN}"
+    es: "${TELEGRAM_CHAT_ID_ES}"
+  max_notifications_per_day: 3
+  video_size_limit_mb: 45
+  fallback_to_link: true
+  base_url: "http://SEU_IP_ORACLE:8080"  # para fallback de link direto
+
+# ── TIKTOK ───────────────────────────────────────────────────────────────────
+
+tiktok:
+  enabled: true
+  api_enabled: false  # true quando API oficial for aprovada
+  posting_windows:
+    pt:
+      - "07:00-09:00"
+      - "12:00-14:00"
+      - "18:00-21:00"
+    en:
+      - "08:00-10:00"
+      - "13:00-15:00"
+      - "19:00-22:00"
+    es:
+      - "07:00-09:00"
+      - "12:00-14:00"
+      - "18:00-21:00"

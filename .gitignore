@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Dados gerados (grandes demais para git)
+data/raw/*.json
+data/audio/
+data/videos/
+data/exports/
+
+# Banco
+db/*.db
+
+# Configuração local
+.env
+config/local_*.yaml
+
+# Assets grandes
+assets/backgrounds/*.mp4
+assets/fonts/*.ttf
+
+# Logs
+data/logs/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# --- Claude Code ---
+.claude/settings.local.json
+
+# --- Segredos / credenciais (confirme se já não estão cobertos) ---
+.env
+.env.*
+secrets/
+db/pipeline.db
+
+# --- MIGRACAO PARA REPOSITORIO PUBLICO ---
+# Chaves e credenciais em qualquer lugar da arvore
+*.key
+*.pem
+*_credentials.json
+*_token*.json
+atalho_oracle.txt
+DOCUMENTOS/
+
+# Biblioteca de backgrounds (~15GB: Shorts 800MB + Big 15GB).
+# NAO versionar — os arquivos vivem fora do repositorio (ex: assets de
+# release) e sao baixados sob demanda. Apenas o manifesto com os NOMES
+# (config/backgrounds_manifest.json) fica versionado.
+background/
+
+# Artefatos gerados pelo pipeline
+data/thumbnails/
+data/subtitles/
+data/queue/*.json
+*.mp4
+*.mov
+test_card*.png

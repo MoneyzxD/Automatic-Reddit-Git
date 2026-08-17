@@ -1,0 +1,61 @@
+# ────────────────────────────────────────────────────────────────────────
+# Reddit Stories Pipeline — requirements.txt
+# Stack 100% gratuita
+# Instalar: pip install -r requirements.txt
+# ────────────────────────────────────────────────────────────────────────
+
+# ── Tradução (gratuito, sem API key)
+deep-translator>=1.11.4    # tradução PT/EN/ES via Google Translate (gratuito)
+
+# ── HTTP e extração ──────────────────────────────────────────────────────
+requests>=2.31.0         # Reddit JSON público (sem API key)
+pyyaml>=6.0              # leitura de configs YAML
+
+# ── Filtragem ────────────────────────────────────────────────────────────
+vaderSentiment>=3.3.2    # análise de sentimento (gratuito)
+better-profanity>=0.7.0  # detecção de profanidade (gratuito)
+
+# ── Adaptação e LLM ──────────────────────────────────────────────────────
+# Ollama roda localmente — baixe em https://ollama.ai
+# Sem dependência Python especial além de requests (já listado)
+jinja2>=3.1.0            # templates de metadados e scripts
+
+# ── Geração de voz ───────────────────────────────────────────────────────
+edge-tts>=6.1.9          # Microsoft Edge TTS gratuito (neural, sem auth)
+gTTS>=2.4.0              # Google TTS gratuito (fallback)
+
+# ── Legendas ─────────────────────────────────────────────────────────────
+openai-whisper>=20231117 # transcrição local gratuita (OpenAI)
+stable-ts>=2.14.0        # alinhamento preciso por palavra
+pysrt>=1.1.2             # manipulação de arquivos SRT
+
+# ── Vídeo ────────────────────────────────────────────────────────────────
+ffmpeg-python>=0.2.0     # wrapper Python para FFmpeg
+# ATENÇÃO: FFmpeg deve estar instalado no sistema:
+#   Linux : sudo apt install ffmpeg
+#   macOS : brew install ffmpeg
+#   Windows: https://ffmpeg.org/download.html
+
+# ── Thumbnails ───────────────────────────────────────────────────────────
+Pillow>=10.0.0           # geração de imagens (gratuito)
+
+# ── Banco de dados ───────────────────────────────────────────────────────
+# sqlite3 já vem com Python — sem dependência extra
+
+# ── Utilitários ──────────────────────────────────────────────────────────
+python-dotenv>=1.0.0     # carrega variáveis de ambiente do .env
+loguru>=0.7.0            # logging avançado (opcional — substitui utils/logger.py)
+APScheduler>=3.10.0      # agendamento diário automático (scheduler.py)
+
+# ────────────────────────────────────────────────────────────────────────
+# OPCIONAL — GPU para Whisper mais rápido
+# ────────────────────────────────────────────────────────────────────────
+# torch>=2.0.0           # descomente se tiver GPU CUDA
+# torchaudio>=2.0.0
+
+# ── LLM Naturalização e Detecção de Gênero ──────────────────────────────────
+groq>=0.4.0              # Groq API gratuita (llama3-70b) — pip install groq
+                         # Chave gratuita em: https://console.groq.com/keys
+
+# ── Duração de MP3 (fallback timestamps) ────────────────────────────────────
+mutagen>=1.47.0          # leitura de metadados de áudio

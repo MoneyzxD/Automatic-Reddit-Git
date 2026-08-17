@@ -1,0 +1,58 @@
+# subreddits.yaml — Subreddits organizados por categoria
+# Todos focados em histórias com alto engajamento e monetização segura
+
+categories:
+
+  relationships:
+    name: "Relacionamentos"
+    subreddits:
+      - r/AITAH
+      - r/AmItheAsshole
+      - r/relationship_advice
+      - r/TrueOffMyChest
+      - r/offmychest
+      - r/tifu
+    priority: 1
+
+  family:
+    name: "Família"
+    subreddits:
+      - r/EntitledParents
+      - r/raisedbynarcissists
+      - r/JUSTNOMIL
+      - r/JUSTNOFAMILY
+      - r/survivorsofabuse
+    priority: 2
+
+  revenge:
+    name: "Vingança / Justiça"
+    subreddits:
+      - r/ProRevenge
+      - r/MaliciousCompliance
+      - r/pettyrevenge
+      - r/NuclearRevenge
+      - r/legaladvice
+    priority: 2
+
+  confessions:
+    name: "Confissões"
+    subreddits:
+      - r/confessions
+      - r/SecretLife
+      - r/TrueOffMyChest
+    priority: 3
+
+  workplace:
+    name: "Trabalho"
+    subreddits:
+      - r/antiwork
+      - r/WorkplaceNarcissist
+      - r/talesfromtechsupport
+      - r/IDontWorkHereLady
+    priority: 3
+
+# Subreddits de histórias longas (acima de 500 palavras)
+long_story_subreddits:
+  - r/nosleep           # terror / suspense
+  - r/LetsNotMeet       # encontros perturbadores
+  - r/creepyencounters  # histórias reais assustadoras

@@ -1,0 +1,20 @@
+# hooks_pt.yaml — Templates de gancho emocional em português
+# Usar em thumbnails e primeiros 30s do vídeo
+
+dramatic:
+  - "Você não vai acreditar no que aconteceu..."
+  - "Minha vida mudou completamente naquele dia."
+  - "Nunca imaginei que algo assim pudesse acontecer comigo."
+  - "Eu precisava contar isso para alguém."
+  - "Essa foi a decisão mais difícil da minha vida."
+
+conflict:
+  - "Quando descobri a verdade, tudo fez sentido."
+  - "Ele achava que eu não sabia. Mas eu sabia."
+  - "Dei a ela uma última chance. Ela desperdiçou."
+  - "Tomei uma atitude que nunca esperaram."
+
+cliffhanger:
+  - "O que aconteceu depois disso me deixou em choque."
+  - "A resposta dele me deixou sem palavras."
+  - "Jamais imaginei que a história terminaria assim."

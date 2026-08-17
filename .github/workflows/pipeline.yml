@@ -1,0 +1,214 @@
+name: Pipeline de videos
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FASE 5 DA MIGRACAO — comeca MANUAL de proposito.
+#
+# O cron esta comentado no fim deste arquivo. Ative-o so depois que o disparo
+# manual (workflow_dispatch) tiver publicado um video de ponta a ponta com
+# sucesso. Ligar o agendamento antes disso significa descobrir problemas em
+# producao, sem ninguem olhando.
+#
+# GERACAO E PUBLICACAO RODAM NO MESMO JOB, de proposito: o runner e efemero e
+# o arquivo de video so existe enquanto o job vive. Quem desacopla o horario
+# de publicacao do horario de execucao e o publishAt da API do YouTube
+# (scheduler/scheduling.py), nao o agendador do GitHub.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      idiomas:
+        description: "Idiomas (separados por espaco)"
+        required: true
+        default: "pt"
+        type: string
+      dry_run:
+        description: "Simular sem gerar nem publicar"
+        required: false
+        default: false
+        type: boolean
+      apenas_gerar:
+        description: "Gerar video sem publicar (util no primeiro teste)"
+        required: false
+        default: true
+        type: boolean
+      historia_teste:
+        description: "Usar historia de teste em vez de extrair do Reddit"
+        required: false
+        default: false
+        type: boolean
+
+  # schedule:
+  #   # Ativar SOMENTE apos validacao manual bem-sucedida.
+  #   # 6 disparos/dia a cada 4h. Horarios em UTC.
+  #   # O atraso tipico do cron do GitHub (10-30 min em horario de pico) nao
+  #   # afeta a hora de publicacao — quem manda nisso e o publishAt.
+  #   - cron: "0 2,6,10,14,18,22 * * *"
+
+# Serializa execucoes: duas rodadas simultaneas corromperiam a fila JSON e o
+# banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).
+# Nao cancela a que estiver rodando — deixa terminar e enfileira a proxima.
+concurrency:
+  group: pipeline-videos
+  cancel-in-progress: false
+
+jobs:
+  gerar-e-publicar:
+    runs-on: ubuntu-latest
+    # Teto de 6h do GitHub; 300 min deixa margem e evita job pendurado
+    # queimando tempo se algo travar (ex: espera de rede infinita).
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -1
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── ESTADO ENTRE EXECUCOES ──────────────────────────────────────────
+      # O runner e efemero: sem isto, o banco de dedupe nasce vazio a cada
+      # execucao e a mesma historia do Reddit seria reprocessada e publicada
+      # de novo. O cache e best-effort (o GitHub pode expulsa-lo); a garantia
+      # real vem do commit de volta no fim do job.
+      - name: Restaurar banco de dedupe
+        uses: actions/cache/restore@v4
+        with:
+          path: db/pipeline.db
+          key: pipeline-db-${{ github.run_id }}
+          restore-keys: |
+            pipeline-db-
+
+      - name: Restaurar filas de upload
+        uses: actions/cache/restore@v4
+        with:
+          path: data/queue
+          key: pipeline-queue-${{ github.run_id }}
+          restore-keys: |
+            pipeline-queue-
+
+      # ── GERACAO ─────────────────────────────────────────────────────────
+      - name: Gerar video
+        env:
+          PIPELINE_ENV: runner
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          # Biblioteca de backgrounds fora do repositorio (~800MB): o runner
+          # baixa apenas o sorteado. Ver stages/backgrounds.py.
+          BACKGROUND_BASE_URL: ${{ vars.BACKGROUND_BASE_URL }}
+        run: |
+          python main.py \
+            --lang ${{ inputs.idiomas }} \
+            ${{ inputs.dry_run && '--dry-run' || '' }} \
+            ${{ inputs.historia_teste && '--test-story' || '' }}
+
+      # ── PUBLICACAO ──────────────────────────────────────────────────────
+      # Mesmo job, de proposito: o arquivo de video so existe aqui dentro.
+      - name: Publicar (YouTube agendado + kit TikTok no Telegram)
+        if: ${{ !inputs.apenas_gerar && !inputs.dry_run }}
+        env:
+          PIPELINE_ENV: runner
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          TELEGRAM_CHAT_ID_PTBR: ${{ secrets.TELEGRAM_CHAT_ID_PTBR }}
+          TELEGRAM_CHAT_ID_EN: ${{ secrets.TELEGRAM_CHAT_ID_EN }}
+          TELEGRAM_CHAT_ID_ES: ${{ secrets.TELEGRAM_CHAT_ID_ES }}
+          # Tokens OAuth gerados UMA VEZ localmente e colados como Secret.
+          # Nao existe navegador no runner para o fluxo interativo.
+          YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}
+          YOUTUBE_TOKEN_PT: ${{ secrets.YOUTUBE_TOKEN_PT }}
+          YOUTUBE_TOKEN_EN: ${{ secrets.YOUTUBE_TOKEN_EN }}
+          YOUTUBE_TOKEN_ES: ${{ secrets.YOUTUBE_TOKEN_ES }}
+        run: |
+          python publish.py --lang ${{ inputs.idiomas }}
+
+      # ── PERSISTENCIA DO ESTADO ──────────────────────────────────────────
+      - name: Salvar banco de dedupe
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: db/pipeline.db
+          key: pipeline-db-${{ github.run_id }}
+
+      - name: Salvar filas de upload
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/queue
+          key: pipeline-queue-${{ github.run_id }}
+
+      # ── OBSERVABILIDADE ─────────────────────────────────────────────────
+      # Nao ha SSH para o runner. Sem os logs anexados, diagnosticar uma
+      # falha no meio de uma execucao de 40+ min seria impossivel.
+      - name: Anexar logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_id }}
+          path: |
+            data/logs/*.log
+            data/scripts/**/*_trace.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+      # Amostra do video gerado, para conferir qualidade sem publicar.
+      # Util na fase de validacao manual; desligue depois para economizar
+      # tempo de upload do artifact.
+      - name: Anexar video gerado (amostra)
+        if: ${{ always() && inputs.apenas_gerar }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ github.run_id }}
+          path: data/exports/**/*.mp4
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Avisar falha no Telegram
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os, urllib.parse, urllib.request
+          token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+          chat  = os.environ.get("TELEGRAM_ADMIN_CHAT_ID", "")
+          if not token or not chat:
+              print("Telegram nao configurado — aviso de falha nao enviado")
+              raise SystemExit(0)
+          run_url = (
+              f"{os.environ.get('GITHUB_SERVER_URL','https://github.com')}/"
+              f"{os.environ.get('GITHUB_REPOSITORY','')}/actions/runs/"
+              f"{os.environ.get('GITHUB_RUN_ID','')}"
+          )
+          texto = (
+              "❌ Pipeline falhou no GitHub Actions\n"
+              f"Execucao: {run_url}\n"
+              "Os logs completos estao anexados como artifact na pagina acima."
+          )
+          dados = urllib.parse.urlencode({"chat_id": chat, "text": texto}).encode()
+          # A URL contem o token — nunca imprimir esta chamada no log.
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage", data=dados
+          )
+          try:
+              urllib.request.urlopen(req, timeout=20)
+              print("Aviso de falha enviado no Telegram")
+          except Exception as e:
+              print(f"Falha ao avisar no Telegram: {type(e).__name__}")
+          PY

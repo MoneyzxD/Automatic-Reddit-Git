@@ -1,0 +1,158 @@
+pipeline:
+  name: Reddit Stories Dark Channel
+  version: 1.0.0
+  base_dir: .
+  languages:
+  - pt
+  - en
+  - es
+  daily_story_target: 1
+  min_score: 65
+  dry_run: false
+extraction:
+  base_url: https://www.reddit.com
+  user_agent: Mozilla/5.0 RedditStories/1.0 (educational)
+  request_delay: 2.0
+  max_retries: 3
+  posts_per_subreddit: 50 
+  time_filter: month ## //////////////////////////////////
+  min_upvotes: 50 ###### ALTERADO CHAT GPT
+  min_upvote_ratio: 0.6 ######//////////////////
+  max_text_length: 15000
+filtering:
+  min_score: 65
+  max_profanity_score: 0.3
+  monetization_blacklist:
+  - suicide
+  - self-harm
+  - drug dealer
+  - illegal
+  - murder
+  - overdose
+  - rape
+  - child abuse
+  sentiment_min_magnitude: 0.3
+splitter:
+  words_per_minute: 130
+  target_minutes: 5.5
+  max_minutes: 7.0
+  min_minutes: 3.0
+voice:
+  primary: edge-tts
+  fallback: gtts
+  voices:
+    pt:
+      primary: pt-BR-FranciscaNeural
+      secondary: pt-BR-AntonioNeural
+    en:
+      primary: en-US-AriaNeural
+      secondary: en-US-GuyNeural
+    es:
+      primary: es-MX-DaliaNeural
+      secondary: es-MX-JorgeNeural
+  gtts_langs:
+    pt: pt
+    en: en
+    es: es
+  audio_format: mp3
+  speech_rate: +4%
+  speech_style: "excited" # EU ADICONEI 
+subtitles:
+  whisper_model: base
+  whisper_device: cpu
+  max_words_per_line: 7
+  max_chars_per_line: 42
+  min_segment_duration: 0.8
+  language_codes:
+    pt: pt
+    en: en
+    es: es
+video:
+  width: 1080
+  height: 1920
+  fps: 30
+  codec_video: libx264
+  preset: fast
+  crf: 23
+  codec_audio: aac
+  audio_bitrate: 192k
+  format: mp4
+  background_color: '#0D0D0D'
+  background_dir: background/Shorts   # ← ADICIONAR
+  background_file: ""
+  background_fallback: color
+  subtitle_font: assets/fonts/bold.ttf
+  subtitle_size: 58
+  subtitle_color: white
+  subtitle_outline: black
+  subtitle_outline_width: 3
+  subtitle_position: center
+  hook_duration: 5.0
+  hook_font_size: 72
+thumbnail:
+  width: 1280
+  height: 720
+  background_color: '#0D0D0D'
+  title_font: assets/fonts/bold.ttf
+  title_font_size: 72
+  title_color: '#FFFFFF'
+  title_max_chars: 40
+  accent_color: '#FF4444'
+  shorts_width: 1080
+  shorts_height: 1920
+# ─────────────────────────────────────────────────────────────────────────────
+# MODELOS GROQ — atualizados em 2026-08-17
+# Os modelos antigos (llama-3.1-8b-instant e llama-3.3-70b-versatile) foram
+# descontinuados pela Groq e passaram a responder 404. O pipeline caia
+# silenciosamente para o fallback de regras — sem erro visivel, so qualidade
+# pior. Se voltar a dar 404 em qualquer estagio, cheque a lista real com:
+#     python -c "from groq import Groq; print([m.id for m in Groq().models.list().data])"
+#
+# Tiering preservado (mesma filosofia de antes):
+#   openai/gpt-oss-20b   → limpeza/deteccao/validacao (barato e rapido)
+#   openai/gpt-oss-120b  → reescrita criativa (naturalizacao, titulo/hook)
+# Limites atuais: 8000 TPM / 1000 RPM (antes eram 6000 TPM).
+# ─────────────────────────────────────────────────────────────────────────────
+metadata:
+  llm_enabled: true
+  groq_model: openai/gpt-oss-20b
+  ollama_model: llama3.2               # corrigido de llama3 para llama3.2
+  ollama_url: http://localhost:11434/api/generate
+  fallback_to_templates: true
+  title_max_chars: 60
+  description_max_chars: 5000
+  tags_count: 25
+adapter:
+  llm_enabled: true
+  groq_model: openai/gpt-oss-20b       # limpeza simples — modelo leve basta
+  ollama_model: llama3.2
+  ollama_url: http://localhost:11434/api/generate
+publisher:
+  enabled: false
+  platform: youtube
+  upload_delay_hours: 2
+  daily_upload_limit: 3
+  schedule_time: '10:00'
+naturalizer:
+  enabled: true
+  groq_model: openai/gpt-oss-120b      # reescrita viral — precisa do modelo grande
+  ollama_url: http://localhost:11434/api/generate
+  ollama_model: llama3.2
+gender_detector:
+  enabled: true
+  groq_model: openai/gpt-oss-20b       # detecção/correção — modelo leve ok
+  ollama_url: http://localhost:11434/api/generate
+  ollama_model: llama3.2
+validator:
+  enabled: true
+  groq_validator_model: openai/gpt-oss-20b
+  groq_call_delay: 6.0
+
+
+
+
+
+
+
+
+

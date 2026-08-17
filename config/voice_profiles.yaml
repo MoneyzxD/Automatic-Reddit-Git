@@ -1,0 +1,46 @@
+# voice_profiles.yaml — Perfis de voz por idioma e estilo
+# Usando edge-tts (gratuito) com fallback gTTS
+
+profiles:
+
+  pt:
+    language: "Português (Brasil)"
+    primary_voice: "pt-BR-FranciscaNeural"
+    secondary_voice: "pt-BR-AntonioNeural"
+    gtts_lang: "pt"
+    gtts_tld: "com.br"
+    speech_rate: "+0%"
+    pitch: "+0Hz"
+    style_drama: "+10%"       # para histórias intensas
+    style_calm: "-5%"         # para narrativas suaves
+    pause_comma: 300          # ms de pausa após vírgula
+    pause_period: 500         # ms de pausa após ponto
+    pause_paragraph: 800      # ms de pausa entre parágrafos
+
+  en:
+    language: "English (US)"
+    primary_voice: "en-US-AriaNeural"
+    secondary_voice: "en-US-GuyNeural"
+    gtts_lang: "en"
+    gtts_tld: "com"
+    speech_rate: "+0%"
+    pitch: "+0Hz"
+    style_drama: "+8%"
+    style_calm: "-5%"
+    pause_comma: 250
+    pause_period: 450
+    pause_paragraph: 750
+
+  es:
+    language: "Español (México)"
+    primary_voice: "es-MX-DaliaNeural"
+    secondary_voice: "es-MX-JorgeNeural"
+    gtts_lang: "es"
+    gtts_tld: "com.mx"
+    speech_rate: "+0%"
+    pitch: "+0Hz"
+    style_drama: "+10%"
+    style_calm: "-5%"
+    pause_comma: 280
+    pause_period: 470
+    pause_paragraph: 780

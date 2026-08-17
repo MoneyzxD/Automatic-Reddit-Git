@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./**/*token*)",
+      "Read(./**/*credentials*)",
+      "Read(./db/pipeline.db)"
+    ],
+    "allow": [
+      "Bash(pytest*)",
+      "Bash(python -m pytest*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(python main.py --dry-run*)",
+      "Bash(ffmpeg -version)",
+      "Bash(ls*)",
+      "Bash(cat CLAUDE.md)"
+    ],
+    "ask": [
+      "Bash(python main.py*)",
+      "Bash(git commit*)",
+      "Bash(git push*)"
+    ]
+  }
+}
