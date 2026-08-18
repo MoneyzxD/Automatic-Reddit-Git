@@ -787,7 +787,7 @@ def run_pipeline(
             logger.info("ETAPA 10.5 — Validacao do titulo/hook (%s)", lang)
             title_for_lang, hook_for_lang = validator.validate_and_fix_title_hook(
                 title_for_lang, hook_for_lang, lang_script, lang, story_id,
-                story_title=story_title,
+                story_title=story_title, narrator_gender=narrator_gender,
             )
             logger.info("Titulo/hook validados (%s): %s | %s", lang, title_for_lang, hook_for_lang)
 

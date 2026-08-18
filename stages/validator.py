@@ -228,6 +228,7 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
     "pt": (
         "Você é um revisor rigoroso de títulos e hooks virais para YouTube Shorts/TikTok "
         "em português do Brasil.\n\n"
+        "GÊNERO DO NARRADOR: {narrator_gender}\n\n"
         "CONTEXTO DA HISTÓRIA (resumo):\n"
         "{story_text}\n\n"
         "TÍTULO DE ARQUIVO GERADO:\n"
@@ -238,12 +239,16 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         "Avalie se o título e o hook fazem sentido, são claros, e vendem bem a história "
         "sem ser vagos ou confusos.\n\n"
         "PROBLEMAS COMUNS A DETECTAR:\n"
-        "1. Referências vagas que não fazem sentido fora de contexto (ex: 'terminou o caso' "
+        "1. Concordância de gênero incorreta em palavras que variam por gênero (ex: "
+        "'vilão'/'vilã', 'enganado'/'enganada', 'sozinho'/'sozinha') considerando que "
+        "o narrador é {narrator_gender} — este é o erro mais comum e mais visível "
+        "publicamente, verifique com atenção antes de qualquer outro item\n"
+        "2. Referências vagas que não fazem sentido fora de contexto (ex: 'terminou o caso' "
         "sem deixar claro que é um caso extraconjugal)\n"
-        "2. Título/hook que soa cortado ou gramaticalmente estranho\n"
-        "3. Falta de clareza sobre O QUE aconteceu na história\n"
-        "4. Título fraco que não gera curiosidade\n"
-        "5. Inconsistência entre título/hook e o que realmente acontece na história\n\n"
+        "3. Título/hook que soa cortado ou gramaticalmente estranho\n"
+        "4. Falta de clareza sobre O QUE aconteceu na história\n"
+        "5. Título fraco que não gera curiosidade\n"
+        "6. Inconsistência entre título/hook e o que realmente acontece na história\n\n"
         "Retorne APENAS um JSON no formato exato abaixo, sem texto antes ou depois:\n"
         "{{\n"
         '  "approved": true ou false,\n'
@@ -253,7 +258,7 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         '      "trecho": "titulo" ou "hook",\n'
         '      "problema": "explicacao curta do erro",\n'
         '      "sugestao": "nova versao sugerida, completa e clara",\n'
-        '      "categoria": "clareza" ou "gramatica" ou "impacto" ou "inconsistencia"\n'
+        '      "categoria": "genero" ou "clareza" ou "gramatica" ou "impacto" ou "inconsistencia"\n'
         "    }}\n"
         "  ]\n"
         "}}\n"
@@ -261,6 +266,7 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
     "en": (
         "You are a rigorous reviewer of viral titles and hooks for YouTube Shorts/TikTok "
         "in English.\n\n"
+        "NARRATOR GENDER: {narrator_gender}\n\n"
         "STORY CONTEXT (summary):\n"
         "{story_text}\n\n"
         "GENERATED FILE TITLE:\n"
@@ -271,11 +277,14 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         "Evaluate whether the title and hook make sense, are clear, and sell the story "
         "well without being vague or confusing.\n\n"
         "COMMON PROBLEMS TO DETECT:\n"
-        "1. Vague references that make no sense out of context\n"
-        "2. Title/hook that sounds cut off or grammatically strange\n"
-        "3. Lack of clarity about WHAT happened in the story\n"
-        "4. Weak title that doesn't create curiosity\n"
-        "5. Inconsistency between title/hook and what actually happens in the story\n\n"
+        "1. Incorrect gender agreement on words that vary by gender (e.g. villain/villainess, "
+        "cheated-on husband vs. wife) given the narrator is {narrator_gender} — this is the "
+        "most common and most publicly visible error, check it carefully before anything else\n"
+        "2. Vague references that make no sense out of context\n"
+        "3. Title/hook that sounds cut off or grammatically strange\n"
+        "4. Lack of clarity about WHAT happened in the story\n"
+        "5. Weak title that doesn't create curiosity\n"
+        "6. Inconsistency between title/hook and what actually happens in the story\n\n"
         "Return ONLY a JSON in the exact format below, no text before or after:\n"
         "{{\n"
         '  "approved": true or false,\n'
@@ -285,7 +294,7 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         '      "trecho": "titulo" or "hook",\n'
         '      "problema": "short explanation of the error",\n'
         '      "sugestao": "suggested new version, complete and clear",\n'
-        '      "categoria": "clareza" or "gramatica" or "impacto" or "inconsistencia"\n'
+        '      "categoria": "genero" or "clareza" or "gramatica" or "impacto" or "inconsistencia"\n'
         "    }}\n"
         "  ]\n"
         "}}\n"
@@ -293,6 +302,7 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
     "es": (
         "Eres un revisor riguroso de titulos y hooks virales para YouTube Shorts/TikTok "
         "en español.\n\n"
+        "GÉNERO DEL NARRADOR: {narrator_gender}\n\n"
         "CONTEXTO DE LA HISTORIA (resumen):\n"
         "{story_text}\n\n"
         "TITULO DE ARCHIVO GENERADO:\n"
@@ -303,11 +313,15 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         "Evalua si el titulo y el hook tienen sentido, son claros, y venden bien la "
         "historia sin ser vagos o confusos.\n\n"
         "PROBLEMAS COMUNES A DETECTAR:\n"
-        "1. Referencias vagas que no tienen sentido fuera de contexto\n"
-        "2. Titulo/hook que suena cortado o gramaticalmente extrano\n"
-        "3. Falta de claridad sobre QUE paso en la historia\n"
-        "4. Titulo debil que no genera curiosidad\n"
-        "5. Inconsistencia entre titulo/hook y lo que realmente pasa en la historia\n\n"
+        "1. Concordancia de genero incorrecta en palabras que varian por genero (ej: "
+        "'villano'/'villana', 'engañado'/'engañada') considerando que el narrador es "
+        "{narrator_gender} — este es el error mas comun y mas visible publicamente, "
+        "verificalo con atencion antes que cualquier otro punto\n"
+        "2. Referencias vagas que no tienen sentido fuera de contexto\n"
+        "3. Titulo/hook que suena cortado o gramaticalmente extrano\n"
+        "4. Falta de claridad sobre QUE paso en la historia\n"
+        "5. Titulo debil que no genera curiosidad\n"
+        "6. Inconsistencia entre titulo/hook y lo que realmente pasa en la historia\n\n"
         "Devuelve SOLO un JSON en el formato exacto de abajo, sin texto antes o despues:\n"
         "{{\n"
         '  "approved": true o false,\n'
@@ -317,7 +331,7 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         '      "trecho": "titulo" o "hook",\n'
         '      "problema": "explicacion corta del error",\n'
         '      "sugestao": "nueva version sugerida, completa y clara",\n'
-        '      "categoria": "clareza" o "gramatica" o "impacto" o "inconsistencia"\n'
+        '      "categoria": "genero" o "clareza" o "gramatica" o "impacto" o "inconsistencia"\n'
         "    }}\n"
         "  ]\n"
         "}}\n"
@@ -682,12 +696,18 @@ class ValidatorEngine:
     # ── VALIDACAO: TITULO + HOOK ─────────────────────────────────────────────
 
     def validate_title_hook(self, title: str, hook: str, story_text: str,
-                            language: str = "pt") -> ValidationResult:
+                            language: str = "pt",
+                            narrator_gender: str = "unknown") -> ValidationResult:
         prompt_tpl = TITLE_HOOK_VALIDATION_PROMPTS.get(language, TITLE_HOOK_VALIDATION_PROMPTS["en"])
+        gender_label = (
+            self._UNKNOWN_GENDER_LABEL.get(language, self._UNKNOWN_GENDER_LABEL["en"])
+            if narrator_gender == "unknown" else narrator_gender
+        )
         prompt = prompt_tpl.format(
             title=title,
             hook=hook,
             story_text=story_text[:500].replace("\n", " "),
+            narrator_gender=gender_label,
         )
         raw = self._call_groq(
             system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
@@ -1210,7 +1230,8 @@ class ValidatorEngine:
 
     def validate_and_fix_title_hook(self, title: str, hook: str, story_text: str,
                                     language: str, story_id: str,
-                                    story_title: str = "") -> tuple[str, str]:
+                                    story_title: str = "",
+                                    narrator_gender: str = "unknown") -> tuple[str, str]:
         current_title = title
         current_hook  = hook
         attempt = 0
@@ -1223,7 +1244,8 @@ class ValidatorEngine:
 
         while attempt < MAX_SAFETY_RETRIES:
             attempt += 1
-            result = self.validate_title_hook(current_title, current_hook, story_text, language)
+            result = self.validate_title_hook(current_title, current_hook, story_text, language,
+                                               narrator_gender=narrator_gender)
 
             if result.score > best_score:
                 best_score = result.score
