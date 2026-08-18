@@ -173,8 +173,12 @@ def build_provider(base_dir: Path, bg_dir: Path | None = None):
 def gerar_manifesto(bg_dir: Path, manifest_path: Path = MANIFEST_PATH) -> int:
     """
     Varre a pasta local e grava o manifesto com os nomes dos arquivos.
-    Rode isto sempre que adicionar/remover backgrounds da biblioteca.
-    Retorna a quantidade de arquivos listados.
+    Rode isto sempre que adicionar/remover backgrounds da biblioteca LOCAL.
+
+    NAO use isto para gerar o manifesto do modo remoto (GitHub Releases) —
+    o GitHub renomeia o asset no upload (espacos viram ponto, caracteres como
+    # [ ] ! ? somem), entao o nome local nunca bate com o nome real do
+    download. Para o modo remoto use gerar_manifesto_remoto().
     """
     bg_dir = Path(bg_dir)
     videos = sorted(
@@ -189,18 +193,59 @@ def gerar_manifesto(bg_dir: Path, manifest_path: Path = MANIFEST_PATH) -> int:
     return len(videos)
 
 
+def gerar_manifesto_remoto(owner_repo: str, tag: str,
+                            manifest_path: Path = MANIFEST_PATH) -> int:
+    """
+    Le os nomes REAIS dos assets de uma GitHub Release e grava o manifesto.
+
+    Fonte da verdade para o modo remoto: a API da release, nao a pasta local.
+    O GitHub sanitiza o nome do arquivo ao fazer upload do asset (espaco vira
+    ponto; #, [, ], !, ? e caracteres unicode como fullwidth question mark
+    somem) — se o manifesto listar o nome local original, todo download falha
+    com 404 porque o asset com aquele nome exato nunca existiu no release.
+
+    owner_repo: "dono/repositorio" (ex: "MoneyzxD/Automatic-Reddit-Git")
+    tag:        tag da release (ex: "backgrounds-v1")
+    """
+    import requests
+
+    url = f"https://api.github.com/repos/{owner_repo}/releases/tags/{tag}"
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    assets = resp.json().get("assets", [])
+    nomes = sorted(
+        a["name"] for a in assets
+        if Path(a["name"]).suffix.lower() in _VIDEO_EXTS
+    )
+
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump({"files": nomes}, f, ensure_ascii=False, indent=2)
+
+    print(f"Manifesto gravado (remoto, {owner_repo}@{tag}): {manifest_path} ({len(nomes)} arquivos)")
+    return len(nomes)
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Utilitario de backgrounds")
-    parser.add_argument("--gerar-manifesto", action="store_true")
-    parser.add_argument("--dir", default=None, help="pasta de backgrounds")
+    parser.add_argument("--gerar-manifesto", action="store_true",
+                         help="varre a pasta local (modo local)")
+    parser.add_argument("--gerar-manifesto-remoto", action="store_true",
+                         help="le os nomes reais de uma GitHub Release (modo remoto)")
+    parser.add_argument("--dir", default=None, help="pasta de backgrounds (modo local)")
+    parser.add_argument("--owner-repo", default="MoneyzxD/Automatic-Reddit-Git",
+                         help="dono/repositorio da release (modo remoto)")
+    parser.add_argument("--tag", default="backgrounds-v1", help="tag da release (modo remoto)")
     args = parser.parse_args()
 
     base = Path(__file__).parent.parent
     pasta = Path(args.dir) if args.dir else base / "background" / "Shorts"
 
-    if args.gerar_manifesto:
+    if args.gerar_manifesto_remoto:
+        gerar_manifesto_remoto(args.owner_repo, args.tag)
+    elif args.gerar_manifesto:
         gerar_manifesto(pasta)
     else:
         parser.print_help()

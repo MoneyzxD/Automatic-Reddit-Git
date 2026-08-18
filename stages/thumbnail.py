@@ -57,8 +57,11 @@ _TEXT_AREA = {
     "height": 145,
 }
 
-# ── PATCH: fonte aumentada de 42 → 68 para o hook ficar legível ──
-_FONT_SIZE_MAX  = 68
+# 68 deixava hooks longos ocupando quase toda a altura do card (linhas
+# encostando na borda da area de texto) — 48 mantem a legibilidade ganha
+# no patch anterior mas com folga suficiente pra nao esmagar o cabecalho
+# e os icones do template.
+_FONT_SIZE_MAX  = 48
 _FONT_SIZE_MIN  = 16
 _FONT_COLOR     = (255, 255, 255)   # branco
 _STROKE_COLOR   = (0, 0, 0)        # contorno preto
@@ -108,7 +111,9 @@ def _fit_text(draw, text: str, font_truetype, area_w: int, area_h: int,
         lines          = textwrap.wrap(text, width=chars_per_line) or [text]
         line_h         = int(size * _LINE_SPACING)
 
-        if line_h * len(lines) <= area_h:
+        # Margem de 15%: sem ela o texto acerta a altura exata da area e as
+        # linhas encostam na borda (cabecalho/icones do card ficam espremidos).
+        if line_h * len(lines) <= area_h * 0.85:
             return lines, font, line_h
 
     # Fallback: tamanho mínimo com truncagem
