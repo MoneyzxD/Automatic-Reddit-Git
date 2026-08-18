@@ -13,12 +13,14 @@ Por que existe:
     sobe todo video pro canal errado, silenciosamente (a API nao avisa).
 
 Antes de rodar:
-    1. Abra https://studio.youtube.com no navegador.
-    2. No seletor de conta (canto superior direito), troque para o canal
-       CORRETO (ex: "Ah Voz do Reddit") — precisa ser o canal ativo nessa
-       sessao do navegador ANTES de autorizar, senao o token sai preso no
-       canal errado de novo.
-    3. So entao rode este script.
+    Cada canal (ex: "Ah Voz do Reddit") pode estar numa conta Google (e-mail)
+    DIFERENTE da sua conta pessoal — nao e um simples "trocar de canal"
+    dentro da mesma conta. O navegador que este script abre mostra a tela
+    de escolha de conta do Google (se voce ja tiver mais de uma logada);
+    quando ela aparecer, clique especificamente no e-mail dono do canal
+    certo (ou em "Usar outra conta" se esse e-mail nao estiver logado ali).
+    Autorizar com o e-mail errado prende o token no canal errado de novo,
+    silenciosamente — a API nao avisa.
 
 Uso:
     python scripts/reautenticar_youtube.py --lang pt
@@ -60,12 +62,13 @@ def main() -> int:
         print("Baixe o client_secret.json do Google Cloud Console primeiro.")
         return 1
 
-    print("Confirma antes de continuar:")
-    print("  1. Abriu https://studio.youtube.com no navegador?")
-    print("  2. Trocou pro canal CORRETO no seletor de conta (canto superior direito)?")
-    resposta = input("Confirmado? (s/n): ").strip().lower()
+    print(f"Vai autorizar o canal do idioma '{args.lang}'.")
+    print("Quando o navegador abrir a tela de login do Google, escolha o")
+    print("e-mail DONO desse canal especificamente (ou 'Usar outra conta'")
+    print("se ele nao estiver na lista) — nao o primeiro e-mail sugerido.")
+    resposta = input("Pronto para continuar? (s/n): ").strip().lower()
     if resposta != "s":
-        print("Cancelado. Troque o canal ativo no navegador e rode de novo.")
+        print("Cancelado.")
         return 1
 
     from google_auth_oauthlib.flow import InstalledAppFlow
