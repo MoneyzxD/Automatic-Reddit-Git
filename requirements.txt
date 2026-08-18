@@ -70,5 +70,13 @@ python-telegram-bot>=20.7
 groq>=0.4.0              # Groq API gratuita (llama3-70b) — pip install groq
                          # Chave gratuita em: https://console.groq.com/keys
 
+# ── Upload YouTube (OAuth + Data API v3) ────────────────────────────────────
+# scheduler/uploader.py importa google.oauth2, google_auth_oauthlib e
+# googleapiclient — sem estes pacotes o upload falha com "No module named
+# 'googleapiclient'" (visto no primeiro teste real de publicacao).
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
 # ── Duração de MP3 (fallback timestamps) ────────────────────────────────────
 mutagen>=1.47.0          # leitura de metadados de áudio

@@ -95,21 +95,41 @@ async def _send_admin_alert_async(message: str, bot_token: str, admin_chat_id: s
         return False
 
 
+def _resolver_placeholder(valor) -> str:
+    """
+    Resolve um valor de config no formato "$VAR" ou "${VAR}" para a variavel
+    de ambiente correspondente. Valor que nao comeca com "$" volta como veio.
+
+    Existe porque publishing.yaml guarda credenciais como placeholder (nunca
+    o valor real, versionado), e mais de um lugar precisa da mesma resolucao
+    (bot_token, admin_chat_id, chats por idioma) — sem uma funcao unica, era
+    facil um desses pontos ficar sem o tratamento (foi o caso do bot_token:
+    ficava com o literal "${TELEGRAM_BOT_TOKEN}" sem nunca virar o token de
+    verdade, e toda chamada que passava a config completa recebia 404 "Not
+    Found" do Telegram — token invalido faz parte da propria URL da API).
+    """
+    texto = str(valor or "").strip()
+    if texto.startswith("$"):
+        nome = texto.lstrip("$").strip("{}")
+        return os.environ.get(nome, "")
+    return texto
+
+
 def _resolve_telegram_credentials(config: dict | None) -> tuple[str, str]:
     """
     Resolve bot_token e admin_chat_id a partir de config/settings.yaml
-    (com suporte a placeholders "$VAR") ou, na ausencia, das variaveis
-    de ambiente TELEGRAM_BOT_TOKEN e TELEGRAM_ADMIN_CHAT_ID diretamente.
-    Nunca loga o valor resolvido (evita expor token/chat_id no log).
+    (com suporte a placeholders "$VAR"/"${VAR}") ou, na ausencia, das
+    variaveis de ambiente TELEGRAM_BOT_TOKEN e TELEGRAM_ADMIN_CHAT_ID
+    diretamente. Nunca loga o valor resolvido (evita expor token/chat_id
+    no log).
     """
     config = config or {}
     tg_cfg = config.get("telegram", {})
 
-    bot_token = tg_cfg.get("bot_token", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
-
-    admin_chat_id = tg_cfg.get("admin_chat_id", "") or os.environ.get("TELEGRAM_ADMIN_CHAT_ID", "")
-    if str(admin_chat_id).startswith("$"):
-        admin_chat_id = os.environ.get(admin_chat_id.lstrip("$").strip("{}"), "")
+    bot_token = (_resolver_placeholder(tg_cfg.get("bot_token", ""))
+                 or os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+    admin_chat_id = (_resolver_placeholder(tg_cfg.get("admin_chat_id", ""))
+                      or os.environ.get("TELEGRAM_ADMIN_CHAT_ID", ""))
 
     return bot_token, admin_chat_id
 
@@ -198,17 +218,17 @@ class TikTokNotifier:
     def __init__(self, config: dict):
         tg_cfg = config.get("telegram", {})
 
-        self.bot_token          = tg_cfg.get("bot_token", "") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
-        self.chats: dict        = tg_cfg.get("chats", {})
-        self.max_per_day: int   = tg_cfg.get("max_notifications_per_day", 3)
-        self.size_limit_mb: int = tg_cfg.get("video_size_limit_mb", 45)
-        self.fallback_to_link   = tg_cfg.get("fallback_to_link", True)
-        self.base_url: str      = tg_cfg.get("base_url", "").rstrip("/")
+        self.bot_token           = (_resolver_placeholder(tg_cfg.get("bot_token", ""))
+                                     or os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+        self.chats: dict         = tg_cfg.get("chats", {})
+        self.max_per_day: int    = tg_cfg.get("max_notifications_per_day", 3)
+        self.size_limit_mb: int  = tg_cfg.get("video_size_limit_mb", 45)
+        self.fallback_to_link    = tg_cfg.get("fallback_to_link", True)
+        self.base_url: str       = tg_cfg.get("base_url", "").rstrip("/")
 
-        # Resolve variáveis de ambiente nos chat_ids se necessário
+        # Resolve variáveis de ambiente nos chat_ids
         self.chats = {
-            lang: os.environ.get(chat_id.lstrip("$").strip("{}"), chat_id)
-            if str(chat_id).startswith("$") else chat_id
+            lang: _resolver_placeholder(chat_id)
             for lang, chat_id in self.chats.items()
         }
 

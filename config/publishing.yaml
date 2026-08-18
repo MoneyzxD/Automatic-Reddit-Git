@@ -9,9 +9,14 @@
 
 global:
   enabled: true                   # true quando pronto para producao
+  # "tiktok" fica de fora de proposito: nao ha aprovacao/token da Content
+  # Posting API do TikTok configurado. Com "tiktok" nesta lista,
+  # scheduler/uploader.py tenta um upload automatico que sempre falha
+  # (token ausente) e marca o item inteiro como falho — mesmo o YouTube
+  # tendo subido certo. O fluxo real do TikTok e o kit manual por Telegram
+  # (scheduler/notifier.py TikTokNotifier), que roda independente disto.
   platforms:
     - youtube
-    - tiktok
   delete_after_upload: true       # apaga video local apos upload confirmado
   retry_attempts: 3               # tentativas por plataforma em caso de falha
   retry_delay_minutes: 30         # espera entre tentativas (backoff fixo)
