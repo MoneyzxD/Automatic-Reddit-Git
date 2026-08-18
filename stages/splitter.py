@@ -1,7 +1,8 @@
 """
 splitter.py
 ===========
-Divide historias longas em multiplas partes coerentes (3-7 min).
+Divide historias longas em multiplas partes, respeitando o teto de
+duracao de Short do YouTube (3 min) com margem de seguranca.
 
 Calibracao de WPM:
     edge-tts com speech_rate=+8% produz aproximadamente 160-170 wpm
@@ -10,9 +11,23 @@ Calibracao de WPM:
     Estimativa conservadora: 155 wpm
     (evita divisoes desnecessarias por superestimacao)
 
+Teto de 2:45, nao 3:00:
+    A duracao aqui e estimada por contagem de palavras ANTES da narracao
+    de verdade ser gerada (TTS roda so na ETAPA 13, depois do split). Na
+    pratica a estimativa fica perto do audio real mas nao exata — sem
+    folga, um script estimado bem no limite de 3:00 pode passar por
+    poucos segundos apos a narracao de verdade e perder a elegibilidade
+    de Short. 2:45 deixa ~15s de margem pra esse erro de estimativa.
+
 Logica:
     - Estima duracao a 155 wpm
-    - Se > 7 min -> divide em partes de ~5.5 min
+    - Historias que cabem em 2:45 saem como video unico (a maioria das
+      historias do Reddit, que tendem a ser curtas, nunca e dividida)
+    - Historias mais longas sao divididas em partes de duracao PARECIDA
+      entre si: calcula quantas partes cabem dentro do teto e divide o
+      total de palavras por esse numero — em vez de encher cada parte
+      ate o teto e deixar a ultima com as sobras (o que gerava partes
+      desbalanceadas, ex: 2:45 + 0:50)
     - Corta apenas em quebras de paragrafo
     - Partes 2+ repetem o HOOK ORIGINAL no inicio, seguido de "Parte N"
       (sem "de Total" — apenas o numero da parte)
@@ -21,18 +36,17 @@ Logica:
     - Partes intermediarias mantem o marcador "[Continua na Parte N...]"
 """
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
 # WPM calibrado para edge-tts +8% (mais rapido que leitura humana padrao)
 # Valor conservador para evitar superestimacao de duracao
 WORDS_PER_MINUTE = 155
-TARGET_MINUTES   = 5.5
-MAX_MINUTES      = 7.0
-MIN_MINUTES      = 3.0
-TARGET_WORDS     = int(TARGET_MINUTES * WORDS_PER_MINUTE)   # 852
-MAX_WORDS        = int(MAX_MINUTES * WORDS_PER_MINUTE)       # 1085
-MIN_WORDS        = int(MIN_MINUTES * WORDS_PER_MINUTE)       # 465
+
+# Teto por parte — ver "Teto de 2:45, nao 3:00" no docstring do modulo.
+MAX_MINUTES = 2.75
+MAX_WORDS   = int(MAX_MINUTES * WORDS_PER_MINUTE)   # 426
 
 # Rótulo de "Parte" usado na repeticao do hook no inicio das partes 2+
 PART_LABEL = {
@@ -92,14 +106,28 @@ def split_script(
 
     logger.info("Script longo: %.1f min → iniciando divisao", estimated)
 
-    paragraphs = [p.strip() for p in script_text.split("\n\n") if p.strip()]
+    paragraphs  = [p.strip() for p in script_text.split("\n\n") if p.strip()]
+    total_words = sum(len(p.split()) for p in paragraphs)
+
+    # Numero de partes necessario pra caber no teto, e quanto cada uma
+    # deveria ter em media — preenchendo ate essa media (nao ate o teto)
+    # as partes saem parecidas entre si, em vez da primeira cheia e a
+    # ultima com o resto.
+    num_parts             = max(2, math.ceil(total_words / MAX_WORDS))
+    target_words_per_part = math.ceil(total_words / num_parts)
+
     parts      = []
     current    = []
     curr_words = 0
 
     for para in paragraphs:
         pw = len(para.split())
-        if curr_words + pw > MAX_WORDS and current:
+        # So corta se ainda faltar pelo menos uma parte pra formar —
+        # os paragrafos finais sempre vao pra ultima parte, mesmo que
+        # ela passe um pouco da media (melhor que criar uma parte extra
+        # pequena so pra caber a sobra).
+        if (curr_words + pw > target_words_per_part and current
+                and len(parts) < num_parts - 1):
             parts.append("\n\n".join(current))
             current    = [para]
             curr_words = pw
