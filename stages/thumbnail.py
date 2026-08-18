@@ -287,7 +287,11 @@ class ThumbnailGenerator:
             return None
 
         tw_orig, th_orig = template.size
-        target_w = 980
+        # 980 (91% da largura do video 1080px) deixava o card dominando o
+        # quadro. 780 (~72%) da mais respiro sem comprometer a legibilidade
+        # — o texto reescala junto (scale_factor abaixo), entao a fonte
+        # some proporcionalmente com o card, nao fica desproporcional.
+        target_w = 780
         scale    = target_w / tw_orig
         target_h = int(th_orig * scale)
         template = template.resize((target_w, target_h), Image.LANCZOS)
