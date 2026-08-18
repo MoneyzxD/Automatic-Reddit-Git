@@ -110,7 +110,7 @@ jobs:
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
           # Biblioteca de backgrounds fora do repositorio (~800MB): o runner
           # baixa apenas o sorteado. Ver stages/backgrounds.py.
-          BACKGROUND_BASE_URL: ${{ vars.BACKGROUND_BASE_URL }}
+          BACKGROUND_BASE_URL: ${{ secrets.BACKGROUND_BASE_URL }}
         run: |
           python main.py \
             --lang ${{ inputs.idiomas }} \
