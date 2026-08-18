@@ -81,7 +81,7 @@ def split_script(
     closing_hook_text: str = "",
 ) -> list:
     """
-    Divide um script em partes de 3-7 minutos.
+    Divide um script em partes de ate 2:45 (teto de Short do YouTube com margem).
 
     Parametros:
         script_text       : texto completo do script (ja com hook injetado na parte 1

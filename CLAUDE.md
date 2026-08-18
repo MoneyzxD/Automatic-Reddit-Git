@@ -57,7 +57,7 @@ FFmpeg must be installed and on PATH; Ollama is optional (local LLM fallback) an
 | 10 | Title | `stages/titler.py` — viral generator based on the original Reddit title |
 | 10.5 | Validation | Validates title + hook |
 | 11 | Hook | Title injected as the first spoken line of the script |
-| 12 | Split | `stages/splitter.py` — 3-7 minute parts, each repeats the hook and gets its own closing |
+| 12 | Split | `stages/splitter.py` — parts up to 2:45 (YouTube Shorts duration cap, with safety margin), each repeats the hook and gets its own closing |
 | 13 | Voice | `stages/voice.py` — edge-tts, with the correct gendered voice |
 | 14 | Subtitles | `stages/subtitle.py` — word-level animated ASS |
 | 15 | Video | `stages/video.py` — FFmpeg 1080x1920 + ASS + automatic background (Shorts/) |

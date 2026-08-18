@@ -20,7 +20,7 @@ Fluxo por historia (1 historia por execucao):
     10. Titulo         -> gerador viral baseado no titulo original do Reddit
     10.5 Validacao     -> valida titulo + hook
     11. Hook           -> titulo injetado como primeira frase do script
-    12. Split          -> partes de 3-7 min (com hook repetido e encerramento)
+    12. Split          -> partes de ate 2:45 (teto de Short do YouTube), com hook repetido e encerramento
     13. Voz            -> edge-tts com voz do genero correto
     14. Legendas       -> ASS animado palavra por palavra
     15. Video          -> FFmpeg 1080x1920 + ASS + background automatico (Shorts/)
