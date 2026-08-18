@@ -115,7 +115,10 @@ growth_plan:
   week_2:    { max_uploads_per_day: 1, min_interval_minutes: 240 }
   week_3:    { max_uploads_per_day: 2, min_interval_minutes: 180 }
   week_4:    { max_uploads_per_day: 2, min_interval_minutes: 120 }
-  week_5_plus: { max_uploads_per_day: 3, min_interval_minutes: 90 }
+  # TEMPORARIO PARA TESTE (18/08): intervalo reduzido pra 1min pra validar
+  # rapido a divisao em partes sem esperar 90min entre elas. Reverter para
+  # min_interval_minutes: 90 assim que a validacao terminar.
+  week_5_plus: { max_uploads_per_day: 3, min_interval_minutes: 1 }
 
 # ── ANTI-BLOCK — CAMADA 2: FINGERPRINT DE VIDEO ───────────────────────────────
 # Variacoes aplicadas no video.py a cada renderizacao.
