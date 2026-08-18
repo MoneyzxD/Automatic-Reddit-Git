@@ -246,7 +246,10 @@ telegram:
 # ── TIKTOK ───────────────────────────────────────────────────────────────────
 
 tiktok:
-  enabled: true
+  enabled: false  # desativado por enquanto — foco em YouTube primeiro.
+                  # O kit por Telegram quebra pra videos >45MB (link aponta
+                  # pra um placeholder de Oracle que nunca existiu no runner).
+                  # Reativar quando isso for resolvido de verdade.
   api_enabled: false  # true quando API oficial for aprovada
   posting_windows:
     pt:
