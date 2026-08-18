@@ -8,7 +8,7 @@
 # ── CONFIGURACAO GLOBAL ───────────────────────────────────────────────────────
 
 global:
-  enabled: false                  # true quando pronto para producao
+  enabled: true                   # true quando pronto para producao
   platforms:
     - youtube
     - tiktok

@@ -17,10 +17,41 @@ volume-alvo cabe no free tier.
 from __future__ import annotations
 
 import logging
+import re
+import time
 
 from utils import telemetry
 
 logger = logging.getLogger(__name__)
+
+# ── RETRY EM RATE LIMIT (429) ────────────────────────────────────────────────
+# O SDK do Groq ja tenta de novo sozinho algumas vezes, mas desiste antes do
+# TPM liberar — a API costuma pedir poucos segundos ("Please try again in
+# 8.01s"), bem menos do que o tempo ja gasto nas tentativas anteriores. Sem isto, um
+# 429 isolado (comum quando varios checkpoints de validacao caem no mesmo
+# minuto) derruba o estagio inteiro para o fallback sem-LLM, mesmo quando
+# esperar poucos segundos teria resolvido com qualidade plena.
+_RATE_LIMIT_MAX_TENTATIVAS = 2
+_RATE_LIMIT_ESPERA_TETO    = 30.0
+_RATE_LIMIT_ESPERA_PADRAO  = 15.0
+_RETRY_AFTER_RE = re.compile(r"try again in ([\d.]+)s", re.IGNORECASE)
+
+
+def _e_rate_limit(exc: Exception) -> bool:
+    if getattr(exc, "status_code", None) == 429:
+        return True
+    texto = str(exc).lower()
+    return "rate_limit" in texto or "429" in texto
+
+
+def _espera_sugerida(exc: Exception) -> float:
+    m = _RETRY_AFTER_RE.search(str(exc))
+    if m:
+        try:
+            return min(float(m.group(1)), _RATE_LIMIT_ESPERA_TETO)
+        except ValueError:
+            pass
+    return _RATE_LIMIT_ESPERA_PADRAO
 
 
 #: Modelos de raciocinio que aceitam reasoning_effort. Neles, o "pensamento"
@@ -54,7 +85,22 @@ class _TrackedCompletions:
         if "reasoning_effort" not in kwargs and _aceita_reasoning_effort(modelo):
             kwargs["reasoning_effort"] = _REASONING_EFFORT_PADRAO
 
-        resp = self._inner.create(*args, **kwargs)
+        tentativa = 0
+        while True:
+            try:
+                resp = self._inner.create(*args, **kwargs)
+                break
+            except Exception as e:
+                if _e_rate_limit(e) and tentativa < _RATE_LIMIT_MAX_TENTATIVAS:
+                    tentativa += 1
+                    espera = _espera_sugerida(e)
+                    logger.warning(
+                        "Rate limit do Groq (%s) — aguardando %.1fs para tentar de novo (%d/%d)",
+                        self._stage, espera, tentativa, _RATE_LIMIT_MAX_TENTATIVAS,
+                    )
+                    time.sleep(espera)
+                    continue
+                raise
         try:
             telemetry.record_usage(
                 self._stage,
