@@ -135,6 +135,9 @@ class FileOrganizer:
             thumbnail_path=paths.get("jpg"),
             metadata_path=paths.get("json"),
             title=title,
+            story_id=story_id,
+            part=part,
+            total=total,
         )
 
         return paths
@@ -146,6 +149,9 @@ class FileOrganizer:
         thumbnail_path: str | None,
         metadata_path: str | None,
         title: str,
+        story_id: str = "",
+        part: int = 1,
+        total: int = 1,
     ) -> None:
         """
         Enfileira vídeo exportado para upload automático.
@@ -171,6 +177,9 @@ class FileOrganizer:
                 thumbnail_path=Path(thumbnail_path) if thumbnail_path else None,
                 metadata=metadata,
                 title=title,
+                story_id=story_id,
+                part=part,
+                total=total,
             )
             logger.info("Enfileirado para upload: %s (%s)", item_id, language)
 

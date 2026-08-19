@@ -104,18 +104,41 @@ def enqueue(
     metadata: dict,
     title: str,
     planned_at: str | None = None,
+    story_id: str = "",
+    part: int = 1,
+    total: int = 1,
 ) -> str:
     """
     Adiciona um item na fila de upload.
     Retorna o ID do item criado.
+
+    story_id: identificador real da historia (ID do post do Reddit em
+        producao, ou o ID fixo da historia de teste) — base preferida do ID
+        do item, em vez do nome do arquivo. O nome do arquivo vem de um
+        titulo gerado por LLM (via slugify), que pode colidir entre
+        historias diferentes ou, em teste, e sempre o mesmo. Sem story_id,
+        cai de volta pro nome do arquivo (compatibilidade).
+
+        Em qualquer caso, uma colisao NUNCA descarta o item em silencio —
+        um sufixo "_v2", "_v3"... e adicionado ate achar um ID livre.
     """
-    queue   = _load_queue(language)
-    item_id = Path(video_path).stem
+    queue = _load_queue(language)
+
+    if story_id:
+        sufixo  = f"_pt{part}of{total}" if total > 1 else ""
+        base_id = f"{story_id}_{language}{sufixo}"
+    else:
+        base_id = Path(video_path).stem
 
     existing_ids = {item["id"] for item in queue["items"]}
-    if item_id in existing_ids:
-        logger.warning("Item ja existe na fila: %s", item_id)
-        return item_id
+    item_id   = base_id
+    contador  = 2
+    while item_id in existing_ids:
+        item_id = f"{base_id}_v{contador}"
+        contador += 1
+    if item_id != base_id:
+        logger.warning("ID '%s' ja existia na fila — criando entrada nova como '%s'",
+                        base_id, item_id)
 
     item = {
         "id":             item_id,
