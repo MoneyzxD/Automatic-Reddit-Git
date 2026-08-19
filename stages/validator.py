@@ -713,7 +713,11 @@ class ValidatorEngine:
             system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
             user_prompt=prompt,
             temperature=0.3,
-            max_tokens=800,
+            # 800 truncava com frequencia: o modelo (reasoning) gasta parte
+            # do orcamento "pensando" antes de escrever o JSON, e o prompt
+            # de titulo/hook ficou mais longo depois da checagem de genero
+            # (mais um item pra avaliar = mais raciocinio antes da resposta).
+            max_tokens=1500,
         )
         return self._parse_validation_json(raw)
 
@@ -732,7 +736,9 @@ class ValidatorEngine:
             system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
             user_prompt=prompt,
             temperature=0.3,
-            max_tokens=800,
+            # Mesmo motivo do validate_title_hook acima — 800 e apertado
+            # demais pra um modelo de raciocinio.
+            max_tokens=1500,
         )
         return self._parse_validation_json(raw)
 
