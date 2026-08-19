@@ -47,7 +47,7 @@ class SubtitleGenerator:
     # ── ASS A PARTIR DE WORD BOUNDARIES ─────────────────────────────────
 
     def generate_from_boundaries(
-        self, boundaries_path: Path, output_path: Path
+        self, boundaries_path: Path, output_path: Path, skip_before: float = 0.0
     ) -> bool:
         """Gera ASS a partir do JSON de word boundaries do edge-tts."""
         boundaries = load_word_boundaries(boundaries_path)
@@ -55,7 +55,7 @@ class SubtitleGenerator:
             logger.warning("Word boundaries não encontrados: %s", boundaries_path)
             return False
 
-        return generate_ass(boundaries, output_path)
+        return generate_ass(boundaries, output_path, skip_before=skip_before)
 
     # ── FALLBACK: WHISPER ────────────────────────────────────────────────
 
@@ -77,7 +77,8 @@ class SubtitleGenerator:
         return self._whisper_model
 
     def _generate_from_whisper(
-        self, audio_path: Path, language: str, output_path: Path
+        self, audio_path: Path, language: str, output_path: Path,
+        skip_before: float = 0.0,
     ) -> bool:
         """Usa Whisper para extrair timestamps e gerar ASS."""
         lang_code = self.language_codes.get(language, language)
@@ -99,7 +100,7 @@ class SubtitleGenerator:
             if not boundaries:
                 raise ValueError("Whisper não retornou word-level timestamps")
 
-            return generate_ass(boundaries, output_path)
+            return generate_ass(boundaries, output_path, skip_before=skip_before)
 
         except Exception as e:
             logger.error("Whisper falhou: %s", e)
@@ -108,7 +109,8 @@ class SubtitleGenerator:
     # ── FALLBACK: ESTIMATIVA FONÉTICA ────────────────────────────────────
 
     def _generate_estimated(
-        self, text: str, audio_path: Path, output_path: Path
+        self, text: str, audio_path: Path, output_path: Path,
+        skip_before: float = 0.0,
     ) -> bool:
         """Estima timestamps via modelo fonético quando tudo falha."""
         # Estimar duração do áudio
@@ -123,7 +125,7 @@ class SubtitleGenerator:
         if not boundaries:
             return False
 
-        return generate_ass(boundaries, output_path)
+        return generate_ass(boundaries, output_path, skip_before=skip_before)
 
     # ── INTERFACE PÚBLICA ─────────────────────────────────────────────────
 
@@ -133,6 +135,7 @@ class SubtitleGenerator:
         language: str,
         output_path: Path,
         script_text: str = "",
+        skip_before: float = 0.0,
     ) -> bool:
         """
         Gera arquivo ASS animado word-by-word.
@@ -141,6 +144,12 @@ class SubtitleGenerator:
         1. Word boundaries do edge-tts (JSON gerado pelo voice.py)
         2. Whisper word-level timestamps
         3. Estimativa fonética
+
+        skip_before: palavras com timestamp anterior a este valor (segundos)
+            nao entram no ASS. Usado pra nao legendar o hook, que ja aparece
+            por inteiro no card overlay — legendar palavra-por-palavra tambem
+            e redundante e sobrepoe visualmente o card enquanto ele ainda
+            esta visivel/desaparecendo.
 
         output_path deve terminar em .ass
         """
@@ -152,13 +161,13 @@ class SubtitleGenerator:
         boundaries_path = audio_path.with_name(audio_path.stem + "_boundaries.json")
         if boundaries_path.exists():
             logger.info("Gerando ASS via edge-tts boundaries: %s", output_path.name)
-            if self.generate_from_boundaries(boundaries_path, output_path):
+            if self.generate_from_boundaries(boundaries_path, output_path, skip_before=skip_before):
                 return True
 
         # 2. Whisper
         if self.config.get("use_whisper_fallback", False):
             try:
-                if self._generate_from_whisper(audio_path, language, output_path):
+                if self._generate_from_whisper(audio_path, language, output_path, skip_before=skip_before):
                     return True
             except Exception as e:
                 logger.warning("Whisper indisponível: %s", e)
@@ -166,7 +175,7 @@ class SubtitleGenerator:
         # 3. Estimativa fonética
         if script_text:
             logger.warning("Usando estimativa fonética para %s", output_path.name)
-            return self._generate_estimated(script_text, audio_path, output_path)
+            return self._generate_estimated(script_text, audio_path, output_path, skip_before=skip_before)
 
         logger.error("Não foi possível gerar subtítulos para %s", audio_path.name)
         return False

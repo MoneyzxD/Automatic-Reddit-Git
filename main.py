@@ -563,6 +563,7 @@ def run_pipeline(
     from stages.titler          import TitleGenerator
     from stages.splitter        import split_story
     from stages.voice           import VoiceGenerator
+    from stages.word_timing     import load_word_boundaries
     from stages.subtitle        import SubtitleGenerator
     from stages.video           import VideoRenderer
     from stages.thumbnail       import ThumbnailGenerator
@@ -858,11 +859,33 @@ def run_pipeline(
                 }, config)
                 continue
 
+            # Duracao real do hook — usa os timestamps reais das primeiras
+            # hook_words palavras (boundaries do proprio audio_ok acima),
+            # nao mais uma estimativa por velocidade de fala media. Precisa
+            # ser exata porque tanto o card overlay (abaixo) quanto o corte
+            # de legenda (ETAPA 14) usam o MESMO valor — com estimativa,
+            # os dois podiam discordar e a legenda da historia comecava
+            # antes do card do hook terminar de sumir, sobrepondo os dois.
+            hook_words = len(hook_for_lang.split())
+            boundaries = load_word_boundaries(voice_gen.get_boundaries_path(audio_path))
+            if boundaries and len(boundaries) >= hook_words > 0:
+                ultima_palavra_hook = boundaries[hook_words - 1]
+                hook_duration = float(ultima_palavra_hook["start"]) + float(ultima_palavra_hook["duration"])
+            else:
+                # Fallback: estimativa por velocidade de fala media, usada
+                # so quando os boundaries nao vieram (ex: fallback gTTS)
+                hook_duration = hook_words / 2.8 + 1.5
+
             # ── ETAPA 14 — Subtitulos ASS animados ──────────────────────────
             logger.info("ETAPA 14 — Subtitulos ASS word-by-word")
             sub_dir  = BASE_DIR / "data" / "subtitles" / lang
             ass_path = sub_dir / (stem + ".ass")
-            sub_gen.generate(audio_path, lang, ass_path, script_text=part_script)
+            # skip_before: o hook ja aparece por inteiro no card overlay —
+            # burnar legenda palavra-por-palavra dele tambem e redundante
+            # e foi reportado como bug visual (legenda do hook nao deveria
+            # existir).
+            sub_gen.generate(audio_path, lang, ass_path, script_text=part_script,
+                              skip_before=hook_duration)
             if not ass_path.exists():
                 logger.warning("ASS nao gerado — video sem legenda")
                 ass_path = None
@@ -877,10 +900,8 @@ def run_pipeline(
                 logger.warning("Thumbnail nao gerada — continuando sem ela")
                 thumb_path = None
 
-            # Estima duração do hook pela contagem de palavras
-            # (~2.8 palavras/s para narração natural + 1.5s de margem)
-            hook_words    = len(hook_for_lang.split())
-            hook_duration = hook_words / 2.8 + 1.5
+            # hook_duration ja foi calculado antes da ETAPA 14 (usado tambem
+            # pro corte de legenda) — reaproveitado aqui pro card overlay.
 
             # Lê duração real do áudio para evitar fantasma do card overlay
             audio_duration = get_audio_duration(audio_path)

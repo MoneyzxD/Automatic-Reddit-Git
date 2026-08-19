@@ -412,9 +412,14 @@ def estimate_word_timestamps(text: str, total_duration: float) -> list:
 
 # ── GERACAO DE ASS ────────────────────────────────────────────────────────────
 
-def generate_ass(word_boundaries: list, output_path: Path) -> bool:
+def generate_ass(word_boundaries: list, output_path: Path, skip_before: float = 0.0) -> bool:
     """
     Gera arquivo ASS com subtitulos palavra por palavra + animacao bounce.
+
+    skip_before: palavras com start anterior a este valor (segundos) sao
+        descartadas — usado pra nao legendar o hook, que ja e mostrado
+        por inteiro no card overlay (legendar tambem seria redundante e
+        sobreporia visualmente o card).
     """
     if not word_boundaries:
         logger.error("Nenhum word boundary disponivel para gerar ASS")
@@ -425,6 +430,9 @@ def generate_ass(word_boundaries: list, output_path: Path) -> bool:
     lines  = [ASS_HEADER]
 
     for wb in word_boundaries:
+        if float(wb.get("start", 0.0)) < skip_before:
+            continue
+
         word = wb["word"].upper().strip()
         # Remove pontuacao para exibicao limpa
         word = re.sub(r"[^\w\s]", "", word, flags=re.UNICODE).strip()
