@@ -627,11 +627,13 @@ class TitleGenerator:
 
     def _groq_title(self, original_title: str, story_summary: str,
                     language: str, hook_type: str = "short") -> str | None:
-        if not self.groq_key:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "titler")
+            client = tracked_groq(groq_key, "titler")
 
             base_prompt = TITLE_PROMPTS.get(language, TITLE_PROMPTS["en"]).format(
                 original_title=original_title,
@@ -665,11 +667,13 @@ class TitleGenerator:
 
     def _groq_hook(self, original_title: str, story_summary: str,
                    language: str) -> str | None:
-        if not self.groq_key:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "titler")
+            client = tracked_groq(groq_key, "titler")
 
             prompt = HOOK_PROMPTS.get(language, HOOK_PROMPTS["en"]).format(
                 original_title=original_title,
@@ -705,11 +709,13 @@ class TitleGenerator:
 
     def _groq_closing(self, original_title: str, story_summary: str,
                       language: str) -> str | None:
-        if not self.groq_key:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "titler")
+            client = tracked_groq(groq_key, "titler")
 
             prompt = CLOSING_HOOK_PROMPTS.get(language, CLOSING_HOOK_PROMPTS["en"]).format(
                 original_title=original_title,

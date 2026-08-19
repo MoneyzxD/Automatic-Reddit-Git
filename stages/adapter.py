@@ -99,7 +99,12 @@ class StoryAdapter:
         }
 
     def _groq_adapt(self, story: dict) -> dict | None:
-        if not self.groq_key:
+        from utils import environment as env
+        # Adapter so processa o texto original em ingles (antes da traducao)
+        # — usa a chave do "en" pra separar seu consumo do dos outros
+        # idiomas, com fallback pra chave generica.
+        groq_key = env.groq_api_key("en") or self.groq_key
+        if not groq_key:
             logger.debug("Groq ignorado no adapter — GROQ_API_KEY nao definida")
             return None
 
@@ -108,7 +113,7 @@ class StoryAdapter:
 
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "adapter")
+            client = tracked_groq(groq_key, "adapter")
             prompt = ADAPTER_PROMPT_GROQ.format(title=title, text=text)
 
             resp = client.chat.completions.create(

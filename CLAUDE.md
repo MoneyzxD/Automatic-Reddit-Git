@@ -82,7 +82,7 @@ Every stage that uses an LLM (`adapter.py`, `translator.py`, `naturalizer.py`, `
 - `config/subreddits.yaml` — subreddit source list by category, flattened by `get_subreddits()`.
 - `config/publishing.yaml` — everything for `scheduler/runner.py`: per-channel/per-language upload limits, posting-window schedules by weekday+timezone, growth-plan ramp (limits scale up by account age), TikTok notification windows, anti-detection jitter/pause settings.
 - `config/voice_profiles.yaml` — TTS voice selection detail beyond what's in `settings.yaml`.
-- `.env` (from `.env.example`) — secrets and per-environment values: `GROQ_API_KEY`, `OLLAMA_URL`, `TELEGRAM_BOT_TOKEN` + chat IDs per language, YouTube OAuth creds, `DRY_RUN`, `LOG_LEVEL`.
+- `.env` (from `.env.example`) — secrets and per-environment values: `GROQ_API_KEY`, `OLLAMA_URL`, `TELEGRAM_BOT_TOKEN` + chat IDs per language, YouTube OAuth creds, `DRY_RUN`, `LOG_LEVEL`. Optional per-language Groq keys (`GROQ_API_KEY_PT`/`_EN`/`_ES`) give each language its own free-tier token budget instead of all three sharing one account's rate/daily limit — resolved by `utils/environment.py:groq_api_key(language)`, falling back to `GROQ_API_KEY` when a language-specific key isn't set.
 
 ### Scheduler / publishing (`scheduler/`)
 

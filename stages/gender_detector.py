@@ -252,11 +252,13 @@ class GenderDetector:
         self.enabled      = self.config.get("enabled", True)
 
     def _detect_via_groq(self, text: str, language: str) -> dict | None:
-        if not self.groq_key:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "gender_detector")
+            client = tracked_groq(groq_key, "gender_detector")
             prompt = DETECT_PROMPT_GROQ.get(language, DETECT_PROMPT_GROQ["en"])
             resp   = client.chat.completions.create(
                 model=self.groq_model,
@@ -298,11 +300,13 @@ class GenderDetector:
         }
 
     def _correct_via_groq(self, text: str, gender: str, language: str) -> str | None:
-        if not self.groq_key:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client       = tracked_groq(self.groq_key, "gender_detector")
+            client       = tracked_groq(groq_key, "gender_detector")
             labels       = GENDER_LABELS.get(language, GENDER_LABELS["en"])
             gender_label = labels.get(gender, gender)
             prompt       = CORRECT_PROMPT_GROQ.get(language, CORRECT_PROMPT_GROQ["en"])

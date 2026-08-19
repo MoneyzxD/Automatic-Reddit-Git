@@ -550,12 +550,15 @@ class ValidatorEngine:
     # ── CHAMADA GENERICA AO GROQ ────────────────────────────────────────────
 
     def _call_groq(self, system_prompt: str, user_prompt: str,
-                   temperature: float = 0.3, max_tokens: int = 1500) -> str | None:
-        if not self.groq_key:
+                   temperature: float = 0.3, max_tokens: int = 1500,
+                   language: str = "") -> str | None:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "validator")
+            client = tracked_groq(groq_key, "validator")
             resp = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[
@@ -690,6 +693,7 @@ class ValidatorEngine:
             user_prompt=prompt,
             temperature=0.2,
             max_tokens=dynamic_max_tokens,
+            language=language,
         )
         return self._parse_validation_json(raw)
 
@@ -718,6 +722,7 @@ class ValidatorEngine:
             # de titulo/hook ficou mais longo depois da checagem de genero
             # (mais um item pra avaliar = mais raciocinio antes da resposta).
             max_tokens=1500,
+            language=language,
         )
         return self._parse_validation_json(raw)
 
@@ -739,6 +744,7 @@ class ValidatorEngine:
             # Mesmo motivo do validate_title_hook acima — 800 e apertado
             # demais pra um modelo de raciocinio.
             max_tokens=1500,
+            language=language,
         )
         return self._parse_validation_json(raw)
 
@@ -849,6 +855,7 @@ class ValidatorEngine:
             user_prompt=prompt,
             temperature=temperature,
             max_tokens=4000,
+            language=language,
         )
         if raw:
             return raw.strip()
@@ -946,6 +953,7 @@ class ValidatorEngine:
                 user_prompt=prompt,
                 temperature=temperature,
                 max_tokens=100,
+                language=language,
             )
             if raw:
                 new_title = _strip_colon_subtitle(raw.strip().strip('"').split("\n")[0])
@@ -967,6 +975,7 @@ class ValidatorEngine:
                 user_prompt=prompt,
                 temperature=temperature,
                 max_tokens=100,
+                language=language,
             )
             if raw:
                 new_hook = _strip_colon_subtitle(raw.strip().strip('"').split("\n")[0])
@@ -1025,6 +1034,7 @@ class ValidatorEngine:
                 user_prompt=prompt,
                 temperature=temperature,
                 max_tokens=150,
+                language=language,
             )
             if raw:
                 new_description = raw.strip().strip('"').split("\n")[0]
@@ -1043,6 +1053,7 @@ class ValidatorEngine:
                 user_prompt=prompt,
                 temperature=temperature,
                 max_tokens=150,
+                language=language,
             )
             if raw:
                 new_tags = [t.strip() for t in raw.strip().split(",") if t.strip()]

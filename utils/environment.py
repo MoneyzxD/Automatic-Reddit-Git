@@ -54,6 +54,32 @@ def current_env(base_dir: Path | None = None) -> str:
     return "local"
 
 
+# ── GROQ — UMA CHAVE POR IDIOMA ─────────────────────────────────────────────
+#
+# Motivo: PT/EN/ES rodando com uma unica chave competem pelo mesmo teto de
+# tokens (por minuto E por dia) do free tier — quanto mais idiomas em
+# producao, mais cedo esse teto compartilhado estoura (ja aconteceu: 200k
+# TPD do gpt-oss-20b batido num dia de teste pesado). Cada idioma usar sua
+# PROPRIA conta gratuita do Groq separa os orcamentos, sem duplicar
+# trabalho nem contornar o limite de uma unica carga de trabalho — cada
+# chave continua fazendo so o trabalho do seu proprio idioma.
+#
+# Variaveis: GROQ_API_KEY_PT, GROQ_API_KEY_EN, GROQ_API_KEY_ES
+# Sem a chave especifica do idioma, cai para GROQ_API_KEY (comportamento
+# atual preservado — nao quebra quem so tem uma chave configurada).
+
+def groq_api_key(language: str = "") -> str:
+    """
+    Chave do Groq para o idioma informado. Tenta GROQ_API_KEY_<LANG> antes
+    de cair para a chave generica GROQ_API_KEY.
+    """
+    if language:
+        especifica = _env(f"GROQ_API_KEY_{language.upper()}")
+        if especifica:
+            return especifica
+    return _env("GROQ_API_KEY")
+
+
 # ── BACKGROUNDS ───────────────────────────────────────────────────────────────
 
 def background_source() -> str:

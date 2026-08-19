@@ -113,6 +113,15 @@ jobs:
         env:
           PIPELINE_ENV: runner
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Uma chave gratuita do Groq POR IDIOMA — cada idioma tem seu
+          # proprio orcamento de tokens (por minuto e por dia), em vez de
+          # PT/EN/ES competirem pelo teto de uma unica conta. Secret
+          # ausente = string vazia = cai pra GROQ_API_KEY acima
+          # (utils/environment.py:groq_api_key). So precisa cadastrar
+          # conforme for configurando cada idioma, nao e obrigatorio.
+          GROQ_API_KEY_PT: ${{ secrets.GROQ_API_KEY_PT }}
+          GROQ_API_KEY_EN: ${{ secrets.GROQ_API_KEY_EN }}
+          GROQ_API_KEY_ES: ${{ secrets.GROQ_API_KEY_ES }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
           # Biblioteca de backgrounds fora do repositorio (~800MB): o runner

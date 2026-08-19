@@ -316,12 +316,14 @@ class ScriptNaturalizer:
     # ── PROVIDERS ─────────────────────────────────────────────────────────────
 
     def _groq_rewrite(self, text: str, language: str, narrator_gender: str) -> str | None:
-        if not self.groq_key:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key:
             logger.debug("Groq ignorado — GROQ_API_KEY nao definida")
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "naturalizer")
+            client = tracked_groq(groq_key, "naturalizer")
             prompt = self._build_prompt(language, narrator_gender)
             resp   = client.chat.completions.create(
                 model=self.groq_model,

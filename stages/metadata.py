@@ -267,11 +267,13 @@ class MetadataGenerator:
 
     def _description_via_groq(self, title: str, story_summary: str,
                                language: str, narrator_gender: str) -> str | None:
-        if not self.groq_key or not self.llm_enabled:
+        from utils import environment as env
+        groq_key = env.groq_api_key(language) or self.groq_key
+        if not groq_key or not self.llm_enabled:
             return None
         try:
             from utils.groq_client import tracked_groq
-            client = tracked_groq(self.groq_key, "metadata")
+            client = tracked_groq(groq_key, "metadata")
 
             gender_label = {
                 "female":  {"pt": "feminino", "en": "female",   "es": "femenino"},
