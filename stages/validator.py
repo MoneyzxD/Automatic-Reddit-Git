@@ -704,7 +704,7 @@ class ValidatorEngine:
         dynamic_max_tokens = min(4500, max(2000, 1800 + word_count * 3))
 
         raw = self._call_groq(
-            system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
+            system_prompt=f"Responda em {language}. Retorne APENAS JSON valido, sem texto adicional.",
             user_prompt=prompt,
             temperature=0.2,
             max_tokens=dynamic_max_tokens,
@@ -729,7 +729,7 @@ class ValidatorEngine:
             narrator_gender=gender_label,
         )
         raw = self._call_groq(
-            system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
+            system_prompt=f"Responda em {language}. Retorne APENAS JSON valido, sem texto adicional.",
             user_prompt=prompt,
             temperature=0.3,
             # 800 truncava com frequencia: o modelo (reasoning) gasta parte
@@ -753,7 +753,7 @@ class ValidatorEngine:
             story_text=story_text[:500].replace("\n", " "),
         )
         raw = self._call_groq(
-            system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
+            system_prompt=f"Responda em {language}. Retorne APENAS JSON valido, sem texto adicional.",
             user_prompt=prompt,
             temperature=0.3,
             # Mesmo motivo do validate_title_hook acima — 800 e apertado
@@ -866,7 +866,7 @@ class ValidatorEngine:
             )
 
         raw = self._call_groq(
-            system_prompt="Retorne APENAS o texto corrigido, sem comentarios.",
+            system_prompt=f"Responda em {language}. Retorne APENAS o texto corrigido, sem comentarios.",
             user_prompt=prompt,
             temperature=temperature,
             max_tokens=4000,

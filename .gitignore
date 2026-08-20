@@ -38,7 +38,12 @@ data/logs/*.log
 Thumbs.db
 
 # --- Claude Code ---
-.claude/settings.local.json
+# Toda a pasta, nao so settings.local.json: skills/plugins instalados
+# (ex: superpowers) se materializam aqui com centenas de arquivos que
+# nao tem nada a ver com o projeto — nao deve ir pro repo publico.
+.claude/
+.agents/
+skills-lock.json
 
 # --- Segredos / credenciais (confirme se já não estão cobertos) ---
 .env
