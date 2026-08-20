@@ -71,26 +71,29 @@ def _aceita_reasoning_effort(model: str) -> bool:
 
 
 # ── REPARO DE MOJIBAKE (UTF-8 decodificado como Latin-1) ────────────────────
-# Observado em producao: travessoes/aspas curvas que o modelo gera saem como
-# "â" seguido de caractere(s) de controle C1 invisiveis (\x80-\x9f) — o
-# padrao classico de bytes UTF-8 validos (ex: E2 80 94 do em-dash) que foram
-# decodificados como Latin-1 em algum ponto entre a resposta do Groq e o
-# texto chegar aqui. C1 (\x80-\x9f) nunca aparece legitimamente em narracao,
-# entao a presenca dele e um sinal seguro de corrupcao. Reencodar como
-# Latin-1 recupera os bytes originais; decodificar como UTF-8 reconstroi o
-# caractere certo. Aplicado aqui (unico ponto por onde toda resposta do Groq
-# passa) para proteger todos os estagios, independente de qual gerou o
-# texto corrompido.
-_MOJIBAKE_RE = re.compile(r"[\x80-\x9f]")
-
-
+# Observado em producao de duas formas: travessoes/aspas curvas viram "â" +
+# controle C1 invisivel (\x80-\x9f, do em-dash E2 80 94), E acentuacao
+# pt/es vira "Ã±", "Ã­", "Ã³" etc. (do "n" 0xC3 0xB1 etc.) — ambos o mesmo
+# padrao raiz: bytes UTF-8 validos decodificados como Latin-1 em algum
+# ponto entre a resposta do Groq e o texto chegar aqui. A primeira versao
+# deste reparo so cobria o primeiro caso (regex restrita a \x80-\x9f) — a
+# acentuacao pt/es usa bytes fora dessa faixa (0xA0-0xFF) e passava direto,
+# o que e MUITO mais grave pra esses dois idiomas (toda palavra acentuada).
+#
+# Deteccao generica: qualquer texto com caractere nao-ASCII e candidato.
+# Reencodar como Latin-1 (sempre reversivel para codepoints 0-255) recupera
+# os bytes originais; decodificar como UTF-8 reconstroi o caractere certo.
+# Texto legitimamente acentuado (ja correto) nao sofre nada — um "ñ" real
+# e um UNICO codepoint que nao forma sequencia UTF-8 valida sozinho, entao
+# o round-trip falha com UnicodeDecodeError e o texto original e mantido.
 def _reparar_mojibake(texto: str) -> str:
-    if not texto or not _MOJIBAKE_RE.search(texto):
+    if not texto or texto.isascii():
         return texto
     try:
-        return texto.encode("latin-1").decode("utf-8")
+        reparado = texto.encode("latin-1").decode("utf-8")
     except (UnicodeEncodeError, UnicodeDecodeError):
         return texto
+    return reparado if reparado != texto else texto
 
 
 class _TrackedCompletions:
