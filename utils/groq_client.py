@@ -70,6 +70,29 @@ def _aceita_reasoning_effort(model: str) -> bool:
     return any(marca in m for marca in _MODELOS_COM_RACIOCINIO)
 
 
+# ── REPARO DE MOJIBAKE (UTF-8 decodificado como Latin-1) ────────────────────
+# Observado em producao: travessoes/aspas curvas que o modelo gera saem como
+# "â" seguido de caractere(s) de controle C1 invisiveis (\x80-\x9f) — o
+# padrao classico de bytes UTF-8 validos (ex: E2 80 94 do em-dash) que foram
+# decodificados como Latin-1 em algum ponto entre a resposta do Groq e o
+# texto chegar aqui. C1 (\x80-\x9f) nunca aparece legitimamente em narracao,
+# entao a presenca dele e um sinal seguro de corrupcao. Reencodar como
+# Latin-1 recupera os bytes originais; decodificar como UTF-8 reconstroi o
+# caractere certo. Aplicado aqui (unico ponto por onde toda resposta do Groq
+# passa) para proteger todos os estagios, independente de qual gerou o
+# texto corrompido.
+_MOJIBAKE_RE = re.compile(r"[\x80-\x9f]")
+
+
+def _reparar_mojibake(texto: str) -> str:
+    if not texto or not _MOJIBAKE_RE.search(texto):
+        return texto
+    try:
+        return texto.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return texto
+
+
 class _TrackedCompletions:
     """Proxy de client.chat.completions que contabiliza uso apos cada create()."""
 
@@ -101,6 +124,21 @@ class _TrackedCompletions:
                     time.sleep(espera)
                     continue
                 raise
+
+        try:
+            for choice in getattr(resp, "choices", None) or []:
+                msg = getattr(choice, "message", None)
+                conteudo = getattr(msg, "content", None) if msg else None
+                if isinstance(conteudo, str):
+                    reparado = _reparar_mojibake(conteudo)
+                    if reparado != conteudo:
+                        logger.warning(
+                            "Mojibake reparado na resposta do Groq (%s)", self._stage,
+                        )
+                        msg.content = reparado
+        except Exception as e:  # reparo nunca pode quebrar o pipeline
+            logger.debug("Falha ao verificar mojibake (%s): %s", self._stage, e)
+
         try:
             telemetry.record_usage(
                 self._stage,
