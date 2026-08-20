@@ -11,8 +11,13 @@ Fluxo:
 
 Stack gratuita (sem API key):
     Primário  : deep-translator (GoogleTranslator — gratuito)
-    Fallback  : googletrans 4.0.0rc1
-    Fallback 2: script original sem tradução (apenas para EN)
+    Fallback  : deep-translator (MyMemoryTranslator — gratuito, mesmo pacote)
+    Fallback 2: script original sem tradução
+
+    Nota: googletrans (o pacote separado, nao o motor do deep-translator)
+    foi descartado de proposito — ele fixa httpx numa versao de 2020,
+    incompativel com groq/python-telegram-bot/huggingface-hub. MyMemory
+    e um segundo motor real sem esse conflito, ja incluso no deep-translator.
 
 Instalação:
     pip install deep-translator
@@ -101,26 +106,27 @@ class ScriptTranslator:
 
     # ── TRADUÇÃO ──────────────────────────────────────────────────────────
 
-    def _split_chunks(self, text: str) -> list:
+    def _split_chunks(self, text: str, chunk_size: int | None = None) -> list:
         """
         Divide o texto em chunks menores respeitando parágrafos.
         Evita cortar frases no meio.
         """
+        chunk_size = chunk_size or self.CHUNK_SIZE
         paragraphs = text.split("\n\n")
         chunks     = []
         current    = ""
 
         for para in paragraphs:
-            if len(current) + len(para) + 2 <= self.CHUNK_SIZE:
+            if len(current) + len(para) + 2 <= chunk_size:
                 current += ("\n\n" if current else "") + para
             else:
                 if current:
                     chunks.append(current)
-                if len(para) > self.CHUNK_SIZE:
+                if len(para) > chunk_size:
                     sentences = re.split(r"(?<=[.!?])\s+", para)
                     buf = ""
                     for sent in sentences:
-                        if len(buf) + len(sent) <= self.CHUNK_SIZE:
+                        if len(buf) + len(sent) <= chunk_size:
                             buf += (" " if buf else "") + sent
                         else:
                             if buf:
@@ -170,30 +176,56 @@ class ScriptTranslator:
             logger.warning(f"deep-translator falhou ({source}→{target}): {e}")
             return None
 
-    def _translate_googletrans(self, text: str, source: str, target: str) -> str | None:
-        """Fallback: googletrans."""
+    # MyMemory (API gratuita por tras do deep-translator) limita ~500
+    # caracteres por requisicao — bem menor que o CHUNK_SIZE do Google
+    # Translate. Margem de seguranca pra nao estourar em textos com
+    # acentuacao (alguns caracteres multibyte contam mais pro limite real).
+    MYMEMORY_CHUNK_SIZE = 450
+
+    def _translate_mymemory(self, text: str, source: str, target: str) -> str | None:
+        """
+        Fallback: MyMemoryTranslator, motor gratuito ja embutido no
+        deep-translator (mesmo pacote da traducao primaria, sem dependencia
+        nova). Existe porque o GoogleTranslator do deep-translator falha as
+        vezes de forma transitoria (visto em producao: "No translation was
+        found using the current translator" para en->es especificamente) e
+        sem um segundo motor real o pipeline seguia com o texto original
+        sem traducao nenhuma.
+        """
         try:
-            from googletrans import Translator
-            tr      = Translator()
-            chunks  = self._split_chunks(text)
-            results = []
-            tgt     = LANG_CODES.get(target, target)
-            for chunk in chunks:
-                r = tr.translate(chunk, src=source, dest=tgt)
-                result_text = _ensure_utf8(r.text) if r.text else chunk
-                results.append(result_text)
-                time.sleep(self.DELAY)
+            from deep_translator import MyMemoryTranslator
+        except ImportError:
+            return None
+
+        try:
+            chunks   = self._split_chunks(text, chunk_size=self.MYMEMORY_CHUNK_SIZE)
+            results  = []
+            src_code = LANG_CODES.get(source, source)
+            tgt_code = LANG_CODES.get(target, target)
+
+            translator = MyMemoryTranslator(source=src_code, target=tgt_code)
+
+            for i, chunk in enumerate(chunks):
+                if not chunk.strip():
+                    results.append(chunk)
+                    continue
+                result = translator.translate(chunk)
+                result = _ensure_utf8(result) if result else chunk
+                results.append(result or chunk)
+                if i < len(chunks) - 1:
+                    time.sleep(self.DELAY)
+
             final_result = "\n\n".join(results)
             return _ensure_utf8(final_result)
         except Exception as e:
-            logger.warning(f"googletrans falhou ({source}→{target}): {e}")
+            logger.warning(f"MyMemoryTranslator falhou ({source}→{target}): {e}")
             return None
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> str:
         """
         Traduz texto do idioma fonte para o alvo.
         Se source == target, retorna o texto original.
-        Tenta deep-translator → googletrans → texto original.
+        Tenta deep-translator (Google) → deep-translator (MyMemory) → texto original.
         """
         # Normaliza para comparação (pt-br == pt)
         src_norm = _normalize_lang_key(source_lang)
@@ -210,18 +242,17 @@ class ScriptTranslator:
 
         result = self._translate_deep(text, source_lang, target_lang)
         if result:
-            logger.info(f"  ✓ Tradução concluída (deep-translator)")
+            logger.info(f"  ✓ Tradução concluída (deep-translator/Google)")
             return result
 
-        result = self._translate_googletrans(text, source_lang, target_lang)
+        result = self._translate_mymemory(text, source_lang, target_lang)
         if result:
-            logger.info(f"  ✓ Tradução concluída (googletrans fallback)")
+            logger.info(f"  ✓ Tradução concluída (deep-translator/MyMemory fallback)")
             return result
 
         logger.error(
-            f"  Tradução falhou ({source_lang}→{target_lang}). "
-            f"Instale: pip install deep-translator\n"
-            f"  Usando texto original."
+            f"  Tradução falhou ({source_lang}→{target_lang}) nos dois motores. "
+            f"Usando texto original."
         )
         return text
 

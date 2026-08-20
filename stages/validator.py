@@ -681,12 +681,15 @@ class ValidatorEngine:
         # RESERVA DE RACIOCINIO: os modelos gpt-oss gastam parte do orcamento
         # "pensando" antes de escrever. Sem folga extra, o raciocinio consome
         # tudo, o conteudo volta vazio/truncado e o validador aprova sem
-        # validar (medido: truncava em ~2970 com a formula antiga).
-        # Teto de 3500 e deliberado: o limite da conta e 8000 TOKENS POR
-        # MINUTO — uma unica chamada perto disso consumiria a janela inteira
-        # e provocaria 413 na chamada seguinte.
+        # validar. Medido em producao: com reserva de 1400 ainda truncava as
+        # vezes (~3254 num script medio) porque o raciocinio varia de
+        # tentativa pra tentativa — subido pra 1800.
+        # Teto subido de 3500 para 4500: agora cada idioma tem sua propria
+        # chave/orcamento de 8000 TOKENS POR MINUTO (nao compartilhado mais
+        # entre PT/EN/ES), entao ha mais folga pra uma chamada unica sem
+        # comer o orcamento das chamadas seguintes no mesmo minuto.
         word_count = len(script_text.split())
-        dynamic_max_tokens = min(3500, max(2000, 1400 + word_count * 3))
+        dynamic_max_tokens = min(4500, max(2000, 1800 + word_count * 3))
 
         raw = self._call_groq(
             system_prompt="Retorne APENAS JSON valido, sem texto adicional.",
