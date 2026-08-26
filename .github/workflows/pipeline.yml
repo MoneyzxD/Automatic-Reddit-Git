@@ -1,12 +1,10 @@
 name: Pipeline de videos
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FASE 5 DA MIGRACAO — comeca MANUAL de proposito.
-#
-# O cron esta comentado no fim deste arquivo. Ative-o so depois que o disparo
-# manual (workflow_dispatch) tiver publicado um video de ponta a ponta com
-# sucesso. Ligar o agendamento antes disso significa descobrir problemas em
-# producao, sem ninguem olhando.
+# Disparo manual (workflow_dispatch) ja validado de ponta a ponta nos 3
+# idiomas. Cron ativo abaixo — publish.py respeita o teto diario do
+# growth_plan por canal, entao gerar os 3 idiomas por disparo nao gera spam
+# de publicacao: o excedente so fica na fila esperando a proxima janela.
 #
 # GERACAO E PUBLICACAO RODAM NO MESMO JOB, de proposito: o runner e efemero e
 # o arquivo de video so existe enquanto o job vive. Quem desacopla o horario
@@ -38,12 +36,11 @@ on:
         default: false
         type: boolean
 
-  # schedule:
-  #   # Ativar SOMENTE apos validacao manual bem-sucedida.
-  #   # 6 disparos/dia a cada 4h. Horarios em UTC.
-  #   # O atraso tipico do cron do GitHub (10-30 min em horario de pico) nao
-  #   # afeta a hora de publicacao — quem manda nisso e o publishAt.
-  #   - cron: "0 2,6,10,14,18,22 * * *"
+  schedule:
+    # 6 disparos/dia a cada 4h. Horarios em UTC.
+    # O atraso tipico do cron do GitHub (10-30 min em horario de pico) nao
+    # afeta a hora de publicacao — quem manda nisso e o publishAt.
+    - cron: "0 2,6,10,14,18,22 * * *"
 
 # Serializa execucoes: duas rodadas simultaneas corromperiam a fila JSON e o
 # banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).
@@ -129,7 +126,7 @@ jobs:
           BACKGROUND_BASE_URL: ${{ secrets.BACKGROUND_BASE_URL }}
         run: |
           python main.py \
-            --lang ${{ inputs.idiomas }} \
+            --lang ${{ inputs.idiomas || 'pt en es' }} \
             ${{ inputs.dry_run && '--dry-run' || '' }} \
             ${{ inputs.historia_teste && '--test-story' || '' }}
 

@@ -233,6 +233,19 @@ class YouTubeUploader:
             else:
                 logger.info("Upload YouTube concluido: %s", url)
 
+            thumb_path = item.get("thumbnail_path")
+            if thumb_path and Path(thumb_path).exists():
+                try:
+                    service.thumbnails().set(
+                        videoId=video_id,
+                        media_body=MediaFileUpload(str(thumb_path), mimetype="image/jpeg"),
+                    ).execute()
+                    logger.info("Thumbnail definida: %s", video_id)
+                except Exception as e:
+                    # Canal sem verificacao por telefone rejeita thumbnail
+                    # customizada — nao pode derrubar um upload que ja deu certo.
+                    logger.warning("Falha ao definir thumbnail (%s): %s", video_id, e)
+
             _think_time()
             return {
                 "status":     "uploaded",
