@@ -66,7 +66,10 @@ class RedditExtractor:
         self, subreddit: str, time_filter: str = "week", limit: int = 50
     ) -> list:
         """Busca posts via Reddit JSON público (sem API key)."""
-        sub = subreddit.lstrip("r/")
+        # lstrip() remove QUALQUER caractere do conjunto {r, /}, nao o
+        # prefixo "r/" — corrompia nomes como "r/relationship_advice" para
+        # "elationship_advice" (o "r" de "relationship" tambem sumia).
+        sub = subreddit.removeprefix("r/")
 
         for base_url in self.REDDIT_URLS:
             url    = f"{base_url}/r/{sub}/top.json"
@@ -80,13 +83,18 @@ class RedditExtractor:
                     if items:
                         logger.info(f"Reddit JSON: {len(items)} posts de r/{sub}")
                         return items
+                    logger.warning(f"Reddit JSON: resposta OK mas 0 posts para r/{sub} em {base_url}")
                 elif resp.status_code == 429:
                     logger.warning(f"Rate limit em r/{sub} — aguardando 60s")
                     time.sleep(60)
                 else:
-                    logger.debug(f"HTTP {resp.status_code} para r/{sub} em {base_url}")
+                    # Nivel warning (nao debug): raiz mais provavel de falha
+                    # uniforme em todos os subreddits e o Reddit bloqueando o
+                    # IP do runner do GitHub Actions (403) — em debug isso
+                    # ficava invisivel no log de producao.
+                    logger.warning(f"HTTP {resp.status_code} para r/{sub} em {base_url}")
             except requests.RequestException as e:
-                logger.debug(f"Erro ao buscar r/{sub} em {base_url}: {e}")
+                logger.warning(f"Erro ao buscar r/{sub} em {base_url}: {e}")
 
             time.sleep(self.delay + random.uniform(0.5, 1.5))
 
@@ -101,7 +109,7 @@ class RedditExtractor:
         Busca posts via PullPush.io (gratuito, mantido pela comunidade).
         Endpoint: api.pullpush.io/reddit/search/submission
         """
-        sub    = subreddit.lstrip("r/")
+        sub    = subreddit.removeprefix("r/")
         params = {
             "subreddit": sub,
             "sort":      "score",
@@ -135,8 +143,11 @@ class RedditExtractor:
                             "subreddit":    sub,
                         })
                     return normalized
+                logger.warning(f"PullPush: resposta OK mas 0 posts para r/{sub}")
+            else:
+                logger.warning(f"PullPush: HTTP {resp.status_code} para r/{sub}")
         except requests.RequestException as e:
-            logger.debug(f"PullPush falhou para r/{sub}: {e}")
+            logger.warning(f"PullPush falhou para r/{sub}: {e}")
         return []
 
     # ── FETCH COM FALLBACK ────────────────────────────────────────────────
@@ -154,7 +165,7 @@ class RedditExtractor:
             return posts
 
         # Fallback: PullPush.io
-        logger.info(f"Reddit JSON falhou para r/{subreddit} — tentando PullPush.io")
+        logger.info(f"Reddit JSON falhou para {subreddit} — tentando PullPush.io")
         posts = self._fetch_pullpush(subreddit, limit=min(limit, 25))
         return posts
 
@@ -218,7 +229,7 @@ class RedditExtractor:
         min_upvotes  = int(self.config.get("min_upvotes", 50))
 
         for i, sub in enumerate(subreddits):
-            logger.info(f"[{i+1}/{len(subreddits)}] Extraindo r/{sub}")
+            logger.info(f"[{i+1}/{len(subreddits)}] Extraindo {sub}")
             posts = self.fetch_subreddit(sub, time_filter=time_filter, limit=limit)
 
             for post in posts:
