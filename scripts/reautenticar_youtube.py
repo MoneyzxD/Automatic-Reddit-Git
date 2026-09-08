@@ -35,9 +35,12 @@ Depois de gerar:
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent.parent
+BASE_DIR    = Path(__file__).parent.parent
+STATUS_FILE = BASE_DIR / "data" / "oauth_token_status.json"
 
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
@@ -80,9 +83,20 @@ def main() -> int:
     with open(token_file, "w") as f:
         f.write(creds.to_json())
 
+    # So a data de geracao, sem nenhum dado sensivel — versionado no repo
+    # pra que scripts/check_token_expiry.py (rodando no runner, sem acesso
+    # a este arquivo local) saiba a idade de cada token e avise antes do
+    # limite de 7 dias do app OAuth em modo "Testing".
+    STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    status = json.loads(STATUS_FILE.read_text(encoding="utf-8")) if STATUS_FILE.exists() else {}
+    status[args.lang] = datetime.now(timezone.utc).isoformat()
+    STATUS_FILE.write_text(json.dumps(status, indent=2), encoding="utf-8")
+
     print(f"\nToken salvo em: {token_file}")
     print(f"Agora copie o CONTEUDO desse arquivo para o GitHub Secret YOUTUBE_TOKEN_{args.lang.upper()}")
     print("(Settings -> Secrets and variables -> Actions -> editar o secret existente)")
+    print(f"\nNao esqueca de commitar {STATUS_FILE.relative_to(BASE_DIR)} tambem "
+          "(sem isso o aviso de expiracao nao sabe que este token foi renovado).")
     return 0
 
 

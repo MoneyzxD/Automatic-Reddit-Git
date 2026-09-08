@@ -205,6 +205,12 @@ def main() -> int:
     from utils import environment as env
     logger.info("Ambiente: %s", env.describe(BASE_DIR))
 
+    try:
+        from scripts.check_oauth_expiry import check_and_warn
+        check_and_warn()
+    except Exception as e:  # aviso nunca pode derrubar a publicacao
+        logger.debug("Falha ao checar expiracao de token: %s", e)
+
     pub_cfg = _carregar_publishing()
     if not pub_cfg:
         logger.error("publishing.yaml vazio — nada a fazer")
