@@ -36,11 +36,13 @@ on:
         default: false
         type: boolean
 
-  schedule:
-    # 6 disparos/dia a cada 4h. Horarios em UTC.
-    # O atraso tipico do cron do GitHub (10-30 min em horario de pico) nao
-    # afeta a hora de publicacao — quem manda nisso e o publishAt.
-    - cron: "0 2,6,10,14,18,22 * * *"
+  # PAUSADO em 08/09 — token OAuth expirando a cada 7 dias (app OAuth ainda
+  # em modo "Testing" no Google Cloud, publicacao travada por falta de
+  # Politica de Privacidade). Reativar so depois de resolver isso, senao
+  # cada disparo so acumula falha sem gerar nada.
+  # schedule:
+  #   # 6 disparos/dia a cada 4h. Horarios em UTC.
+  #   - cron: "0 2,6,10,14,18,22 * * *"
 
 # Serializa execucoes: duas rodadas simultaneas corromperiam a fila JSON e o
 # banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).
