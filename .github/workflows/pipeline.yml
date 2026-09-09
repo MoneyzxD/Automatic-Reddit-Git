@@ -126,6 +126,12 @@ jobs:
           # Biblioteca de backgrounds fora do repositorio (~800MB): o runner
           # baixa apenas o sorteado. Ver stages/backgrounds.py.
           BACKGROUND_BASE_URL: ${{ secrets.BACKGROUND_BASE_URL }}
+          # Reddit passou a devolver 403 no JSON publico ate pra trafego
+          # anonimo de IP residencial — so sessao logada continua
+          # funcionando. Cabecalho Cookie completo de uma sessao logada no
+          # reddit.com (dura ~6 meses; ver utils/environment.py e
+          # scripts/check_oauth_expiry.py pro aviso de expiracao).
+          REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
           python main.py \
             --lang ${{ inputs.idiomas || 'pt en es' }} \
@@ -149,6 +155,9 @@ jobs:
           YOUTUBE_TOKEN_PT: ${{ secrets.YOUTUBE_TOKEN_PT }}
           YOUTUBE_TOKEN_EN: ${{ secrets.YOUTUBE_TOKEN_EN }}
           YOUTUBE_TOKEN_ES: ${{ secrets.YOUTUBE_TOKEN_ES }}
+          # scripts/check_oauth_expiry.py roda no inicio deste passo — sem
+          # isto o aviso de expiracao do cookie do Reddit fica mudo aqui.
+          REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
           python publish.py --lang ${{ inputs.idiomas }}
 

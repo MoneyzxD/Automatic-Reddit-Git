@@ -58,6 +58,16 @@ class RedditExtractor:
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
         })
+
+        from utils import environment as env
+        cookie = env.reddit_session_cookie()
+        if cookie:
+            # Trafego de sessao logada continua funcionando mesmo com o
+            # Reddit devolvendo 403 pra requisicao anonima (ver
+            # utils/environment.py:reddit_session_cookie).
+            session.headers["Cookie"] = cookie
+            logger.info("Reddit: usando sessao logada (cookie configurado)")
+
         return session
 
     # ── FONTE 1: Reddit JSON público ─────────────────────────────────────

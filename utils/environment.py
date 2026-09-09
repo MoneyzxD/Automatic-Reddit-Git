@@ -80,6 +80,20 @@ def groq_api_key(language: str = "") -> str:
     return _env("GROQ_API_KEY")
 
 
+# ── REDDIT — COOKIE DE SESSAO LOGADA ────────────────────────────────────────
+#
+# Motivo: o Reddit passou a devolver 403 no endpoint JSON publico mesmo pra
+# trafego anonimo vindo de IP residencial (nao e mais so bloqueio de IP de
+# datacenter) — mudanca de politica deles, nao algo que o codigo controla.
+# Trafego de uma sessao logada de verdade (cookie de navegador) continua
+# funcionando. REDDIT_SESSION_COOKIE guarda o cabecalho Cookie completo
+# copiado do DevTools (aba Network) de uma sessao logada no reddit.com.
+
+def reddit_session_cookie() -> str:
+    """Cookie de sessao logada do Reddit, ou vazio se nao configurado."""
+    return _env("REDDIT_SESSION_COOKIE")
+
+
 # ── BACKGROUNDS ───────────────────────────────────────────────────────────────
 
 def background_source() -> str:
