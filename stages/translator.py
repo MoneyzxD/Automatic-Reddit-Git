@@ -81,6 +81,12 @@ class ScriptTranslator:
     CHUNK_SIZE = 4500   # chars por request (limite seguro do Google)
     DELAY      = 1.0    # segundos entre requests
 
+    # Retry quando os DOIS motores falham na mesma rodada — geralmente
+    # transitorio (rate limit, hiccup do servidor). len() define quantas
+    # tentativas extras alem da primeira.
+    TRANSLATE_MAX_TENTATIVAS = 3
+    TRANSLATE_RETRY_ESPERA   = [5, 15]
+
     def __init__(self, config: dict = None):
         self.config      = config or {}
         self.scripts_dir = None  # definido em translate_all()
@@ -250,15 +256,29 @@ class ScriptTranslator:
             f"{LANG_NAMES.get(target_lang, target_lang)}"
         )
 
-        result = self._translate_deep(text, source_lang, target_lang)
-        if result:
-            logger.info(f"  ✓ Tradução concluída (deep-translator/Google)")
-            return result
+        # Ambos os motores as vezes falham de forma transitoria (rate
+        # limit, hiccup do servidor) — sem retry, o texto original ficava
+        # no idioma errado e a deteccao de genero (que roda antes, sobre
+        # esse texto) saia com confianca baixa/errada, cascateando pra
+        # narracao com genero e voz trocados (visto em producao).
+        for tentativa in range(self.TRANSLATE_MAX_TENTATIVAS):
+            if tentativa > 0:
+                espera = self.TRANSLATE_RETRY_ESPERA[tentativa - 1]
+                logger.warning(
+                    f"  Tradução falhou nos dois motores — aguardando {espera}s "
+                    f"pra tentativa {tentativa + 1}/{self.TRANSLATE_MAX_TENTATIVAS}"
+                )
+                time.sleep(espera)
 
-        result = self._translate_mymemory(text, source_lang, target_lang)
-        if result:
-            logger.info(f"  ✓ Tradução concluída (deep-translator/MyMemory fallback)")
-            return result
+            result = self._translate_deep(text, source_lang, target_lang)
+            if result:
+                logger.info(f"  ✓ Tradução concluída (deep-translator/Google)")
+                return result
+
+            result = self._translate_mymemory(text, source_lang, target_lang)
+            if result:
+                logger.info(f"  ✓ Tradução concluída (deep-translator/MyMemory fallback)")
+                return result
 
         logger.error(
             f"  Tradução falhou ({source_lang}→{target_lang}) nos dois motores. "

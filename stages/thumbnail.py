@@ -116,14 +116,20 @@ def _fit_text(draw, text: str, font_truetype, area_w: int, area_h: int,
         if line_h * len(lines) <= area_h * 0.85:
             return lines, font, line_h
 
-    # Fallback: tamanho mínimo com truncagem
+    # Fallback: tamanho mínimo com truncagem — MESMO no tamanho minimo,
+    # limita ao numero de linhas que realmente cabe em area_h (0.85), em
+    # vez de um "[:6]" fixo que podia estourar o card pra hooks longos.
     try:
         font = ImageFont.truetype(font_path, font_size_min)
     except Exception:
         font = ImageFont.load_default()
+    line_h         = int(font_size_min * _LINE_SPACING)
+    max_lines      = max(1, int((area_h * 0.85) // line_h))
     chars_per_line = max(10, int(area_w / (font_size_min * 0.6)))
-    lines          = textwrap.wrap(text, width=chars_per_line)[:6]
-    return lines, font, int(font_size_min * _LINE_SPACING)
+    lines          = textwrap.wrap(text, width=chars_per_line)[:max_lines]
+    if lines and len(lines) < len(textwrap.wrap(text, width=chars_per_line)):
+        lines[-1] = lines[-1].rstrip(".,;: ") + "..."
+    return lines, font, line_h
 
 
 def _find_font() -> str:
