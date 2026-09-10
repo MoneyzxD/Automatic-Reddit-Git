@@ -38,6 +38,16 @@ LANG_CODES = {
     "es":    "es",
 }
 
+# MyMemory exige codigo COM regiao (en-US, nao "en" sozinho) — "en" sozinho
+# da erro "No support for the provided language" mesmo sendo idioma valido.
+# Mapeamento separado do LANG_CODES acima porque o GoogleTranslator aceita
+# os codigos simples normalmente e nao deve ser mexido.
+MYMEMORY_LANG_CODES = {
+    "pt": "pt-BR",
+    "en": "en-US",
+    "es": "es-MX",
+}
+
 LANG_NAMES = {
     "pt":    "Português (Brasil)",
     "en":    "English",
@@ -200,8 +210,8 @@ class ScriptTranslator:
         try:
             chunks   = self._split_chunks(text, chunk_size=self.MYMEMORY_CHUNK_SIZE)
             results  = []
-            src_code = LANG_CODES.get(source, source)
-            tgt_code = LANG_CODES.get(target, target)
+            src_code = MYMEMORY_LANG_CODES.get(source, source)
+            tgt_code = MYMEMORY_LANG_CODES.get(target, target)
 
             translator = MyMemoryTranslator(source=src_code, target=tgt_code)
 
