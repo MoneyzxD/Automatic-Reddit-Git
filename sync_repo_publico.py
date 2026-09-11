@@ -65,8 +65,17 @@ def listar_arquivos_versionaveis() -> list[str]:
     return [l for l in r.stdout.splitlines() if l.strip()]
 
 
+
+# Excecoes explicitas ao bloqueio por substring — arquivos com nome padrao
+# que contem uma palavra bloqueada (".env") mas sao seguros/esperados no
+# repo publico (sao templates, nunca tem valor real).
+CAMINHOS_PERMITIDOS = (".env.example",)
+
+
 def bloqueado(caminho: str) -> bool:
     c = caminho.lower().replace("\\", "/")
+    if any(c.endswith(p) for p in CAMINHOS_PERMITIDOS):
+        return False
     return any(b.replace("\\", "/") in c for b in CAMINHOS_BLOQUEADOS)
 
 

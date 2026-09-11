@@ -48,6 +48,9 @@ skills-lock.json
 # --- Segredos / credenciais (confirme se já não estão cobertos) ---
 .env
 .env.*
+# .env.* acima bloquearia .env.example (que deve ser versionado, é so
+# template sem valor real) — reabre a excecao explicitamente.
+!.env.example
 secrets/
 db/pipeline.db
 
