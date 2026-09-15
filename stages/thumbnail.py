@@ -4,10 +4,10 @@ thumbnail.py
 Etapa 16 do pipeline — dois objetivos:
 
     1. generate()             → Thumbnail estática JPG (YouTube)
-                                Carrega template PNG do idioma correto,
-                                insere o hook como texto, exporta JPG 1280x720.
+                                Compõe uma capa vertical 1080x1920 com o card
+                                do idioma correto, sem esticar o template.
 
-    2. render_hook_card()     → PNG do card com texto renderizado (980x458).
+    2. render_hook_card()     → PNG do card com texto renderizado (780x364).
                                 Usado como fallback ou etapa intermediária.
 
     3. render_hook_card_video() → .MOV com canal alpha (codec qtrle) contendo
@@ -28,7 +28,6 @@ O pipeline (main.py) chama:
 from __future__ import annotations
 
 import logging
-import textwrap
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -41,32 +40,15 @@ _TEMPLATE_MAP = {
     "es":    "Thumbnail - ES.png",
 }
 
-# Dimensões da thumbnail de saída (YouTube)
-_THUMB_W  = 1280
-_THUMB_H  = 720
-
-# Dimensões reais do template PNG (medidas do arquivo)
-_CARD_W   = 393
-_CARD_H   = 184
-
-# Área de texto dentro do card (coordenadas relativas ao template 393x184)
-_TEXT_AREA = {
-    "x":      110,
-    "y":      20,
-    "width":  265,
-    "height": 145,
-}
-
-# 68 deixava hooks longos ocupando quase toda a altura do card (linhas
-# encostando na borda da area de texto) — 48 mantem a legibilidade ganha
-# no patch anterior mas com folga suficiente pra nao esmagar o cabecalho
-# e os icones do template.
-_FONT_SIZE_MAX  = 48
-_FONT_SIZE_MIN  = 16
-_FONT_COLOR     = (255, 255, 255)   # branco
-_STROKE_COLOR   = (0, 0, 0)        # contorno preto
-_STROKE_WIDTH   = 2
-_LINE_SPACING   = 1.2
+# O card mantém os 780px aprovados pelo operador; a capa usa proporção Shorts.
+_THUMB_W = 1080
+_THUMB_H = 1920
+_CARD_W = 780
+_FONT_SIZE_MAX = 44
+_FONT_SIZE_MIN = 22
+_FONT_COLOR = (24, 24, 32)
+_LINE_SPACING = 1.22
+_RENDER_SCALE = 2
 
 
 def _get_template_path(lang: str, base_dir: Path) -> Path | None:
@@ -91,52 +73,85 @@ def _get_template_path(lang: str, base_dir: Path) -> Path | None:
     return None
 
 
-def _fit_text(draw, text: str, font_truetype, area_w: int, area_h: int,
-              font_path: str, font_size_max: int, font_size_min: int):
-    """
-    Ajusta automaticamente tamanho da fonte e quebra de linha para
-    que o texto caiba dentro da área definida.
-    Retorna (lines, font, line_height).
-    """
+def _load_font(font_path: str, size: int):
+    """Usa Inter semibold quando variável e mantém o tamanho no fallback."""
     from PIL import ImageFont
 
-    for size in range(font_size_max, font_size_min - 1, -2):
-        try:
-            font = ImageFont.truetype(font_path, size)
-        except Exception:
-            font = ImageFont.load_default()
+    try:
+        font = ImageFont.truetype(font_path, size)
+    except OSError:
+        return ImageFont.load_default(size=size)
+    try:
+        if b"SemiBold" in font.get_variation_names():
+            font.set_variation_by_name(b"SemiBold")
+    except OSError:
+        pass  # Fontes TTF estáticas não têm eixos de variação.
+    return font
 
-        avg_char_w     = size * 0.6
-        chars_per_line = max(10, int(area_w / avg_char_w))
-        lines          = textwrap.wrap(text, width=chars_per_line) or [text]
-        line_h         = int(size * _LINE_SPACING)
 
-        # Margem de 15%: sem ela o texto acerta a altura exata da area e as
-        # linhas encostam na borda (cabecalho/icones do card ficam espremidos).
-        if line_h * len(lines) <= area_h * 0.85:
+def _wrap_text(draw, text: str, font, area_w: int) -> list[str]:
+    """Quebra palavras pela largura em pixels, incluindo palavras muito longas."""
+    def fits(value):
+        left, _, right, _ = draw.textbbox((0, 0), value, font=font)
+        return right - left <= area_w
+
+    lines, line = [], ""
+    for word in text.split():
+        candidate = f"{line} {word}" if line else word
+        if fits(candidate):
+            line = candidate
+            continue
+        if line:
+            lines.append(line)
+        line = ""
+        for char in word:
+            if line and not fits(line + char):
+                lines.append(line)
+                line = ""
+            line += char
+    if line:
+        lines.append(line)
+    return lines or [""]
+
+
+def _fit_text(draw, text: str, font_truetype, area_w: int, area_h: int,
+              font_path: str, font_size_max: int, font_size_min: int):
+    """Ajusta largura e altura reais; só abrevia títulos além do limite mínimo."""
+    for size in range(font_size_max, font_size_min - 1, -1):
+        font = _load_font(font_path, size)
+        lines = _wrap_text(draw, text, font, area_w)
+        bbox = font.getbbox("ÁÉÍÓÚÇgjpq")
+        line_h = max(round(size * _LINE_SPACING), bbox[3] - bbox[1])
+        if line_h * len(lines) <= area_h:
+            # Equilibra linhas sem mudar tamanho nem texto; evita uma palavra
+            # sozinha na última linha quando há espaço nas anteriores.
+            best_score = float("inf")
+            for width in range(area_w, int(area_w * 0.70), -max(1, area_w // 40)):
+                candidate = _wrap_text(draw, text, font, width)
+                if len(candidate) != len(lines):
+                    break
+                widths = [draw.textlength(line, font=font) for line in candidate]
+                score = max(widths) - min(widths)
+                if score < best_score:
+                    lines, best_score = candidate, score
             return lines, font, line_h
 
-    # Fallback: tamanho mínimo com truncagem — MESMO no tamanho minimo,
-    # limita ao numero de linhas que realmente cabe em area_h (0.85), em
-    # vez de um "[:6]" fixo que podia estourar o card pra hooks longos.
-    try:
-        font = ImageFont.truetype(font_path, font_size_min)
-    except Exception:
-        font = ImageFont.load_default()
-    line_h         = int(font_size_min * _LINE_SPACING)
-    max_lines      = max(1, int((area_h * 0.85) // line_h))
-    chars_per_line = max(10, int(area_w / (font_size_min * 0.6)))
-    lines          = textwrap.wrap(text, width=chars_per_line)[:max_lines]
-    if lines and len(lines) < len(textwrap.wrap(text, width=chars_per_line)):
-        lines[-1] = lines[-1].rstrip(".,;: ") + "..."
+    max_lines = max(1, area_h // line_h)
+    lines = lines[:max_lines]
+    last = lines[-1].rstrip(".,;: ")
+    while last and draw.textlength(last + "…", font=font) > area_w:
+        last = last[:-1]
+    lines[-1] = last + "…"
+    logger.warning("Título abreviado no card por exceder a área disponível")
     return lines, font, line_h
 
 
-def _find_font() -> str:
-    """Procura uma fonte bold disponível no sistema."""
+def _find_font(configured: str | None = None) -> str:
+    """Prioriza a fonte versionada para Windows e Linux produzirem o mesmo card."""
     candidates = [
+        configured,
+        str(Path(__file__).resolve().parent.parent / "assets/fonts/Inter.ttf"),
         # Windows
-        "C:/Windows/Fonts/impact.ttf",
         "C:/Windows/Fonts/arialbd.ttf",
         "C:/Windows/Fonts/Arial Bold.ttf",
         # Linux (Oracle)
@@ -146,8 +161,7 @@ def _find_font() -> str:
         "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
     ]
     for path in candidates:
-        if Path(path).exists():
-            logger.debug("Fonte encontrada: %s", path)
+        if path and Path(path).is_file():
             return path
 
     logger.warning("Nenhuma fonte TTF encontrada — usando fonte padrão PIL")
@@ -155,17 +169,18 @@ def _find_font() -> str:
 
 
 def _draw_text_on_image(img, text: str, area: dict, font_path: str,
-                         center_v: bool = True):
+                         center_v: bool = True, font_size_max: int = _FONT_SIZE_MAX,
+                         font_size_min: int = _FONT_SIZE_MIN):
     """
     Desenha texto centralizado dentro da área definida.
-    Aplica contorno para legibilidade sobre qualquer fundo.
+    Texto escuro sólido no fundo branco, com margens para cabeçalho e rodapé.
     """
     from PIL import ImageDraw
 
     draw  = ImageDraw.Draw(img)
     lines, font, line_h = _fit_text(
         draw, text, None, area["width"], area["height"],
-        font_path, _FONT_SIZE_MAX, _FONT_SIZE_MIN,
+        font_path, font_size_max, font_size_min,
     )
 
     total_h = line_h * len(lines)
@@ -175,17 +190,6 @@ def _draw_text_on_image(img, text: str, area: dict, font_path: str,
         y        = y_start + i * line_h
         x_center = area["x"] + area["width"] // 2
 
-        # Contorno (8 direções)
-        for dx in range(-_STROKE_WIDTH, _STROKE_WIDTH + 1):
-            for dy in range(-_STROKE_WIDTH, _STROKE_WIDTH + 1):
-                if dx == 0 and dy == 0:
-                    continue
-                draw.text(
-                    (x_center + dx, y + dy),
-                    line, font=font, fill=_STROKE_COLOR, anchor="mt",
-                )
-
-        # Texto principal
         draw.text((x_center, y), line, font=font, fill=_FONT_COLOR, anchor="mt")
 
     return img
@@ -227,56 +231,75 @@ class ThumbnailGenerator:
             logger.error("Erro ao abrir template %s: %s", tpl_path, e)
             return None
 
-    # ── THUMBNAIL ESTÁTICA (YouTube JPG 1280x720) ──────────────────────────
+    def _render_card_image(self, hook_text: str, lang: str, width: int):
+        """Renderiza em 2x e reduz uma vez, suavizando as bordas das letras."""
+        from PIL import Image
+
+        template = self._load_template(lang)
+        if template is None:
+            return None
+        height = int(template.height * width / template.width)
+        scale = width / _CARD_W * _RENDER_SCALE
+        template = template.resize(
+            (width * _RENDER_SCALE, height * _RENDER_SCALE), Image.Resampling.LANCZOS,
+        )
+        # Coordenadas em 780px: início abaixo do avatar, fim antes dos ícones.
+        area = {key: round(value * scale) for key, value in {
+            "x": 36, "y": 110, "width": 708, "height": 188,
+        }.items()}
+        configured = self.config.get("title_font")
+        if configured:
+            configured = str(self.base_dir / configured)
+        font_path = _find_font(configured)
+        logger.info("Fonte do card: %s (semibold, renderização 2x)", Path(font_path).name)
+        _draw_text_on_image(
+            template, hook_text, area, font_path,
+            font_size_max=round(self.config.get("title_font_size", _FONT_SIZE_MAX) * scale),
+            font_size_min=round(_FONT_SIZE_MIN * scale),
+        )
+        return template.resize((width, height), Image.Resampling.LANCZOS)
+
+    # ── THUMBNAIL ESTÁTICA (YouTube Shorts JPG 1080x1920) ─────────────────
 
     def generate(self, hook_text: str, lang: str, output_path: Path) -> bool:
         """
-        Gera thumbnail estática JPG 1280x720 para YouTube.
+        Gera uma capa vertical, mantendo o título na região central dos recortes.
         """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            from PIL import Image
+            from PIL import Image, ImageDraw
         except ImportError:
             logger.error("Pillow não instalado — thumbnail ignorada")
             return False
 
-        template = self._load_template(lang)
-        if template is None:
+        width = int(self.config.get("shorts_width", _THUMB_W))
+        height = int(self.config.get("shorts_height", _THUMB_H))
+        card = self._render_card_image(hook_text, lang, round(width * 0.9))
+        if card is None:
             logger.error("Template não disponível — thumbnail ignorada")
             return False
 
-        font_path = _find_font()
-        tw, th    = template.size
-        area_scaled = {
-            "x":      int(tw * 0.28),
-            "y":      int(th * 0.11),
-            "width":  int(tw * 0.67),
-            "height": int(th * 0.79),
-        }
-
-        img_with_text = _draw_text_on_image(
-            template.copy(), hook_text, area_scaled, font_path, center_v=True,
-        )
-
-        thumb = img_with_text.resize((_THUMB_W, _THUMB_H), Image.LANCZOS)
-
-        if thumb.mode == "RGBA":
-            bg = Image.new("RGB", thumb.size, (0, 0, 0))
-            bg.paste(thumb, mask=thumb.split()[3])
-            thumb = bg
-
-        thumb.save(str(output_path), "JPEG", quality=95)
-        logger.info("Thumbnail gerada: %s", output_path.name)
+        # Fundo discreto na paleta do canal; o card conserva a proporção original.
+        thumb = Image.new("RGB", (width, height))
+        draw = ImageDraw.Draw(thumb)
+        for y in range(height):
+            glow = 1 - abs(2 * y / max(1, height - 1) - 1)
+            color = (int(20 + 28 * glow), int(14 + 6 * glow), int(35 + 48 * glow))
+            draw.line((0, y, width, y), fill=color)
+        x, y = (width - card.width) // 2, (height - card.height) // 2
+        thumb.paste(card, (x, y), card)
+        thumb.save(str(output_path), "JPEG", quality=95, subsampling=0)
+        logger.info("Thumbnail vertical gerada: %s (%dx%d)", output_path.name, width, height)
         return True
 
-    # ── CARD PNG ESTÁTICO (980x458, overlay base) ──────────────────────────
+    # ── CARD PNG ESTÁTICO (780x364, overlay base) ──────────────────────────
 
     def render_hook_card(self, hook_text: str, lang: str,
                           output_path: Path | None = None) -> Path | None:
         """
-        Renderiza o card com o hook sobre o template PNG (980x458, RGBA).
+        Renderiza o card com o hook sobre o template PNG (780x364, RGBA).
         Salva em output_path (ou em temp se None).
         Retorna o caminho do PNG gerado ou None em caso de erro.
 
@@ -288,33 +311,11 @@ class ThumbnailGenerator:
             logger.error("Pillow não instalado — card overlay ignorado")
             return None
 
-        template = self._load_template(lang)
-        if template is None:
+        target_w = int(self.config.get("card_width", _CARD_W))
+        img_with_text = self._render_card_image(hook_text, lang, target_w)
+        if img_with_text is None:
             return None
-
-        tw_orig, th_orig = template.size
-        # 980 (91% da largura do video 1080px) deixava o card dominando o
-        # quadro. 780 (~72%) da mais respiro sem comprometer a legibilidade
-        # — o texto reescala junto (scale_factor abaixo), entao a fonte
-        # some proporcionalmente com o card, nao fica desproporcional.
-        target_w = 780
-        scale    = target_w / tw_orig
-        target_h = int(th_orig * scale)
-        template = template.resize((target_w, target_h), Image.LANCZOS)
-        tw, th   = template.size
-
-        font_path    = _find_font()
-        scale_factor = tw / 980
-        text_area    = {
-            "x":      int(15  * scale_factor),
-            "y":      int(95  * scale_factor),
-            "width":  int(950 * scale_factor),
-            "height": int(315 * scale_factor),
-        }
-
-        img_with_text = _draw_text_on_image(
-            template.copy(), hook_text, text_area, font_path, center_v=True,
-        )
+        tw, th = img_with_text.size
 
         if output_path is None:
             import tempfile
@@ -395,7 +396,7 @@ class ThumbnailGenerator:
         frames_dir = tmp_dir / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Gera o card PNG base (980x458, RGBA)
+        # 1. Gera o card PNG base com texto suavizado em 2x.
         base_card_path = tmp_dir / f"base_{lang}.png"
         base_card      = self.render_hook_card(hook_text, lang, base_card_path)
         if base_card is None:

@@ -160,7 +160,8 @@ class YouTubeUploader:
             efemero, onde o cron pode atrasar 10-30 min. Sem publish_at, o
             comportamento antigo e mantido (publica imediatamente).
 
-        Retorna dict com status, video_id, url e publish_at aplicado.
+        Retorna dict com status, video_id, url, publish_at e resultado da
+        thumbnail separado. Falha na capa nao deve reenviar o video.
         """
         video_path = item.get("video_path")
         if not video_path or not Path(video_path).exists():
@@ -233,6 +234,8 @@ class YouTubeUploader:
             else:
                 logger.info("Upload YouTube concluido: %s", url)
 
+            thumbnail_result = {"status": "not_requested"}
+            studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
             thumb_path = item.get("thumbnail_path")
             if thumb_path and Path(thumb_path).exists():
                 try:
@@ -240,11 +243,36 @@ class YouTubeUploader:
                         videoId=video_id,
                         media_body=MediaFileUpload(str(thumb_path), mimetype="image/jpeg"),
                     ).execute()
+                    thumbnail_result = {"status": "uploaded"}
                     logger.info("Thumbnail definida: %s", video_id)
                 except Exception as e:
-                    # Canal sem verificacao por telefone rejeita thumbnail
-                    # customizada — nao pode derrubar um upload que ja deu certo.
-                    logger.warning("Falha ao definir thumbnail (%s): %s", video_id, e)
+                    # Permissao da capa e separada do upload do video. Um 403
+                    # pode depender da verificacao/elegibilidade do canal.
+                    thumbnail_result = {
+                        "status": "failed", "error": str(e),
+                        "studio_url": studio_url,
+                    }
+                    logger.warning(
+                        "Video enviado, mas a thumbnail falhou (%s): %s. "
+                        "Editar a capa sem reenviar o video: %s",
+                        video_id, e, studio_url,
+                    )
+                    if getattr(getattr(e, "resp", None), "status", None) == 403:
+                        logger.warning(
+                            "YouTube recusou a permissao para thumbnails. Confira "
+                            "a verificacao e a elegibilidade do canal no Studio; "
+                            "em Shorts a disponibilidade depende do canal."
+                        )
+            elif thumb_path:
+                thumbnail_result = {
+                    "status": "missing",
+                    "error": "Arquivo de thumbnail nao encontrado",
+                    "studio_url": studio_url,
+                }
+                logger.warning(
+                    "Video enviado sem a thumbnail: arquivo nao encontrado (%s). "
+                    "Editar a capa sem reenviar o video: %s", thumb_path, studio_url,
+                )
 
             _think_time()
             return {
@@ -252,6 +280,7 @@ class YouTubeUploader:
                 "video_id":   video_id,
                 "url":        url,
                 "publish_at": publish_at,
+                "thumbnail":  thumbnail_result,
             }
 
         except Exception as e:
@@ -501,6 +530,7 @@ class Uploader:
         item_id  = item["id"]
         results  = {}
         all_ok   = True
+        thumbnail_pending = False
 
         # ── YouTube ──────────────────────────────────────────────────────────
         if self.youtube:
@@ -521,6 +551,10 @@ class Uploader:
                     result["status"],
                     video_id=result.get("video_id"),
                     url=result.get("url"),
+                    thumbnail=result.get("thumbnail"),
+                )
+                thumbnail_pending = result.get("thumbnail", {}).get("status") in (
+                    "failed", "missing",
                 )
                 if result["status"] != "uploaded":
                     all_ok = False
@@ -547,7 +581,12 @@ class Uploader:
                     logger.error("TikTok falhou: %s", result.get("error"))
 
         # ── Deletar arquivo local apos upload confirmado ──────────────────────
-        if all_ok:
+        if thumbnail_pending:
+            logger.warning(
+                "Capa pendente: arquivos locais preservados para corrigir a "
+                "thumbnail do video ja enviado (%s)", item_id,
+            )
+        if all_ok and not thumbnail_pending:
             delete = self.pub_config.get("global", {}).get("delete_after_upload", True)
             if delete:
                 self._delete_local_files(item)

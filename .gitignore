@@ -29,6 +29,8 @@ config/local_*.yaml
 # Assets grandes
 assets/backgrounds/*.mp4
 assets/fonts/*.ttf
+# Fonte gratuita do card, necessária para reproduzir o visual no runner.
+!assets/fonts/Inter.ttf
 
 # Logs
 data/logs/*.log
@@ -71,6 +73,7 @@ background/
 
 # Artefatos gerados pelo pipeline
 data/thumbnails/
+data/previews/
 data/subtitles/
 data/queue/*.json
 *.mp4

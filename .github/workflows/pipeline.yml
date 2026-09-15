@@ -202,15 +202,19 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-      # Amostra do video gerado, para conferir qualidade sem publicar.
-      # Util na fase de validacao manual; desligue depois para economizar
-      # tempo de upload do artifact.
-      - name: Anexar video gerado (amostra)
-        if: ${{ always() && inputs.apenas_gerar }}
+      # Capas ficam disponiveis mesmo apos publicar. Se o YouTube recusar
+      # a thumbnail, o uploader preserva tambem o MP4 para ajuste manual;
+      # sem este artifact os arquivos desapareceriam junto com o runner.
+      - name: Anexar thumbnails e videos preservados
+        if: ${{ always() && !inputs.dry_run }}
         uses: actions/upload-artifact@v4
         with:
           name: video-${{ github.run_id }}
-          path: data/exports/**/*.mp4
+          path: |
+            data/exports/**/*.mp4
+            data/exports/**/*.jpg
+            data/thumbnails/**/*.jpg
+            data/thumbnails/**/*.png
           retention-days: 7
           if-no-files-found: warn
 

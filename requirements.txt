@@ -42,7 +42,7 @@ ffmpeg-python>=0.2.0     # wrapper Python para FFmpeg
 #   Windows: https://ffmpeg.org/download.html
 
 # ── Thumbnails ───────────────────────────────────────────────────────────
-Pillow>=10.0.0           # geração de imagens (gratuito)
+Pillow>=10.1.0           # geração de imagens; fallback de fonte com tamanho explícito
 
 # ── Banco de dados ───────────────────────────────────────────────────────
 # sqlite3 já vem com Python — sem dependência extra

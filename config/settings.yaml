@@ -93,9 +93,10 @@ thumbnail:
   width: 1280
   height: 720
   background_color: '#0D0D0D'
-  title_font: assets/fonts/bold.ttf
-  title_font_size: 72
-  title_color: '#FFFFFF'
+  title_font: assets/fonts/Inter.ttf
+  title_font_size: 44
+  title_color: '#181820'
+  card_width: 780
   title_max_chars: 40
   accent_color: '#FF4444'
   shorts_width: 1080
@@ -147,7 +148,6 @@ validator:
   enabled: true
   groq_validator_model: openai/gpt-oss-20b
   groq_call_delay: 6.0
-
 
 
 

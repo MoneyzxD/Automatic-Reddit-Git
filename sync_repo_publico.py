@@ -27,6 +27,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import shutil
 import subprocess
@@ -53,6 +54,13 @@ PADROES_SEGREDO = {
     "token de bot Telegram": r"\d{8,10}:[A-Za-z0-9_-]{30,40}",
     "chave privada":         r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----",
     "chave AWS":             r"AKIA[0-9A-Z]{16}",
+}
+
+# A fonte oficial contém bytes que coincidem com o padrão de token Telegram.
+# Exceção só para esse conteúdo exato, conferido no Google Fonts; um arquivo
+# alterado no mesmo caminho continua passando pela varredura normal.
+ASSETS_PUBLICOS_VERIFICADOS = {
+    "assets/fonts/Inter.ttf": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031",
 }
 
 
@@ -86,7 +94,11 @@ def varrer_segredos(raiz: Path) -> list[tuple[str, str]]:
         if not p.is_file() or ".git" in p.parts:
             continue
         try:
-            texto = p.read_text(encoding="utf-8", errors="ignore")
+            conteudo = p.read_bytes()
+            esperado = ASSETS_PUBLICOS_VERIFICADOS.get(p.relative_to(raiz).as_posix())
+            if esperado and hashlib.sha256(conteudo).hexdigest() == esperado:
+                continue
+            texto = conteudo.decode("utf-8", errors="ignore")
         except Exception:
             continue
         for nome, padrao in PADROES_SEGREDO.items():

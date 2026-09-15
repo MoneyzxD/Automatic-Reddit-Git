@@ -216,10 +216,12 @@ def update_status(
     status: STATUS,
     video_id: str | None = None,
     url: str | None = None,
+    thumbnail: dict | None = None,
 ) -> None:
     """
     Atualiza o status de um item em uma plataforma especifica.
     Recalcula o status geral do item baseado nas plataformas.
+    Guarda o resultado opcional da capa sem alterar o status do video enviado.
     """
     queue = _load_queue(language)
     for item in queue["items"]:
@@ -230,6 +232,8 @@ def update_status(
             item["platforms"][platform]["status"]   = status
             item["platforms"][platform]["video_id"] = video_id
             item["platforms"][platform]["url"]      = url
+            if thumbnail is not None:
+                item["platforms"][platform]["thumbnail"] = thumbnail
 
         statuses = [p["status"] for p in item["platforms"].values()]
         if all(s == "uploaded" for s in statuses):

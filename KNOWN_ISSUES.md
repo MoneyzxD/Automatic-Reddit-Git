@@ -81,6 +81,35 @@ nosso controle direto. Mitigado com retry (3 tentativas, 5s/15s) em
 API. Se isso continuar sendo problema recorrente, considerar outro motor
 de fallback gratuito.
 
+### 7. YouTube recusa thumbnail com 403 mesmo após upload do vídeo
+
+Confirmado no run `34920391659` (15/09/2026): vídeo `0VpyD1Vms60`
+publicado, JPG gerado, mas `thumbnails.set` devolveu falta de permissão para
+miniaturas personalizadas. A recusa ocorre depois da autenticação/upload;
+renovar tokens não habilita esse recurso do canal.
+
+Conferir no YouTube Studio a elegibilidade do canal e a verificação exigida
+para miniaturas. A disponibilidade de upload de capas para Shorts depende
+do canal. A documentação atual permite capa personalizada pelo Studio no
+computador; não assumir que Shorts nunca aceita JPG.
+
+- [Ajuda oficial e requisitos](https://support.google.com/youtube/answer/72431?hl=pt-BR)
+- [Erro 403 da API](https://developers.google.com/youtube/v3/docs/thumbnails/set)
+
+Mitigação: resultado da thumbnail fica separado na fila, com erro e link do
+Studio; o vídeo continua `uploaded` para evitar duplicação. Em falha da capa,
+MP4/JPG são preservados. O artifact `video-<run_id>` inclui capas e vídeos
+preservados por 7 dias, também em execuções que publicam. Corrigir a capa do
+vídeo existente no Studio após habilitar o recurso; não reenviar o vídeo.
+
+### Qualidade do card revisada (15/09/2026)
+
+Inter SemiBold acompanha o projeto com licença OFL (`assets/fonts/Inter.ttf`),
+inclusive no Linux. Texto escuro sólido, renderização em 2x, medição real das
+letras e linhas equilibradas substituem fonte dependente do sistema, contorno
+grosso e estimativa por caracteres. Card mantém 780px e margens para avatar e
+rodapé. A capa é 1080x1920, com o card centralizado sem deformar o template.
+
 ## Resolvido nesta sessão (contexto, não reabrir sem evidência nova)
 
 Para não retrabalhar o que já foi investigado e corrigido:
