@@ -11,6 +11,9 @@ deep-translator>=1.11.4    # tradução PT/EN/ES via Google Translate (gratuito)
 requests>=2.31.0         # Reddit JSON público (sem API key)
 pyyaml>=6.0              # leitura de configs YAML
 
+# ── Verificação no CI
+pytest>=8.0              # testes executados antes de cada geração automática
+
 # ── Filtragem ────────────────────────────────────────────────────────────
 vaderSentiment>=3.3.2    # análise de sentimento (gratuito)
 better-profanity>=0.7.0  # detecção de profanidade (gratuito)

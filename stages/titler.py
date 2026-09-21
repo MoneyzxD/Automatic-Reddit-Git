@@ -169,7 +169,7 @@ HOOK_PROMPTS = {
         "✅ 'Estou errada em não querer ajudar minha irmã depois do que ela fez comigo?'\n"
         "✅ 'Virei a vilã da família depois que me recusei a bancar o estilo de vida do meu irmão.'\n"
         "✅ 'O que fez minha avó de 79 anos perder a paciência na frente de toda a família.'\n"
-        "✅ 'Pessoas que já tiveram problemas com os pais — o que aprenderam com isso?'\n"
+        "✅ 'Depois de cortar contato com meus pais, entendi o preço dessa decisão.'\n"
         "✅ 'Eu tinha 28 anos, trabalhava como enfermeira, e minha irmã ainda achava que eu devia dinheiro a ela.'\n\n"
         "CLAREZA SEM AMBIGUIDADE:\n"
         "Algumas palavras têm mais de um sentido em português (ex: 'caso' pode ser processo "
@@ -187,6 +187,11 @@ HOOK_PROMPTS = {
         "- Exemplos de pergunta correta: 'Fui babaca por recusar emprestar dinheiro pra minha irmã?'\n"
         "- Deve funcionar como título do YouTube E como frase narrada\n"
         "- Deve soar natural quando lido em voz alta\n"
+        "- Escreva UMA única frase coesa, com uma ideia central e uma relação clara de causa e consequência\n"
+        "- NUNCA use hífen, travessão, dois-pontos ou ponto e vírgula para colar duas orações\n"
+        "- Não empilhe fatos independentes; reescreva o conflito para que tudo flua como uma só frase\n"
+        "- Exemplo ruim: 'Recusei deixar o namorado da minha colega morar comigo e ele não paga nada - agora estamos em guerra.'\n"
+        "- Exemplo bom: 'Recusei hospedar de graça o namorado da minha colega e agora estou em guerra com ela.'\n"
         "- Números e valores em dinheiro DEVEM ser escritos por extenso "
         "(ex: 'quinze mil reais', NUNCA '15.000' ou 'R$15.000') — a TTS lê "
         "dígitos em formato numérico um por um ('um, cinco, zero, zero, "
@@ -214,13 +219,13 @@ HOOK_PROMPTS = {
         "- Shocking reveal: 'I became the villain of my family just for setting a boundary.'\n"
         "- Viewer question: 'Have you ever had to choose between family and self-respect?'\n"
         "- Extreme experience: 'My sister humiliated me in front of everyone and still thought she could ask for money.'\n"
-        "- Identification call: 'People who were always called the strong one in the family — this is for you.'\n\n"
+        "- Identification call: 'This is for everyone who was always called the strong one in the family.'\n\n"
         "REAL EXAMPLES OF THE DESIRED STYLE:\n"
         "✅ 'Was I wrong for refusing to lend money to my sister after she humiliated me?'\n"
         "✅ 'Am I the bad guy for not helping my sister after everything she put me through?'\n"
         "✅ 'I became the family villain after I refused to fund my brother's lifestyle.'\n"
         "✅ 'What made my 79-year-old grandmother lose her patience in front of the whole family.'\n"
-        "✅ 'People who had to cut off their parents — what did you learn from it?'\n\n"
+        "✅ 'What did you learn after cutting off your parents?'\n\n"
         "MANDATORY RULES:\n"
         "- Maximum 120 characters\n"
         "- NO subreddit acronyms (AITA, TIFU etc)\n"
@@ -230,6 +235,11 @@ HOOK_PROMPTS = {
         "- Example of correct question: 'Was I wrong for refusing to lend money to my sister?'\n"
         "- Must work as a YouTube title AND as a narrated line\n"
         "- Must sound natural when read aloud\n"
+        "- Write ONE cohesive sentence with one central idea and a clear cause-and-effect relationship\n"
+        "- NEVER use a hyphen, dash, colon or semicolon to glue two clauses together\n"
+        "- Do not stack independent facts; rewrite the conflict so it flows as a single sentence\n"
+        "- Bad: 'I refused to let my coworker's boyfriend stay and he pays nothing - now she is furious.'\n"
+        "- Good: 'I refused to let my coworker's boyfriend live with me for free, so now she is furious.'\n"
         "- Numbers and money amounts MUST be spelled out in words "
         "(e.g. 'fifteen thousand dollars', NEVER '$15,000' or '15,000') "
         "— the TTS reads digit-formatted numbers one by one ('one, five, "
@@ -278,6 +288,11 @@ HOOK_PROMPTS = {
         "- Ejemplo de pregunta correcta: '¿Estuve mal por negarme a prestarle dinero a mi hermana?'\n"
         "- Debe funcionar como título de YouTube Y como frase narrada\n"
         "- Debe sonar natural al leerse en voz alta\n"
+        "- Escribe UNA sola frase cohesionada, con una idea central y una relación clara de causa y efecto\n"
+        "- NUNCA uses guion, raya, dos puntos o punto y coma para pegar dos oraciones\n"
+        "- No acumules hechos independientes; reescribe el conflicto para que fluya como una sola frase\n"
+        "- Ejemplo malo: 'No dejé que el novio de mi compañera se quedara y no paga nada - ahora está furiosa.'\n"
+        "- Ejemplo bueno: 'No dejé que el novio de mi compañera viviera gratis conmigo y ahora está furiosa.'\n"
         "- Números y montos de dinero DEBEN escribirse en palabras "
         "(ej: 'quince mil dólares', NUNCA '15.000' ni '$15.000') — el TTS "
         "lee los dígitos en formato numérico uno por uno ('uno, cinco, "
@@ -436,6 +451,7 @@ SYSTEM_PROMPTS_HOOK = {
         "Você é especialista em hooks de abertura para vídeos virais. "
         "Retorne APENAS o hook final. "
         "Deve ser uma frase completa, natural e coloquial em português do Brasil. "
+        "Escreva uma única frase coesa e nunca use hífen, travessão, dois-pontos ou ponto e vírgula para unir orações. "
         "Perguntas DEVEM terminar com ponto de interrogação. "
         "Sem aspas, sem reticências, sem numeração, sem explicações. "
         "RESPONDA SEMPRE EM PORTUGUÊS DO BRASIL."
@@ -444,6 +460,7 @@ SYSTEM_PROMPTS_HOOK = {
         "You are a specialist in opening hooks for viral videos. "
         "Return ONLY the final hook. "
         "Must be a complete, natural and conversational sentence in English. "
+        "Write one cohesive sentence and never use a hyphen, dash, colon or semicolon to join clauses. "
         "Questions MUST end with a question mark. "
         "No quotes, no ellipsis, no numbering, no explanations. "
         "ALWAYS RESPOND IN ENGLISH."
@@ -452,6 +469,7 @@ SYSTEM_PROMPTS_HOOK = {
         "Eres especialista en hooks de apertura para videos virales. "
         "Devuelve SOLO el hook final. "
         "Debe ser una frase completa, natural y coloquial en español. "
+        "Escribe una sola frase cohesionada y nunca uses guion, raya, dos puntos o punto y coma para unir oraciones. "
         "Las preguntas DEBEN terminar con signo de interrogación. "
         "Sin comillas, sin puntos suspensivos, sin numeración, sin explicaciones. "
         "RESPONDE SIEMPRE EN ESPAÑOL."
@@ -489,6 +507,20 @@ SUBREDDIT_PREFIXES = re.compile(
     r"^(AITA|AITAH|TIFU|WIBTA|UPDATE|OC|TIL|CMV|ELI5)[:\s\-–|]+",
     flags=re.IGNORECASE,
 )
+
+CLAUSE_SEPARATOR = re.compile(r"\s+[-–—]\s+")
+CLAUSE_CONNECTORS = {
+    "pt": " e ",
+    "en": " and ",
+    "es": " y ",
+}
+
+
+def normalize_title_sentence(text: str, language: str = "pt") -> str:
+    """Remove separadores que transformam o titulo em duas frases coladas."""
+    connector = CLAUSE_CONNECTORS.get(language, CLAUSE_CONNECTORS["en"])
+    normalized = CLAUSE_SEPARATOR.sub(connector, text)
+    return re.sub(r"\s{2,}", " ", normalized).strip()
 
 
 class TitleGenerator:
@@ -579,7 +611,8 @@ class TitleGenerator:
 
     # ── LIMPEZA ───────────────────────────────────────────────────────────────
 
-    def _clean_title(self, title: str, max_len: int = 120, is_hook: bool = False) -> str:
+    def _clean_title(self, title: str, max_len: int = 120, is_hook: bool = False,
+                     language: str = "pt") -> str:
         title = re.sub(r'^["\'`]|["\'`]$', "", title).strip()
         title = re.sub(r"^t[íi]tulo:\s*", "", title, flags=re.IGNORECASE).strip()
         title = re.sub(r"^hook:\s*",       "", title, flags=re.IGNORECASE).strip()
@@ -596,6 +629,11 @@ class TitleGenerator:
         # e uma trava deterministica: corta tudo a partir do primeiro ':'.
         if ":" in title:
             title = title.split(":", 1)[0].strip()
+
+        # Hifen/travessao entre oracoes produz o efeito de duas frases
+        # coladas. O prompt pede reescrita; esta trava cobre saidas que ainda
+        # escapem do modelo e preserva hifens internos, como "79-year-old".
+        title = normalize_title_sentence(title, language)
 
         # Para hooks: garantir que perguntas terminam com ?
         if is_hook:
@@ -667,7 +705,10 @@ class TitleGenerator:
                 # (visto em producao: titulo cortado "por interromper...").
                 max_tokens=400,
             )
-            title = self._clean_title(resp.choices[0].message.content.strip())
+            title = self._clean_title(
+                resp.choices[0].message.content.strip(),
+                language=language,
+            )
             if title and len(title) > 3:
                 logger.info("Titulo gerado via Groq (%s, tipo=%s): %s", language, hook_type, title)
                 return title
@@ -709,6 +750,7 @@ class TitleGenerator:
                 resp.choices[0].message.content.strip(),
                 max_len=120,
                 is_hook=True,
+                language=language,
             )
             if hook and len(hook) > 3:
                 logger.info("Hook gerado via Groq (%s): %s", language, hook)
@@ -751,6 +793,7 @@ class TitleGenerator:
                 resp.choices[0].message.content.strip(),
                 max_len=140,
                 is_hook=False,
+                language=language,
             )
             if closing and len(closing) > 3:
                 logger.info("Encerramento gerado via Groq (%s): %s", language, closing)
@@ -778,7 +821,10 @@ class TitleGenerator:
                 timeout=60,
             )
             if resp.status_code == 200:
-                title = self._clean_title(resp.json().get("response", "").strip())
+                title = self._clean_title(
+                    resp.json().get("response", "").strip(),
+                    language=language,
+                )
                 if title and len(title) > 3:
                     logger.info("Titulo gerado via Ollama (%s): %s", language, title)
                     return title
@@ -806,6 +852,7 @@ class TitleGenerator:
                     resp.json().get("response", "").strip(),
                     max_len=120,
                     is_hook=True,
+                    language=language,
                 )
                 if hook and len(hook) > 3:
                     logger.info("Hook gerado via Ollama (%s): %s", language, hook)
@@ -834,6 +881,7 @@ class TitleGenerator:
                     resp.json().get("response", "").strip(),
                     max_len=140,
                     is_hook=False,
+                    language=language,
                 )
                 if closing and len(closing) > 3:
                     logger.info("Encerramento gerado via Ollama (%s): %s", language, closing)

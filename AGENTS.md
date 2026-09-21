@@ -73,8 +73,9 @@ sessão logada:
   **falhou repetidamente** (loop de captcha, anos de tentativa sem sucesso,
   independente de rede/dispositivo) — não insista nesse caminho sem que o
   operador peça explicitamente.
-- O cookie dura ~6 meses (bem mais que o token OAuth do YouTube, que dura só
-  7 dias — ver `KNOWN_ISSUES.md`). `scripts/check_oauth_expiry.py` avisa no
+- O cookie dura ~6 meses (bem mais que o token OAuth do YouTube enquanto o
+  app está em Testing, que dura só 7 dias — ver `KNOWN_ISSUES.md`).
+  `scripts/check_oauth_expiry.py` avisa no
   Telegram quando faltarem ≤14 dias, lendo o campo `exp` do JWT
   `reddit_session` embutido no cookie.
 - Quando expirar: repetir o processo manual de login+DevTools. Não existe
@@ -228,9 +229,12 @@ versionados).
 (de propósito: o runner é efêmero, o arquivo de vídeo só existe enquanto o
 job vive). Cache via `actions/cache` restaura/salva `db/pipeline.db` e
 `data/queue/` entre execuções (senão o dedupe nasceria vazio a cada run).
-Cron está **pausado** no momento desta migração (ver `KNOWN_ISSUES.md` —
-token OAuth do YouTube expirando a cada 7 dias); `workflow_dispatch` manual
-continua disponível.
+O gatilho diário das 09:00 UTC gera uma história nos três idiomas, mas o job
+agendado só executa quando as variáveis de repositório
+`PIPELINE_AUTOMATION_ENABLED=true` e
+`YOUTUBE_OAUTH_PUBLISHING_STATUS=production` estiverem definidas. Ative-as
+somente depois de publicar o app OAuth e reautorizar os três canais; o
+`workflow_dispatch` manual continua disponível independentemente delas.
 
 ## Testes
 

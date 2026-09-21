@@ -2,9 +2,9 @@ name: Pipeline de videos
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Disparo manual (workflow_dispatch) ja validado de ponta a ponta nos 3
-# idiomas. Cron ativo abaixo — publish.py respeita o teto diario do
-# growth_plan por canal, entao gerar os 3 idiomas por disparo nao gera spam
-# de publicacao: o excedente so fica na fila esperando a proxima janela.
+# idiomas. O cron gera uma historia por dia nos tres idiomas; uma historia
+# pode virar ate tres partes, alinhada ao teto diario do growth_plan. Rodadas
+# extras gerariam itens que nao sobreviveriam ao runner efemero.
 #
 # GERACAO E PUBLICACAO RODAM NO MESMO JOB, de proposito: o runner e efemero e
 # o arquivo de video so existe enquanto o job vive. Quem desacopla o horario
@@ -36,13 +36,10 @@ on:
         default: false
         type: boolean
 
-  # PAUSADO em 08/09 — token OAuth expirando a cada 7 dias (app OAuth ainda
-  # em modo "Testing" no Google Cloud, publicacao travada por falta de
-  # Politica de Privacidade). Reativar so depois de resolver isso, senao
-  # cada disparo so acumula falha sem gerar nada.
-  # schedule:
-  #   # 6 disparos/dia a cada 4h. Horarios em UTC.
-  #   - cron: "0 2,6,10,14,18,22 * * *"
+  schedule:
+    # Uma rodada diaria as 09:00 UTC. A API agenda cada idioma dentro da sua
+    # janela local de publicacao; o horario do runner nao vira o horario do video.
+    - cron: "0 9 * * *"
 
 # Serializa execucoes: duas rodadas simultaneas corromperiam a fila JSON e o
 # banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).
@@ -53,6 +50,13 @@ concurrency:
 
 jobs:
   gerar-e-publicar:
+    # O gatilho fica versionado, mas so executa automaticamente depois que o
+    # OAuth estiver em producao e PIPELINE_AUTOMATION_ENABLED=true no GitHub.
+    # Disparos manuais continuam disponiveis durante a preparacao.
+    if: >-
+      ${{ github.event_name != 'schedule' ||
+          (vars.PIPELINE_AUTOMATION_ENABLED == 'true' &&
+           vars.YOUTUBE_OAUTH_PUBLISHING_STATUS == 'production') }}
     runs-on: ubuntu-latest
     # Teto de 6h do GitHub; 300 min deixa margem e evita job pendurado
     # queimando tempo se algo travar (ex: espera de rede infinita).
@@ -98,6 +102,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Validar codigo antes da geracao
+        run: python -m pytest tests -q
+
       # ── ESTADO ENTRE EXECUCOES ──────────────────────────────────────────
       # O runner e efemero: sem isto, o banco de dedupe nasce vazio a cada
       # execucao e a mesma historia do Reddit seria reprocessada e publicada
@@ -122,6 +129,7 @@ jobs:
       # ── GERACAO ─────────────────────────────────────────────────────────
       - name: Gerar video
         env:
+          PIPELINE_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
           PIPELINE_ENV: runner
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           # Uma chave gratuita do Groq POR IDIOMA — cada idioma tem seu
@@ -146,16 +154,17 @@ jobs:
           REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
           python main.py \
-            --lang ${{ inputs.idiomas || 'pt en es' }} \
+            --lang $PIPELINE_LANGUAGES \
             ${{ inputs.dry_run && '--dry-run' || '' }} \
             ${{ inputs.historia_teste && '--test-story' || '' }}
 
       # ── PUBLICACAO ──────────────────────────────────────────────────────
       # Mesmo job, de proposito: o arquivo de video so existe aqui dentro.
       - name: Publicar (YouTube agendado + kit TikTok no Telegram)
-        if: ${{ !inputs.apenas_gerar && !inputs.dry_run }}
+        if: ${{ github.event_name == 'schedule' || (!inputs.apenas_gerar && !inputs.dry_run) }}
         env:
           PIPELINE_ENV: runner
+          PIPELINE_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
           TELEGRAM_CHAT_ID_PTBR: ${{ secrets.TELEGRAM_CHAT_ID_PTBR }}
@@ -167,11 +176,12 @@ jobs:
           YOUTUBE_TOKEN_PT: ${{ secrets.YOUTUBE_TOKEN_PT }}
           YOUTUBE_TOKEN_EN: ${{ secrets.YOUTUBE_TOKEN_EN }}
           YOUTUBE_TOKEN_ES: ${{ secrets.YOUTUBE_TOKEN_ES }}
+          YOUTUBE_OAUTH_PUBLISHING_STATUS: ${{ vars.YOUTUBE_OAUTH_PUBLISHING_STATUS || 'testing' }}
           # scripts/check_oauth_expiry.py roda no inicio deste passo — sem
           # isto o aviso de expiracao do cookie do Reddit fica mudo aqui.
           REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
-          python publish.py --lang ${{ inputs.idiomas }}
+          python publish.py --lang $PIPELINE_LANGUAGES
 
       # ── PERSISTENCIA DO ESTADO ──────────────────────────────────────────
       - name: Salvar banco de dedupe

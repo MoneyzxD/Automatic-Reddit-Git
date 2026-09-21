@@ -50,6 +50,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from stages.titler import normalize_title_sentence
+
 logger = logging.getLogger(__name__)
 
 MAX_SAFETY_RETRIES   = 6    # teto de seguranca — nunca trava o pipeline
@@ -252,7 +254,13 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         "7. Números/valores em dinheiro no HOOK escritos em dígitos (ex: '15.000', "
         "'R$15.000') em vez de por extenso ('quinze mil reais') — o hook é narrado por "
         "TTS, que lê dígitos um por um em vez de falar o número (não se aplica ao título, "
-        "que não é narrado)\n\n"
+        "que não é narrado)\n"
+        "8. Título/hook formado por duas orações apenas coladas com hífen, travessão, "
+        "dois-pontos ou ponto e vírgula, ou por fatos independentes empilhados. Exija UMA "
+        "frase coesa e natural, reescrevendo a relação de causa e consequência. Exemplo: "
+        "troque 'Recusei deixar o namorado dela morar comigo e ele não paga nada - agora "
+        "estamos em guerra' por 'Recusei hospedar de graça o namorado dela e agora estou "
+        "em guerra com ela'\n\n"
         "Retorne APENAS um JSON no formato exato abaixo, sem texto antes ou depois:\n"
         "{{\n"
         '  "approved": true ou false,\n'
@@ -292,7 +300,10 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         "7. Numbers/money amounts in the HOOK written as digits (e.g. '$15,000', "
         "'15,000') instead of spelled out ('fifteen thousand dollars') — the hook is "
         "narrated by TTS, which reads digits one by one instead of speaking the number "
-        "(does not apply to the title, which is not narrated)\n\n"
+        "(does not apply to the title, which is not narrated)\n"
+        "8. A title/hook made of two clauses merely glued together with a hyphen, dash, "
+        "colon or semicolon, or a stack of independent facts. Require ONE cohesive, natural "
+        "sentence that clearly expresses cause and effect\n\n"
         "Return ONLY a JSON in the exact format below, no text before or after:\n"
         "{{\n"
         '  "approved": true or false,\n'
@@ -333,7 +344,10 @@ TITLE_HOOK_VALIDATION_PROMPTS = {
         "7. Numeros/montos de dinero en el HOOK escritos en digitos (ej: '15.000', "
         "'$15.000') en vez de en palabras ('quince mil dolares') — el hook es narrado "
         "por TTS, que lee los digitos uno por uno en vez de decir el numero (no aplica "
-        "al titulo, que no se narra)\n\n"
+        "al titulo, que no se narra)\n"
+        "8. Un titulo/hook formado por dos oraciones pegadas con guion, raya, dos puntos "
+        "o punto y coma, o por hechos independientes acumulados. Exige UNA frase natural "
+        "y cohesionada que exprese claramente la relacion de causa y efecto\n\n"
         "Devuelve SOLO un JSON en el formato exacto de abajo, sin texto antes o despues:\n"
         "{{\n"
         '  "approved": true o false,\n'
@@ -494,8 +508,10 @@ TITLE_HOOK_FIX_EXAMPLES = {
         "- Referencia vaga ou eufemismo que exige contexto externo (algo que so faz sentido "
         "pra quem ja conhece a historia inteira) e fraco. Nomeie o conflito real da historia "
         "de forma direta, sem inventar detalhes que nao estao nela.\n"
-        "- Julgue pelo efeito real na clareza e no impacto do hook, caso a caso — nunca por "
-        "uma regra mecanica de 'nunca usar X' nem repetindo a redacao de um exemplo.\n"
+        "- Hifen, travessao, dois-pontos ou ponto e virgula entre oracoes nao sao permitidos; "
+        "integre a causa e a consequencia em uma frase coesa.\n"
+        "- Nas demais escolhas de estilo, julgue pelo efeito real na clareza e no impacto do "
+        "hook, caso a caso, sem repetir a redacao de um exemplo.\n"
     ),
     "en": (
         "JUDGMENT CRITERIA (principles, NEVER copy an example sentence as if it were the "
@@ -507,8 +523,10 @@ TITLE_HOOK_FIX_EXAMPLES = {
         "- A vague reference or euphemism that requires outside context (something that only "
         "makes sense to someone who already knows the full story) is weak. Name the story's "
         "real conflict directly, without inventing details that aren't in it.\n"
-        "- Judge by the real effect on clarity and impact, case by case — never by a "
-        "mechanical 'never use X' rule, and never by reusing an example's wording.\n"
+        "- A hyphen, dash, colon or semicolon between clauses is not allowed; integrate cause "
+        "and effect into one cohesive sentence.\n"
+        "- For all other style choices, judge the real effect on clarity and impact case by "
+        "case, without reusing an example's wording.\n"
     ),
     "es": (
         "CRITERIOS DE JUICIO (principios, NUNCA copies una frase de ejemplo como si fuera "
@@ -520,8 +538,10 @@ TITLE_HOOK_FIX_EXAMPLES = {
         "- Una referencia vaga o eufemismo que exige contexto externo (algo que solo tiene "
         "sentido para quien ya conoce la historia completa) es debil. Nombra el conflicto "
         "real de la historia de forma directa, sin inventar detalles que no esten en ella.\n"
-        "- Juzga por el efecto real en la claridad e impacto, caso por caso — nunca por una "
-        "regla mecanica de 'nunca usar X' ni repitiendo la redaccion de un ejemplo.\n"
+        "- No se permite guion, raya, dos puntos o punto y coma entre oraciones; integra la "
+        "causa y la consecuencia en una sola frase cohesionada.\n"
+        "- Para las demas decisiones de estilo, juzga el efecto real en la claridad y el "
+        "impacto caso por caso, sin repetir la redaccion de un ejemplo.\n"
     ),
 }
 
@@ -894,10 +914,9 @@ class ValidatorEngine:
         apontados. So altera o campo (titulo ou hook) que teve problema
         reportado; o outro permanece igual.
 
-        Usa exemplos de calibracao (TITLE_HOOK_FIX_EXAMPLES) em vez de regras
-        rigidas tipo "proibido dois-pontos" — o modelo julga semanticamente
-        caso a caso, porque regra mecanica erra em casos legitimos (ex.
-        repeticao como enfase retorica).
+        Usa exemplos de calibracao (TITLE_HOOK_FIX_EXAMPLES) para os problemas
+        semanticos. Separadores de oracoes sao normalizados de forma
+        deterministica porque titulo e hook devem ser uma unica frase coesa.
         """
         title_issues = [i for i in issues if i.trecho.lower() == "titulo"]
         hook_issues  = [i for i in issues if i.trecho.lower() == "hook"]
@@ -906,8 +925,9 @@ class ValidatorEngine:
         # insiste nesse formato mesmo com exemplo de calibracao no prompt
         # (caso real: "Descobri o caso...: a minha historia de dor e superacao"),
         # entao aqui e uma trava deterministica sobre qualquer texto aceito.
-        def _strip_colon_subtitle(s: str) -> str:
-            return s.split(":", 1)[0].strip() if ":" in s else s
+        def _normalize_title(s: str) -> str:
+            without_subtitle = s.split(":", 1)[0].strip() if ":" in s else s
+            return normalize_title_sentence(without_subtitle, language)
 
         new_title = title
         new_hook  = hook
@@ -925,14 +945,14 @@ class ValidatorEngine:
         remaining_title_issues = []
         for iss in title_issues:
             if _usable_suggestion(iss.sugestao, title):
-                new_title = _strip_colon_subtitle(iss.sugestao.strip())
+                new_title = _normalize_title(iss.sugestao.strip())
             else:
                 remaining_title_issues.append(iss)
 
         remaining_hook_issues = []
         for iss in hook_issues:
             if _usable_suggestion(iss.sugestao, hook):
-                new_hook = _strip_colon_subtitle(iss.sugestao.strip())
+                new_hook = _normalize_title(iss.sugestao.strip())
             else:
                 remaining_hook_issues.append(iss)
 
@@ -971,7 +991,7 @@ class ValidatorEngine:
                 language=language,
             )
             if raw:
-                new_title = _strip_colon_subtitle(raw.strip().strip('"').split("\n")[0])
+                new_title = _normalize_title(raw.strip().strip('"').split("\n")[0])
 
         if hook_issues:
             feedback = "; ".join(f"{i.problema} (sugestao: {i.sugestao})" for i in hook_issues)
@@ -993,7 +1013,7 @@ class ValidatorEngine:
                 language=language,
             )
             if raw:
-                new_hook = _strip_colon_subtitle(raw.strip().strip('"').split("\n")[0])
+                new_hook = _normalize_title(raw.strip().strip('"').split("\n")[0])
 
         return new_title, new_hook
 
@@ -1264,14 +1284,14 @@ class ValidatorEngine:
                                     language: str, story_id: str,
                                     story_title: str = "",
                                     narrator_gender: str = "unknown") -> tuple[str, str]:
-        current_title = title
-        current_hook  = hook
+        current_title = normalize_title_sentence(title, language)
+        current_hook  = normalize_title_sentence(hook, language)
         attempt = 0
         previous_pair: tuple[str, str] | None = None
         previous_feedback = ""
         identical_streak = 0
 
-        best_title, best_hook = title, hook
+        best_title, best_hook = current_title, current_hook
         best_score = -1
 
         while attempt < MAX_SAFETY_RETRIES:
@@ -1307,6 +1327,8 @@ class ValidatorEngine:
                 previous_feedback=previous_feedback,
                 temperature=temperature,
             )
+            new_title = normalize_title_sentence(new_title, language)
+            new_hook = normalize_title_sentence(new_hook, language)
             corrected = (new_title != current_title) or (new_hook != current_hook)
             self.log_attempt(story_id, "title_hook", language, attempt, result, corrected=corrected)
 

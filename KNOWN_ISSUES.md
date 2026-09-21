@@ -12,19 +12,20 @@ publicado. Nesse modo, todo token de refresh expira sozinho em 7 dias,
 sem aviso da API — a falha só aparece quando um upload dá
 `invalid_grant: Token has been expired or revoked`.
 
-- **Correção definitiva**: publicar o app (Google Cloud Console → APIs &
-  Services → OAuth consent screen → aba "Público"/Audience → "Publicar
-  app"). Isso trava porque o Google exige um campo "E-mail de contato do
-  desenvolvedor" preenchido na página de Branding, e depois de preenchido
-  ainda pediu **URL de Política de Privacidade e Homepage** pra liberar o
-  modo de produção externa — não resolvido ainda, ficou pendente.
+- **Correção definitiva**: publicar o app (Google Cloud Console → Google Auth
+  Platform → Audience → "Publish app") e depois gerar novamente os três
+  tokens. Para uso pessoal com menos de 100 usuários, a documentação do
+  Google dispensa a verificação completa; permanece a tela de app não
+  verificado e o limite vitalício de 100 novos usuários.
 - **Mitigação já implementada**: `scripts/check_oauth_expiry.py` avisa no
   Telegram quando faltarem ≤2 dias pro limite, lendo
   `data/oauth_token_status.json` (gravado por
   `scripts/reautenticar_youtube.py` a cada renovação manual).
-- **Por causa disso o cron do `pipeline.yml` está pausado** (comentado,
-  não deletado) desde 2026-09-08 — reative só depois de resolver isto,
-  senão toda execução agendada falha sozinha sem gerar nada.
+- O gatilho diário está versionado, mas o job agendado exige as variáveis
+  `PIPELINE_AUTOMATION_ENABLED=true` e
+  `YOUTUBE_OAUTH_PUBLISHING_STATUS=production`. Só configure as duas depois
+  de publicar o app e renovar os tokens, evitando execuções condenadas a
+  falhar.
 
 ### 2. App OAuth do Reddit — não insista em tentar de novo
 Anos de tentativa de criar um app tipo "script" em `reddit.com/prefs/apps`
@@ -51,18 +52,6 @@ a pasta de trabalho for perdida, o único histórico real de código está no
 atual do `Fonte-` como está, (b) abandonar o `Fonte-` e tratar
 `Automatic-Reddit-Git` como o único repositório oficial, ou (c) outra
 estrutura. Isto **não foi decidido nesta migração** — só documentado.
-
-### 4. Drift de título/hook (herdado, status não confirmado)
-Do `PROJECT_HANDOFF.md` anterior: em algum ponto, cada tentativa de
-correção de título/hook sobrescrevia `current_title`/`current_hook`
-incondicionalmente, mesmo quando a nova versão era pior que a anterior —
-podendo alucinar detalhes que não existem na história original. Não há
-confirmação, nesta migração, de que isso foi corrigido — `stages/validator.py`
-recebeu bastante trabalho nesta sessão (níveis de idioma explícitos,
-aumento de `max_tokens`), mas esse bug específico não foi verificado.
-**Ação**: ler `validate_title_hook`/`apply_title_hook_fix` em
-`stages/validator.py` e confirmar se há guarda condicional (só substitui
-se o novo score for ≥ ao anterior).
 
 ### 5. Erro 413 Payload Too Large (herdado, status não confirmado)
 Do `PROJECT_HANDOFF.md` anterior: erro 413 quebrando loops de correção
@@ -139,6 +128,10 @@ Para não retrabalhar o que já foi investigado e corrigido:
 - Hook narrado lendo números em dígito soletrado ("um, cinco, zero...") em
   vez de por extenso — instrução explícita nos prompts de hook +
   verificação no validador
+- Título/hook formado por duas frases coladas com hífen/travessão — prompts
+  PT/EN/ES agora exigem uma frase coesa e uma trava determinística normaliza
+  qualquer separador que escape do LLM. O validador preserva a versão com
+  melhor score em vez de devolver incondicionalmente a última tentativa.
 
 ## Decisões deliberadas — não reverter sem entender o motivo
 

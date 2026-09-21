@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,12 @@ LIMITE_DIAS_YOUTUBE               = 7
 AVISAR_YOUTUBE_COM_DIAS_RESTANTES = 2
 
 AVISAR_REDDIT_COM_DIAS_RESTANTES = 14  # cookie dura ~6 meses, folga maior
+
+
+def youtube_oauth_em_teste() -> bool:
+    """Indica se ainda se aplica o vencimento de sete dias do Google."""
+    status = os.environ.get("YOUTUBE_OAUTH_PUBLISHING_STATUS", "testing")
+    return status.strip().lower() != "production"
 
 
 def _decodificar_exp_jwt(jwt: str) -> datetime | None:
@@ -47,6 +54,8 @@ def _decodificar_exp_jwt(jwt: str) -> datetime | None:
 
 
 def _checar_youtube(agora: datetime) -> None:
+    if not youtube_oauth_em_teste():
+        return
     if not STATUS_FILE.exists():
         return
     try:
