@@ -123,17 +123,8 @@ def _fit_text(draw, text: str, font_truetype, area_w: int, area_h: int,
         bbox = font.getbbox("ÁÉÍÓÚÇgjpq")
         line_h = max(round(size * _LINE_SPACING), bbox[3] - bbox[1])
         if line_h * len(lines) <= area_h:
-            # Equilibra linhas sem mudar tamanho nem texto; evita uma palavra
-            # sozinha na última linha quando há espaço nas anteriores.
-            best_score = float("inf")
-            for width in range(area_w, int(area_w * 0.70), -max(1, area_w // 40)):
-                candidate = _wrap_text(draw, text, font, width)
-                if len(candidate) != len(lines):
-                    break
-                widths = [draw.textlength(line, font=font) for line in candidate]
-                score = max(widths) - min(widths)
-                if score < best_score:
-                    lines, best_score = candidate, score
+            # Usa toda a largura disponível. Encurtar a área para "equilibrar"
+            # linhas deixava espaço lateral demais no card final.
             return lines, font, line_h
 
     max_lines = max(1, area_h // line_h)

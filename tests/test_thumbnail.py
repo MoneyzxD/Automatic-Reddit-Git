@@ -43,6 +43,18 @@ def test_titulos_com_acentos_cabem_sem_perder_palavras(title):
     assert all(draw.textlength(line, font=font) <= 708 for line in lines)
 
 
+def test_card_usa_toda_a_largura_disponivel_para_o_texto():
+    draw = ImageDraw.Draw(Image.new("RGB", (780, 364)))
+    title = (
+        "Cortei o apoio financeiro de quinze mil reais ao filho quando descobri "
+        "que a cirurgia que ele dizia precisar nunca existia."
+    )
+
+    lines, font, _ = _fit_text(draw, title, None, 708, 188, _find_font(), 44, 22)
+
+    assert max(draw.textlength(line, font=font) for line in lines) > 650
+
+
 def test_card_mantem_dimensoes_e_transparencia(tmp_path):
     generator = ThumbnailGenerator({})
     output = tmp_path / "card.png"
