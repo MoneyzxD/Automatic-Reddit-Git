@@ -22,6 +22,20 @@ def test_build_kit_message_contains_commands():
     assert "/skip video_002" in msg
 
 
+def test_build_kit_message_mostra_horario_planejado():
+    metadata = {
+        "title": "Test",
+        "hashtags": ["#test"],
+        "description": "desc",
+        "scheduled_for": "24/09/2026 12:00 (America/Sao_Paulo)",
+    }
+
+    msg = build_kit_message(metadata, language="pt", video_id="video_003")
+
+    assert "Publicar em" in msg
+    assert "24/09/2026 12:00" in msg
+
+
 def test_notifier_loads_config():
     config = {
         "telegram": {

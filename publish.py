@@ -52,7 +52,12 @@ def _carregar_publishing() -> dict:
         return yaml.safe_load(f) or {}
 
 
-def _enviar_kit_tiktok(language: str, item: dict, pub_cfg: dict) -> bool:
+def _enviar_kit_tiktok(
+    language: str,
+    item: dict,
+    pub_cfg: dict,
+    scheduled_for: str | None = None,
+) -> bool:
     """
     Envia o kit de postagem manual do TikTok pelo Telegram.
     O video enviado fica guardado no proprio chat — e isso que torna o
@@ -70,10 +75,13 @@ def _enviar_kit_tiktok(language: str, item: dict, pub_cfg: dict) -> bool:
     from scheduler.queue import update_status
 
     notifier = TikTokNotifier(config=pub_cfg)
+    metadata = dict(item.get("metadata", {}))
+    if scheduled_for:
+        metadata["scheduled_for"] = scheduled_for
     ok = notifier.send(
         language=language,
         video_path=item["video_path"],
-        metadata=item.get("metadata", {}),
+        metadata=metadata,
         video_id=item["id"],
     )
     if ok:
@@ -175,7 +183,15 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
 
         # 1. Kit do TikTok primeiro — depende do arquivo local existir
         try:
-            if _enviar_kit_tiktok(language, item, pub_cfg):
+            quando_local = datetime.fromisoformat(
+                quando.replace("Z", "+00:00")
+            ).astimezone(channel_tz)
+            agendamento_tiktok = (
+                f"{quando_local.strftime('%d/%m/%Y %H:%M')} ({timezone_name})"
+            )
+            if _enviar_kit_tiktok(
+                language, item, pub_cfg, scheduled_for=agendamento_tiktok,
+            ):
                 resumo["kits_tiktok"] += 1
                 logger.info("Kit TikTok enviado: %s", item_id)
         except Exception as e:

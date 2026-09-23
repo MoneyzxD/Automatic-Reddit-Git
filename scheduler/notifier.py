@@ -48,6 +48,7 @@ def build_kit_message(metadata: dict, language: str, video_id: str) -> str:
     title       = metadata.get("title", "")
     hashtags    = metadata.get("hashtags", [])
     description = metadata.get("description", "")
+    scheduled_for = metadata.get("scheduled_for", "")
 
     hashtags_str = " ".join(hashtags) if isinstance(hashtags, list) else str(hashtags)
 
@@ -56,8 +57,13 @@ def build_kit_message(metadata: dict, language: str, video_id: str) -> str:
         special = r"\_*[]()~`>#+-=|{}.!"
         return "".join(f"\\{c}" if c in special else c for c in str(text))
 
+    scheduling_line = (
+        f"*Publicar em:* `{esc(scheduled_for)}`\n\n" if scheduled_for else ""
+    )
+
     return (
         f"📱 *TikTok Post Ready* — `{language.upper()}`\n\n"
+        f"{scheduling_line}"
         f"*Título:*\n`{esc(title)}`\n\n"
         f"*Hashtags:*\n`{esc(hashtags_str)}`\n\n"
         f"*Descrição:*\n{esc(description)}\n\n"
