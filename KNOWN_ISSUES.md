@@ -21,11 +21,11 @@ sem aviso da API — a falha só aparece quando um upload dá
   Telegram quando faltarem ≤2 dias pro limite, lendo
   `data/oauth_token_status.json` (gravado por
   `scripts/reautenticar_youtube.py` a cada renovação manual).
-- O gatilho diário está versionado, mas o job agendado exige as variáveis
-  `PIPELINE_AUTOMATION_ENABLED=true` e
-  `YOUTUBE_OAUTH_PUBLISHING_STATUS=production`. Só configure as duas depois
-  de publicar o app e renovar os tokens, evitando execuções condenadas a
-  falhar.
+- O gatilho diário está ativo com `PIPELINE_AUTOMATION_ENABLED=true`, mesmo
+  enquanto o OAuth está em Testing, por decisão do operador. Renove os três
+  tokens manualmente a cada sete dias (ou quando chegar o alerta do Telegram)
+  e envie-os aos Secrets do repositório. `YOUTUBE_OAUTH_PUBLISHING_STATUS`
+  permanece `testing` até o app ser publicado.
 
 ### 2. App OAuth do Reddit — não insista em tentar de novo
 Anos de tentativa de criar um app tipo "script" em `reddit.com/prefs/apps`

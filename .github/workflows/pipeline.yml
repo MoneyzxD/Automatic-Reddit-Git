@@ -50,13 +50,13 @@ concurrency:
 
 jobs:
   gerar-e-publicar:
-    # O gatilho fica versionado, mas so executa automaticamente depois que o
-    # OAuth estiver em producao e PIPELINE_AUTOMATION_ENABLED=true no GitHub.
-    # Disparos manuais continuam disponiveis durante a preparacao.
+    # O gatilho fica versionado e so executa automaticamente quando o
+    # operador o habilita no GitHub. OAuth em Testing e permitido: nesse
+    # modo os tokens sao renovados manualmente a cada sete dias quando o
+    # alerta do Telegram avisar. Disparos manuais continuam disponiveis.
     if: >-
       ${{ github.event_name != 'schedule' ||
-          (vars.PIPELINE_AUTOMATION_ENABLED == 'true' &&
-           vars.YOUTUBE_OAUTH_PUBLISHING_STATUS == 'production') }}
+          vars.PIPELINE_AUTOMATION_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     # Teto de 6h do GitHub; 300 min deixa margem e evita job pendurado
     # queimando tempo se algo travar (ex: espera de rede infinita).

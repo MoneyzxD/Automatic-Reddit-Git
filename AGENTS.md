@@ -229,12 +229,14 @@ versionados).
 (de propósito: o runner é efêmero, o arquivo de vídeo só existe enquanto o
 job vive). Cache via `actions/cache` restaura/salva `db/pipeline.db` e
 `data/queue/` entre execuções (senão o dedupe nasceria vazio a cada run).
-O gatilho diário das 09:00 UTC gera uma história nos três idiomas, mas o job
-agendado só executa quando as variáveis de repositório
-`PIPELINE_AUTOMATION_ENABLED=true` e
-`YOUTUBE_OAUTH_PUBLISHING_STATUS=production` estiverem definidas. Ative-as
-somente depois de publicar o app OAuth e reautorizar os três canais; o
-`workflow_dispatch` manual continua disponível independentemente delas.
+O gatilho diário das 09:00 UTC gera uma história nos três idiomas e o job
+agendado só executa quando a variável de repositório
+`PIPELINE_AUTOMATION_ENABLED=true` estiver definida. O operador decidiu
+permitir OAuth em modo Testing: os tokens expiram em sete dias e devem ser
+renovados manualmente quando o alerta do Telegram avisar. Defina
+`YOUTUBE_OAUTH_PUBLISHING_STATUS=production` apenas quando o app for
+publicado; o `workflow_dispatch` manual continua disponível independentemente
+da variável de automação.
 
 ## Testes
 
