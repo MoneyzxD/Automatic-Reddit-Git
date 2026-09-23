@@ -100,6 +100,8 @@ def next_publish_slots(
     quantidade: int,
     intervalo_minutos: int | None = None,
     agora: datetime | None = None,
+    limite_por_dia: int | None = None,
+    ocupacao_por_dia: dict[str, int] | None = None,
 ) -> list[datetime]:
     """
     Calcula `quantidade` horarios de publicacao, em UTC, em ordem crescente.
@@ -125,13 +127,22 @@ def next_publish_slots(
 
     cursor = agora_local + timedelta(minutes=LEAD_MINIMO_MINUTOS)
     horarios: list[datetime] = []
+    ocupacao = dict(ocupacao_por_dia or {})
 
-    for _ in range(quantidade):
+    while len(horarios) < quantidade:
         slot = _primeira_janela_apos(channel_cfg, cursor)
+        data_local = slot.date().isoformat()
+        if limite_por_dia and ocupacao.get(data_local, 0) >= limite_por_dia:
+            cursor = (slot + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0,
+            )
+            continue
+
         # Garantia dura: a API do YouTube rejeita publishAt no passado
         if slot <= agora_local:
             slot = agora_local + timedelta(minutes=LEAD_MINIMO_MINUTOS)
         horarios.append(slot.astimezone(timezone.utc))
+        ocupacao[data_local] = ocupacao.get(data_local, 0) + 1
         cursor = slot + timedelta(minutes=intervalo_minutos)
 
     logger.info(

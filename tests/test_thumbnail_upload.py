@@ -90,6 +90,7 @@ def test_falha_thumbnail_preserva_midia_e_status_sem_reenfileirar_video(
     assert saved["platforms"]["youtube"]["thumbnail"] == result["thumbnail"]
     assert saved["platforms"]["youtube"]["video_id"] == "video-ja-enviado"
     assert saved["platforms"]["youtube"]["status"] == "uploaded"
+    assert saved["platforms"]["youtube"]["publish_at"] == "2030-01-01T12:00:00Z"
     assert saved["video_path"] == str(upload_context.video)
     assert saved["thumbnail_path"] == str(upload_context.thumbnail)
     assert upload_context.video.exists()

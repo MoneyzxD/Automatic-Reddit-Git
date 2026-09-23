@@ -68,6 +68,25 @@ def test_count_uploads_today_nao_depende_do_tiktok(tmp_path):
 
     assert queue_module.count_uploads_today("en") == 1
 
+
+def test_agendamento_conta_na_data_local_do_canal(tmp_path):
+    video = tmp_path / "video_agendado.mp4"
+    video.write_bytes(b"fake")
+    queue_module.enqueue("en", video, None, {}, "Agendado")
+    item_id = queue_module.get_pending("en")[0]["id"]
+
+    queue_module.update_status(
+        "en",
+        item_id,
+        "youtube",
+        "uploaded",
+        publish_at="2030-01-02T01:00:00Z",
+    )
+
+    assert queue_module.count_scheduled_by_local_date(
+        "en", "America/New_York",
+    ) == {"2030-01-01": 1}
+
 def test_reset_daily_counter(tmp_path):
     video = tmp_path / "video_004.mp4"
     video.write_bytes(b"fake")

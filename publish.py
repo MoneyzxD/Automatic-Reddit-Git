@@ -33,7 +33,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -114,25 +114,39 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
     teto_diario = int(limites.get("max_uploads_per_day", 1))
     intervalo   = int(limites.get("min_interval_minutes", 360))
 
-    ja_hoje = 0
-    try:
-        from scheduler.queue import count_uploads_today
-        ja_hoje = count_uploads_today(language)
-    except Exception as e:
-        logger.debug("Nao foi possivel contar uploads de hoje (%s): %s", language, e)
+    from scheduler.queue import count_scheduled_by_local_date
+    import pytz
 
+    timezone_name = canal.get("timezone", "UTC")
+    try:
+        channel_tz = pytz.timezone(timezone_name)
+    except Exception:
+        channel_tz = pytz.UTC
+    hoje = datetime.now(timezone.utc).astimezone(channel_tz).date()
+    amanha = hoje + timedelta(days=1)
+    ocupacao = count_scheduled_by_local_date(language, timezone_name)
+    ja_hoje = ocupacao.get(hoje.isoformat(), 0)
+
+    plano_diario = pub_cfg.get("daily_video_plan", {}) or {}
+    max_excedente = int(plano_diario.get("max_carryover_parts_next_day", 1))
     restante = max(0, teto_diario - ja_hoje)
-    limite_efetivo = min(maximo, restante)
+    vagas_amanha = max(
+        0,
+        max_excedente - ocupacao.get(amanha.isoformat(), 0),
+    )
+    capacidade = restante + (vagas_amanha if restante > 0 else 0)
+    limite_efetivo = min(maximo, capacidade)
 
     logger.info(
-        "%d pendente(s) em %s | growth_plan: %d/dia (ja publicados hoje: %d, "
-        "intervalo %dmin) -> processando %d",
-        len(pendentes), language, teto_diario, ja_hoje, intervalo, limite_efetivo,
+        "%d pendente(s) em %s | plano: %d/dia (ja agendados hoje: %d, "
+        "excedente amanha: ate %d, intervalo %dmin) -> processando %d",
+        len(pendentes), language, teto_diario, ja_hoje, vagas_amanha,
+        intervalo, limite_efetivo,
     )
 
     if limite_efetivo <= 0:
         logger.info(
-            "Teto diario do growth_plan ja atingido em %s (%d/%d) — nada a publicar",
+            "Meta diaria ja preenchida em %s (%d/%d) — nada a publicar",
             language, ja_hoje, teto_diario,
         )
         return resumo
@@ -146,7 +160,9 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
 
     lote = pendentes[:maximo]
     horarios = next_publish_slots(language, canal, len(lote),
-                                   intervalo_minutos=intervalo)
+                                   intervalo_minutos=intervalo,
+                                   limite_por_dia=teto_diario,
+                                   ocupacao_por_dia=ocupacao)
 
     for indice, item in enumerate(lote):
         item_id = item["id"]

@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -18,11 +19,14 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 
-def _carregar_plano() -> dict:
+def _carregar_publicacao() -> dict:
     config_path = BASE_DIR / "config" / "publishing.yaml"
     with open(config_path, encoding="utf-8") as arquivo:
-        config = yaml.safe_load(arquivo) or {}
-    return config.get("daily_video_plan", {}) or {}
+        return yaml.safe_load(arquivo) or {}
+
+
+def _carregar_plano() -> dict:
+    return _carregar_publicacao().get("daily_video_plan", {}) or {}
 
 
 def _meta_diaria(valor_cli: int | None = None) -> tuple[int, int]:
@@ -40,12 +44,22 @@ def _meta_diaria(valor_cli: int | None = None) -> tuple[int, int]:
 
 
 def _contar_lote_do_dia(idiomas: list[str]) -> dict[str, int]:
-    from scheduler.queue import count_uploads_today, get_pending
+    import pytz
+    from scheduler.queue import count_scheduled_by_local_date, get_pending
 
-    return {
-        idioma: count_uploads_today(idioma) + len(get_pending(idioma))
-        for idioma in idiomas
-    }
+    canais = _carregar_publicacao().get("channels", {}) or {}
+    contagens = {}
+    for idioma in idiomas:
+        canal = canais.get(idioma) or canais.get("pt-br" if idioma == "pt" else idioma, {})
+        timezone_name = canal.get("timezone", "UTC")
+        try:
+            channel_tz = pytz.timezone(timezone_name)
+        except Exception:
+            channel_tz = pytz.UTC
+        hoje = datetime.now(timezone.utc).astimezone(channel_tz).date().isoformat()
+        agendados = count_scheduled_by_local_date(idioma, timezone_name)
+        contagens[idioma] = agendados.get(hoje, 0) + len(get_pending(idioma))
+    return contagens
 
 
 def _executar_historia(
@@ -73,6 +87,7 @@ def preencher_lote(
     idiomas: list[str],
     meta: int,
     max_tentativas: int,
+    max_excedente: int = 1,
 ) -> dict[str, int]:
     logger = logging.getLogger("daily_batch")
     contagens = _contar_lote_do_dia(idiomas)
@@ -90,7 +105,7 @@ def preencher_lote(
         restantes = {idioma: meta - contagens[idioma] for idioma in idiomas}
         maior_falta = max(restantes.values())
         grupo = [idioma for idioma, falta in restantes.items() if falta == maior_falta]
-        limite_historia = min(3, maior_falta)
+        limite_historia = min(3, maior_falta + max_excedente)
 
         tentativas += 1
         logger.info(
@@ -105,13 +120,20 @@ def preencher_lote(
             raise RuntimeError(f"main.py falhou com codigo {codigo}")
 
         novas_contagens = _contar_lote_do_dia(idiomas)
-        if any(novas_contagens[idioma] > meta for idioma in idiomas):
-            raise RuntimeError(f"Lote ultrapassou a meta diaria: {novas_contagens}")
+        if any(
+            novas_contagens[idioma] > meta + max_excedente
+            for idioma in idiomas
+        ):
+            raise RuntimeError(f"Lote ultrapassou o excedente permitido: {novas_contagens}")
         if novas_contagens == contagens:
             logger.warning("Historia nao coube nas vagas restantes; tentando outra")
         contagens = novas_contagens
 
-    logger.info("Lote diario completo: %s", contagens)
+    logger.info(
+        "Lote completo: %s (ate %d excedente para o dia seguinte)",
+        contagens,
+        max_excedente,
+    )
     return contagens
 
 
@@ -140,7 +162,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         meta, max_tentativas = _meta_diaria(args.target)
-        preencher_lote(idiomas, meta, max_tentativas)
+        max_excedente = int(_carregar_plano().get("max_carryover_parts_next_day", 1))
+        preencher_lote(idiomas, meta, max_tentativas, max_excedente)
     except (OSError, ValueError, RuntimeError) as erro:
         logging.getLogger("daily_batch").error("Lote diario falhou: %s", erro)
         return 1

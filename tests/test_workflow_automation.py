@@ -44,5 +44,6 @@ def test_lote_diario_comeca_em_tres_e_mapeia_progressao():
     plano = config["daily_video_plan"]
     assert plano["target_per_language"] == 3
     assert plano["maximum_target_per_language"] == 10
+    assert plano["max_carryover_parts_next_day"] == 1
     assert plano["planned_steps"] == [3, 4, 5, 6, 8, 10]
     assert plano["interval_minutes_by_target"][10] == 60

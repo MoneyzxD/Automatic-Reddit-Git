@@ -3,7 +3,8 @@ name: Pipeline de videos
 # ─────────────────────────────────────────────────────────────────────────────
 # Disparo manual (workflow_dispatch) ja validado de ponta a ponta nos 3
 # idiomas. O cron completa uma meta de videos por idioma, gerando historias
-# adicionais quando uma historia tem menos partes do que a meta diaria.
+# adicionais quando uma historia tem menos partes do que a meta diaria. Uma
+# parte excedente pode ficar pre-agendada para o dia seguinte.
 #
 # GERACAO E PUBLICACAO RODAM NO MESMO JOB, de proposito: o runner e efemero e
 # o arquivo de video so existe enquanto o job vive. Quem desacopla o horario

@@ -214,13 +214,15 @@ pipeline_job:
   stories_per_run: 1              # legado do scheduler em VM
 
 # Meta real do lote diario. O workflow gera quantas historias forem
-# necessarias para preencher exatamente essa quantidade de videos por idioma,
-# sem cortar uma serie no meio. A progressao e manual porque depende de
+# necessarias para preencher essa quantidade de videos por idioma. Uma unica
+# parte excedente pode ser agendada para o dia seguinte, sem cortar a serie.
+# A progressao e manual porque depende de
 # retencao/qualidade, dados que este pipeline ainda nao consulta no Analytics.
 daily_video_plan:
   enabled: true
   target_per_language: 3
   maximum_target_per_language: 10
+  max_carryover_parts_next_day: 1
   max_story_attempts: 6
   planned_steps: [3, 4, 5, 6, 8, 10]
   interval_minutes_by_target:

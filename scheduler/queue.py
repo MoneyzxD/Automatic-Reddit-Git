@@ -151,7 +151,10 @@ def enqueue(
             "uploaded_at": None,
         },
         "platforms": {
-            "youtube": {"status": "pending", "video_id": None, "url": None},
+            "youtube": {
+                "status": "pending", "video_id": None, "url": None,
+                "publish_at": None,
+            },
             "tiktok":  {"status": "pending", "video_id": None, "url": None},
         },
         "attempts":   0,
@@ -217,6 +220,7 @@ def update_status(
     video_id: str | None = None,
     url: str | None = None,
     thumbnail: dict | None = None,
+    publish_at: str | None = None,
 ) -> None:
     """
     Atualiza o status de um item em uma plataforma especifica.
@@ -234,6 +238,8 @@ def update_status(
             item["platforms"][platform]["url"]      = url
             if status == "uploaded":
                 item["platforms"][platform]["uploaded_at"] = _now_iso()
+            if publish_at is not None:
+                item["platforms"][platform]["publish_at"] = publish_at
             if thumbnail is not None:
                 item["platforms"][platform]["thumbnail"] = thumbnail
 
@@ -291,6 +297,44 @@ def count_uploads_today(language: str) -> int:
     queue["uploads_today"] = count
     _save_queue(language, queue)
     return count
+
+
+def count_scheduled_by_local_date(
+    language: str,
+    timezone_name: str,
+) -> dict[str, int]:
+    """Conta publicacoes do YouTube pela data local configurada do canal."""
+    import pytz
+
+    try:
+        channel_tz = pytz.timezone(timezone_name)
+    except Exception:
+        channel_tz = pytz.UTC
+
+    counts: dict[str, int] = {}
+    for item in _load_queue(language)["items"]:
+        youtube = item.get("platforms", {}).get("youtube", {})
+        if youtube.get("status") != "uploaded":
+            continue
+
+        # Filas antigas nao guardavam publish_at. Nesse caso, a data do
+        # upload e a aproximacao mais segura para nao duplicar publicacoes.
+        timestamp = (
+            youtube.get("publish_at")
+            or youtube.get("uploaded_at")
+            or item.get("schedule", {}).get("uploaded_at")
+        )
+        if not timestamp:
+            continue
+        try:
+            instante = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            if instante.tzinfo is None:
+                instante = instante.replace(tzinfo=timezone.utc)
+            data_local = instante.astimezone(channel_tz).date().isoformat()
+        except (TypeError, ValueError):
+            continue
+        counts[data_local] = counts.get(data_local, 0) + 1
+    return counts
 
 
 def get_last_upload_time(language: str) -> datetime | None:

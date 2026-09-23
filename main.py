@@ -827,13 +827,13 @@ def run_pipeline(
         )
         logger.info("%d parte(s) para %s", len(parts), lang.upper())
 
-        # Uma historia nunca pode ocupar mais de tres Shorts. No lote diario,
-        # tambem nao renderizamos uma serie maior do que as vagas restantes:
-        # publicar apenas o inicio e descartar o fim quebraria a narrativa.
+        # Uma historia nunca pode ocupar mais de tres Shorts. O coordenador do
+        # lote inclui neste limite as vagas de hoje e, quando permitido, uma
+        # unica parte que sera agendada inteira para o dia seguinte.
         limite_partes = min(3, max_parts) if max_parts is not None else 3
         if len(parts) > limite_partes:
             logger.warning(
-                "Historia ignorada em %s: %d partes para %d vaga(s) restante(s)",
+                "Historia ignorada em %s: %d partes para limite de %d",
                 lang.upper(), len(parts), limite_partes,
             )
             continue

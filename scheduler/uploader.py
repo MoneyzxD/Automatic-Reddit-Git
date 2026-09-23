@@ -552,6 +552,7 @@ class Uploader:
                     video_id=result.get("video_id"),
                     url=result.get("url"),
                     thumbnail=result.get("thumbnail"),
+                    publish_at=result.get("publish_at"),
                 )
                 thumbnail_pending = result.get("thumbnail", {}).get("status") in (
                     "failed", "missing",
