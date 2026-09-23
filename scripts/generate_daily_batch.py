@@ -12,6 +12,10 @@ from pathlib import Path
 import yaml
 
 BASE_DIR = Path(__file__).parent.parent
+if str(BASE_DIR) not in sys.path:
+    # Ao executar "python scripts/...", o Python inclui apenas scripts/ no
+    # caminho de imports. O runner precisa da raiz para encontrar main.py.
+    sys.path.insert(0, str(BASE_DIR))
 
 
 def _carregar_plano() -> dict:

@@ -1,4 +1,26 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from scripts import generate_daily_batch
+
+
+def test_script_encontra_main_quando_executado_fora_da_raiz(tmp_path):
+    script = Path(generate_daily_batch.__file__).resolve()
+    ambiente = os.environ.copy()
+    ambiente["PYTHONPATH"] = ""
+
+    resultado = subprocess.run(
+        [sys.executable, str(script), "--dry-run"],
+        cwd=tmp_path,
+        env=ambiente,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert resultado.returncode == 0, resultado.stderr
 
 
 def test_preenche_tres_videos_com_historia_de_duas_e_uma_parte(monkeypatch):
