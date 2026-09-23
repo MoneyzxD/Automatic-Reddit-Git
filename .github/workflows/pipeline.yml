@@ -2,9 +2,8 @@ name: Pipeline de videos
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Disparo manual (workflow_dispatch) ja validado de ponta a ponta nos 3
-# idiomas. O cron gera uma historia por dia nos tres idiomas; uma historia
-# pode virar ate tres partes, alinhada ao teto diario do growth_plan. Rodadas
-# extras gerariam itens que nao sobreviveriam ao runner efemero.
+# idiomas. O cron completa uma meta de videos por idioma, gerando historias
+# adicionais quando uma historia tem menos partes do que a meta diaria.
 #
 # GERACAO E PUBLICACAO RODAM NO MESMO JOB, de proposito: o runner e efemero e
 # o arquivo de video so existe enquanto o job vive. Quem desacopla o horario
@@ -130,6 +129,7 @@ jobs:
       - name: Gerar video
         env:
           PIPELINE_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
+          DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           PIPELINE_ENV: runner
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           # Uma chave gratuita do Groq POR IDIOMA — cada idioma tem seu
@@ -153,7 +153,7 @@ jobs:
           # scripts/check_oauth_expiry.py pro aviso de expiracao).
           REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
-          python main.py \
+          python scripts/generate_daily_batch.py \
             --lang $PIPELINE_LANGUAGES \
             ${{ inputs.dry_run && '--dry-run' || '' }} \
             ${{ inputs.historia_teste && '--test-story' || '' }}
@@ -165,6 +165,7 @@ jobs:
         env:
           PIPELINE_ENV: runner
           PIPELINE_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
+          DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
           TELEGRAM_CHAT_ID_PTBR: ${{ secrets.TELEGRAM_CHAT_ID_PTBR }}

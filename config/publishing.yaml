@@ -211,7 +211,25 @@ pipeline_job:
   enabled: true
   schedule_time: "06:00"          # horario local do servidor (UTC na Oracle)
   languages: ["pt", "en", "es"]  # ordem de processamento
-  stories_per_run: 1              # historias por idioma por execucao
+  stories_per_run: 1              # legado do scheduler em VM
+
+# Meta real do lote diario. O workflow gera quantas historias forem
+# necessarias para preencher exatamente essa quantidade de videos por idioma,
+# sem cortar uma serie no meio. A progressao e manual porque depende de
+# retencao/qualidade, dados que este pipeline ainda nao consulta no Analytics.
+daily_video_plan:
+  enabled: true
+  target_per_language: 3
+  maximum_target_per_language: 10
+  max_story_attempts: 6
+  planned_steps: [3, 4, 5, 6, 8, 10]
+  interval_minutes_by_target:
+    3: 90
+    4: 90
+    5: 90
+    6: 90
+    8: 75
+    10: 60
 
 # ── USER AGENTS PARA ROTACAO ──────────────────────────────────────────────────
 # Usados pelo uploader.py nas chamadas de API.

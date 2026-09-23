@@ -232,6 +232,8 @@ def update_status(
             item["platforms"][platform]["status"]   = status
             item["platforms"][platform]["video_id"] = video_id
             item["platforms"][platform]["url"]      = url
+            if status == "uploaded":
+                item["platforms"][platform]["uploaded_at"] = _now_iso()
             if thumbnail is not None:
                 item["platforms"][platform]["thumbnail"] = thumbnail
 
@@ -270,15 +272,19 @@ def increment_attempts(language: str, item_id: str) -> int:
 
 def count_uploads_today(language: str) -> int:
     """
-    Conta uploads realizados hoje.
-    Reconstroi a partir dos itens para garantir precisao.
+    Conta uploads do YouTube realizados hoje, independentemente do estado
+    manual do TikTok. Aceita schedule.uploaded_at como compatibilidade com
+    filas gravadas antes do timestamp por plataforma.
     """
     queue = _load_queue(language)
     today = _today_str()
 
     count = 0
     for item in queue["items"]:
-        uploaded_at = item["schedule"].get("uploaded_at")
+        uploaded_at = (
+            item.get("platforms", {}).get("youtube", {}).get("uploaded_at")
+            or item.get("schedule", {}).get("uploaded_at")
+        )
         if uploaded_at and uploaded_at.startswith(today):
             count += 1
 
@@ -328,6 +334,10 @@ def reset_daily_counter(language: str) -> None:
         uploaded_at = item["schedule"].get("uploaded_at")
         if uploaded_at and uploaded_at.startswith(today):
             item["schedule"]["uploaded_at"] = None
+        youtube = item.get("platforms", {}).get("youtube", {})
+        youtube_uploaded_at = youtube.get("uploaded_at")
+        if youtube_uploaded_at and youtube_uploaded_at.startswith(today):
+            youtube["uploaded_at"] = None
 
     queue["uploads_today"] = 0
     _save_queue(language, queue)

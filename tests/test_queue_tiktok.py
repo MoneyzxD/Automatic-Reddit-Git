@@ -57,6 +57,17 @@ def test_count_uploads_today(tmp_path):
     queue_module.update_status("en", item_id, "tiktok", "uploaded")
     assert queue_module.count_uploads_today("en") == 1
 
+
+def test_count_uploads_today_nao_depende_do_tiktok(tmp_path):
+    video = tmp_path / "video_youtube.mp4"
+    video.write_bytes(b"fake")
+    queue_module.enqueue("en", video, None, {}, "So YouTube")
+    item_id = queue_module.get_pending("en")[0]["id"]
+
+    queue_module.update_status("en", item_id, "youtube", "uploaded")
+
+    assert queue_module.count_uploads_today("en") == 1
+
 def test_reset_daily_counter(tmp_path):
     video = tmp_path / "video_004.mp4"
     video.write_bytes(b"fake")

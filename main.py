@@ -555,6 +555,7 @@ def run_pipeline(
     languages: list,
     dry_run: bool = False,
     test_story: bool = False,
+    max_parts: int | None = None,
 ) -> None:
     from stages.adapter         import StoryAdapter
     from stages.translator      import ScriptTranslator
@@ -826,6 +827,17 @@ def run_pipeline(
         )
         logger.info("%d parte(s) para %s", len(parts), lang.upper())
 
+        # Uma historia nunca pode ocupar mais de tres Shorts. No lote diario,
+        # tambem nao renderizamos uma serie maior do que as vagas restantes:
+        # publicar apenas o inicio e descartar o fim quebraria a narrativa.
+        limite_partes = min(3, max_parts) if max_parts is not None else 3
+        if len(parts) > limite_partes:
+            logger.warning(
+                "Historia ignorada em %s: %d partes para %d vaga(s) restante(s)",
+                lang.upper(), len(parts), limite_partes,
+            )
+            continue
+
         for part_data in parts:
             part_num = part_data["part_number"]
             total    = part_data["total_parts"]
@@ -1019,7 +1031,7 @@ def run_pipeline(
     # ── Aviso final de alto nivel (Telegram) ──────────────────────────────────
     # Ate aqui, sucesso/falha so existiam no log local — isso e o unico ponto
     # que resume a execucao inteira pro operador, sem precisar abrir o log.
-    if not dry_run:
+    if not dry_run and parts_attempted > 0:
         event = "success" if parts_done == parts_attempted and parts_done > 0 else (
             "partial" if parts_done > 0 else "failure"
         )
@@ -1087,8 +1099,21 @@ if __name__ == "__main__":
         action="store_true",
         help="Pula etapas 1 e 2 usando a historia de teste definida em TEST_STORY",
     )
+    parser.add_argument(
+        "--max-parts",
+        type=int,
+        choices=(1, 2, 3),
+        default=None,
+        help="so renderiza a historia se ela couber inteira neste numero de partes",
+    )
     args = parser.parse_args()
 
     config = load_config()
     setup_logging(BASE_DIR / "data" / "logs")
-    run_pipeline(config, args.lang, dry_run=args.dry_run, test_story=args.test_story)
+    run_pipeline(
+        config,
+        args.lang,
+        dry_run=args.dry_run,
+        test_story=args.test_story,
+        max_parts=args.max_parts,
+    )

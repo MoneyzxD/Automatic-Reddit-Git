@@ -164,9 +164,9 @@ relevante em desenvolvimento local com Ollama rodando de verdade.
   limiares de filtragem). Lido por `load_config()` em `main.py`.
 - `config/subreddits.yaml` — lista de subreddits fonte por categoria,
   achatada por `get_subreddits()`.
-- `config/publishing.yaml` — tudo pro `scheduler/runner.py`: limites de
-  upload por canal/idioma, janelas de postagem por dia da semana+fuso,
-  rampa de growth-plan (limites crescem com a idade da conta), janelas de
+- `config/publishing.yaml` — tudo pro `scheduler/runner.py`: meta diária de
+  vídeos por canal/idioma (`daily_video_plan`), janelas de postagem por dia
+  da semana+fuso, growth-plan legado, janelas de
   notificação do TikTok, jitter/pausa anti-detecção. Usa placeholders
   `${VAR}` resolvidos a partir do ambiente (ex: `${TELEGRAM_CHAT_ID_PTBR}`).
 - `config/voice_profiles.yaml` — detalhe de seleção de voz TTS além do que
@@ -229,7 +229,11 @@ versionados).
 (de propósito: o runner é efêmero, o arquivo de vídeo só existe enquanto o
 job vive). Cache via `actions/cache` restaura/salva `db/pipeline.db` e
 `data/queue/` entre execuções (senão o dedupe nasceria vazio a cada run).
-O gatilho diário das 09:00 UTC gera uma história nos três idiomas e o job
+O gatilho diário das 09:00 UTC chama `scripts/generate_daily_batch.py`, que
+gera histórias adicionais até completar exatamente a meta de vídeos de cada
+idioma sem cortar uma série no meio. A meta começa em 3 e pode ser alterada
+pela variável `DAILY_VIDEO_TARGET` (teto 10); a progressão planejada é
+3 → 4 → 5 → 6 → 8 → 10 e exige decisão manual após avaliar desempenho. O job
 agendado só executa quando a variável de repositório
 `PIPELINE_AUTOMATION_ENABLED=true` estiver definida. O operador decidiu
 permitir OAuth em modo Testing: os tokens expiram em sete dias e devem ser

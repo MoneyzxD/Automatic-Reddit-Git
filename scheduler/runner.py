@@ -89,9 +89,26 @@ def _get_current_week(account_created: str) -> int:
 
 def _get_limits_for_channel(channel_cfg: dict, pub_cfg: dict) -> dict:
     """
-    Retorna limites de upload para o canal baseado no growth_plan.
-    Se growth_plan desativado, usa os valores diretos do canal.
+    Retorna os limites do plano diario atual; se ele estiver desativado,
+    usa o growth_plan legado baseado na idade do canal.
     """
+    plano_diario = pub_cfg.get("daily_video_plan", {}) or {}
+    if plano_diario.get("enabled", False):
+        maximo = int(plano_diario.get("maximum_target_per_language", 10))
+        alvo = int(os.environ.get(
+            "DAILY_VIDEO_TARGET",
+            plano_diario.get("target_per_language", 3),
+        ))
+        alvo = max(1, min(alvo, maximo))
+        intervalos = plano_diario.get("interval_minutes_by_target", {}) or {}
+        intervalo = int(
+            intervalos.get(str(alvo), intervalos.get(alvo, 90))
+        )
+        return {
+            "max_uploads_per_day": alvo,
+            "min_interval_minutes": intervalo,
+        }
+
     growth = pub_cfg.get("growth_plan", {})
     if not growth.get("enabled", True):
         return {
