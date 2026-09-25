@@ -46,6 +46,7 @@ Thumbs.db
 .claude/
 .agents/
 skills-lock.json
+.worktrees/
 
 # --- Segredos / credenciais (confirme se já não estão cobertos) ---
 .env
