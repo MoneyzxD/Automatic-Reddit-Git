@@ -1,0 +1,8 @@
+[
+  {"id":"gay_male_husband","source":"I (28M) have long hair and my husband loves it.","gender":"male"},
+  {"id":"lesbian_female_wife","source":"I (28F) live with my wife.","gender":"female"},
+  {"id":"late_marker","source_prefix_repetitions":260,"source_suffix":"I (44M) finally told them.","gender":"male"},
+  {"id":"quoted_other_character","source":"My sister said, 'I'm a woman.' I (31M) disagreed.","gender":"male"},
+  {"id":"pokemon_card_pt","source":"I traded a Pokemon card.","target":"Troquei uma carta Pokémon.","forbidden":["cartão Pokémon"]},
+  {"id":"credit_card_pt","source":"I paid by credit card.","target":"Paguei com cartão de crédito.","forbidden":["carta de crédito"]}
+]
