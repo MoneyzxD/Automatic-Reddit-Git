@@ -248,7 +248,7 @@ Artefato oficial:
 
 No GitHub Actions, o workflow configura Java 17, restaura um cache versionado,
 baixa o ZIP quando ausente, sempre confere o SHA-256, inicia o servidor local,
-aguarda `/v2/languages`, confirma PT-BR, en-US e es-ES e aquece `/v2/check` para
+aguarda `/v2/languages`, confirma PT-BR, en-US e es e aquece `/v2/check` para
 os três idiomas. Falha de download, hash, inicialização, versão ou locale encerra
 o job antes da geração.
 
