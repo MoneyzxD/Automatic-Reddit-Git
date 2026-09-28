@@ -351,3 +351,26 @@ def test_oracao_coordenada_com_sua_propria_crenca_continua_excluida():
     perfil = resolver_texto("They think I look feminine, and they assume I am a woman.")
     assert perfil.source_gender == "unknown"
     assert perfil.evidence == ()
+
+
+@pytest.mark.parametrize("termo", ["woman", "man"])
+@pytest.mark.parametrize("semantica", [False, True])
+def test_coordenacao_sem_novo_sujeito_preserva_contexto_de_crenca(termo, semantica):
+    texto = f"They assume I am a {termo}, and keep insisting I am a {termo}."
+    genero = "female" if termo == "woman" else "male"
+    resolver = NarratorProfileResolver({}, semantic_enabled=semantica, semantic_provider=lambda chunk: [
+        NarratorEvidence("semantic", texto, -1, genero, 1, "narrator", "groq"),
+    ])
+    perfil = resolver.resolve(story_id="mesmo-sujeito", title="Title", original_text=texto)
+    assert perfil.source_gender == "unknown"
+    assert perfil.evidence == ()
+    assert perfil.decision_method == "stable_tiebreak"
+
+
+def test_crenca_continuada_nao_apaga_oracao_independente_do_narrador():
+    perfil = resolver_texto(
+        "They assume I am a woman, and keep insisting I am a woman, and I (28M) disagree."
+    )
+    assert perfil.source_gender == "male"
+    assert perfil.narration_gender == "male"
+    assert [e.quote for e in perfil.evidence] == ["I (28M)"]

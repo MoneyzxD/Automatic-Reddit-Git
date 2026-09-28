@@ -85,13 +85,14 @@ def _outside_quotes(source: str, start: int, end: int) -> bool:
 def _narrator_assertion(source: str, start: int, end: int) -> bool:
     if not _outside_quotes(source, start, end):
         return False
-    # Suposição/crença relatada não é autodescrição. Nova frase, contraste ou
-    # oração coordenada encerram o contexto; vírgulas isoladas não o encerram.
-    prefix = re.split(
-        r"[.!?;\n]|\b(?:but|however|yet)\b|,\s*(?:and|or|so)\b",
-        source[:start], flags=re.IGNORECASE,
+    # Coordenação só encerra a crença anterior quando apresenta novo sujeito;
+    # "and keep insisting" ainda pertence ao sujeito da oração anterior.
+    context = re.split(
+        r"[.!?;\n]|\b(?:but|however|yet)\b|"
+        r",\s*(?:and|or|so)\s+(?=(?:I|we|you|he|she|it|they)\b)",
+        source[:end], flags=re.IGNORECASE,
     )[-1]
-    return _BELIEF.search(prefix) is None
+    return _BELIEF.search(context) is None
 
 
 def _explicit_evidence(source: str) -> list[NarratorEvidence]:
