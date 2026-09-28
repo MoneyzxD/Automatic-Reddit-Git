@@ -85,9 +85,12 @@ def _outside_quotes(source: str, start: int, end: int) -> bool:
 def _narrator_assertion(source: str, start: int, end: int) -> bool:
     if not _outside_quotes(source, start, end):
         return False
-    # Suposição/crença relatada não é autodescrição. Uma nova frase ou contraste
-    # encerra esse contexto, preservando a correção explícita feita pelo narrador.
-    prefix = re.split(r"[.!?;\n]|\b(?:but|however|yet)\b", source[:start], flags=re.IGNORECASE)[-1]
+    # Suposição/crença relatada não é autodescrição. Nova frase, contraste ou
+    # oração coordenada encerram o contexto; vírgulas isoladas não o encerram.
+    prefix = re.split(
+        r"[.!?;\n]|\b(?:but|however|yet)\b|,\s*(?:and|or|so)\b",
+        source[:start], flags=re.IGNORECASE,
+    )[-1]
     return _BELIEF.search(prefix) is None
 
 

@@ -336,3 +336,18 @@ def test_correcao_da_crenca_alheia_preserva_autoidentificacao_real():
     assert perfil.source_gender == "male"
     assert perfil.narration_gender == "male"
     assert [e.quote for e in perfil.evidence] == ["I am a man"]
+
+
+@pytest.mark.parametrize("marcador,genero", [("28M", "male"), ("28F", "female")])
+def test_crenca_em_outra_oracao_nao_contamina_autoidentificacao(marcador, genero):
+    perfil = resolver_texto(f"They think I look feminine, and I ({marcador}) disagree.")
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert perfil.decision_method == "explicit"
+    assert [e.quote for e in perfil.evidence] == [f"I ({marcador})"]
+
+
+def test_oracao_coordenada_com_sua_propria_crenca_continua_excluida():
+    perfil = resolver_texto("They think I look feminine, and they assume I am a woman.")
+    assert perfil.source_gender == "unknown"
+    assert perfil.evidence == ()
