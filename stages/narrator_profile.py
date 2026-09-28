@@ -85,11 +85,12 @@ def _outside_quotes(source: str, start: int, end: int) -> bool:
 def _narrator_assertion(source: str, start: int, end: int) -> bool:
     if not _outside_quotes(source, start, end):
         return False
-    # Coordenação só encerra a crença anterior quando apresenta novo sujeito;
+    # Novo sujeito: pronome ou grupo nominal iniciado por artigo/possessivo;
     # "and keep insisting" ainda pertence ao sujeito da oração anterior.
     context = re.split(
         r"[.!?;\n]|\b(?:but|however|yet)\b|"
-        r",\s*(?:and|or|so)\s+(?=(?:I|we|you|he|she|it|they)\b)",
+        r",\s*(?:and|or|so)\s+(?=(?:I|we|you|he|she|it|they)\b|"
+        r"(?:my|your|his|her|its|our|their|the|a|an)\s+\w)",
         source[:end], flags=re.IGNORECASE,
     )[-1]
     return _BELIEF.search(context) is None

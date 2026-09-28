@@ -374,3 +374,53 @@ def test_crenca_continuada_nao_apaga_oracao_independente_do_narrador():
     assert perfil.source_gender == "male"
     assert perfil.narration_gender == "male"
     assert [e.quote for e in perfil.evidence] == ["I (28M)"]
+
+
+@pytest.mark.parametrize("sujeito", ["my response", "the answer"])
+@pytest.mark.parametrize("conjuncao", ["and", "or", "so"])
+@pytest.mark.parametrize("marcador,genero,suposicao", [
+    ("28M", "male", "woman"), ("28F", "female", "man"),
+])
+def test_sujeito_nominal_encerra_crenca_da_oracao_anterior(sujeito, conjuncao, marcador, genero, suposicao):
+    perfil = resolver_texto(
+        f"They assume I am a {suposicao}, {conjuncao} {sujeito} is that I ({marcador}) disagree."
+    )
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert perfil.decision_method == "explicit"
+    assert [e.quote for e in perfil.evidence] == [f"I ({marcador})"]
+
+
+@pytest.mark.parametrize("genero,termo,suposicao", [
+    ("male", "man", "woman"), ("female", "woman", "man"),
+])
+def test_sujeito_nominal_preserva_autoidentificacao_semantica(genero, termo, suposicao):
+    texto = f"They assume I am a {suposicao}, and my response is that I identify as a {termo}."
+    quote = f"I identify as a {termo}"
+    resolver = NarratorProfileResolver({}, semantic_provider=lambda chunk: [
+        NarratorEvidence("semantic", quote, -1, genero, 1, "narrator", "groq"),
+    ])
+    perfil = resolver.resolve(story_id="resposta-nominal", title="Title", original_text=texto)
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert perfil.decision_method == "semantic"
+    assert [e.quote for e in perfil.evidence] == [quote]
+
+
+@pytest.mark.parametrize("marcador,genero,suposicao", [
+    ("28M", "male", "woman"), ("28F", "female", "man"),
+])
+@pytest.mark.parametrize("semantica", [False, True])
+def test_sujeito_nominal_com_crenca_exclui_so_a_alegacao_governada(marcador, genero, suposicao, semantica):
+    texto = (
+        f"They assume I am a {suposicao}, and my family believes I am a {suposicao}, "
+        f"and my response is that I ({marcador}) disagree."
+    )
+    genero_suposto = "female" if suposicao == "woman" else "male"
+    resolver = NarratorProfileResolver({}, semantic_enabled=semantica, semantic_provider=lambda chunk: [
+        NarratorEvidence("semantic", f"I am a {suposicao}", -1, genero_suposto, 1, "narrator", "groq"),
+    ])
+    perfil = resolver.resolve(story_id="crenca-nominal", title="Title", original_text=texto)
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert [e.quote for e in perfil.evidence] == [f"I ({marcador})"]
