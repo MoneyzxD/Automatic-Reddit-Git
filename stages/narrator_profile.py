@@ -70,7 +70,11 @@ _SEMANTIC_IDENTITY = re.compile(
     r"\b(?:I\s+(?:identify|self-identify)\s+as|me\s+as)\s+(?:a\s+)?"
     r"(?P<gender>man|woman|male|female)\b", re.IGNORECASE,
 )
-_QUOTED = re.compile(r'"[^"\n]*"|“[^”\n]*”|(?<!\w)\x27.*?\x27(?!\w)')
+_QUOTED = re.compile(r'"[^"\n]*"|“[^”\n]*”|‘.*?’(?!\w)|(?<!\w)\x27.*?\x27(?!\w)')
+_BELIEF = re.compile(
+    r"\b(?:assum(?:e[sd]?|ing)|believ(?:e[sd]?|ing)|think(?:s|ing)?|thought|"
+    r"presum(?:e[sd]?|ing))\b", re.IGNORECASE,
+)
 
 
 def _outside_quotes(source: str, start: int, end: int) -> bool:
@@ -78,11 +82,20 @@ def _outside_quotes(source: str, start: int, end: int) -> bool:
     return not any(start < m.end() and end > m.start() for m in _QUOTED.finditer(source))
 
 
+def _narrator_assertion(source: str, start: int, end: int) -> bool:
+    if not _outside_quotes(source, start, end):
+        return False
+    # Suposição/crença relatada não é autodescrição. Uma nova frase ou contraste
+    # encerra esse contexto, preservando a correção explícita feita pelo narrador.
+    prefix = re.split(r"[.!?;\n]|\b(?:but|however|yet)\b", source[:start], flags=re.IGNORECASE)[-1]
+    return _BELIEF.search(prefix) is None
+
+
 def _explicit_evidence(source: str) -> list[NarratorEvidence]:
     evidence = []
     for pattern in (_AGE, _IDENTITY):
         for match in pattern.finditer(source):
-            if not _outside_quotes(source, match.start(), match.end()):
+            if not _narrator_assertion(source, match.start(), match.end()):
                 continue
             groups = match.groupdict()
             gender = groups.get("gender") or groups.get("suffix") or groups.get("prefix")
@@ -168,7 +181,7 @@ class NarratorProfileResolver:
         # Uma citação real não basta: exige autoidentificação, nunca estereótipos.
         candidates = _explicit_evidence(source)
         for match in _SEMANTIC_IDENTITY.finditer(source):
-            if _outside_quotes(source, match.start(), match.end()):
+            if _narrator_assertion(source, match.start(), match.end()):
                 value = "female" if match["gender"].lower() in {"female", "woman"} else "male"
                 candidates.append(NarratorEvidence("semantic", match.group(), match.start(), value, 1, "narrator", "rules"))
         for match in re.finditer(re.escape(item.quote), chunk.text):

@@ -304,3 +304,35 @@ def test_semantica_aceita_atribuicao_de_identidade_ao_narrador():
     perfil = resolver.resolve(story_id="atribuicao", title="Title", original_text=texto)
     assert perfil.source_gender == "female"
     assert perfil.decision_method == "semantic"
+
+
+@pytest.mark.parametrize("texto,esperado", [
+    ("My sister said, ‘I am a woman.’", "unknown"),
+    ("My sister said, ‘I am a woman.’ I (31M) disagreed.", "male"),
+    ("My sister said, ‘I’m a woman.’ I (31M) disagreed.", "male"),
+    ("People assume I am a woman because I have long hair.", "unknown"),
+    ("I (28M) have long hair. People assume I am a woman.", "male"),
+    ("My neighbors believe that I am a woman.", "unknown"),
+    ("They thought I identify as a woman.", "unknown"),
+])
+@pytest.mark.parametrize("semantica", [False, True])
+def test_citacao_curva_e_crenca_alheia_nao_identificam_narrador(texto, esperado, semantica):
+    def provider(chunk):
+        return [NarratorEvidence("semantic", texto, -1, "female", 1, "narrator", "groq")]
+    resolver = NarratorProfileResolver({}, semantic_provider=provider, semantic_enabled=semantica)
+    perfil = resolver.resolve(story_id="atribuicao-alheia", title="Title", original_text=texto)
+    assert perfil.source_gender == esperado
+    assert not any(e.gender == "female" for e in perfil.evidence)
+    if esperado == "male":
+        assert perfil.narration_gender == "male"
+        assert perfil.decision_method == "explicit"
+    else:
+        assert perfil.evidence == ()
+        assert perfil.decision_method == "stable_tiebreak"
+
+
+def test_correcao_da_crenca_alheia_preserva_autoidentificacao_real():
+    perfil = resolver_texto("People assume I am a woman, but I am a man.")
+    assert perfil.source_gender == "male"
+    assert perfil.narration_gender == "male"
+    assert [e.quote for e in perfil.evidence] == ["I am a man"]
