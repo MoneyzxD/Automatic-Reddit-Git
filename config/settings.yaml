@@ -139,6 +139,12 @@ naturalizer:
   groq_model: openai/gpt-oss-120b      # reescrita viral — precisa do modelo grande
   ollama_url: http://localhost:11434/api/generate
   ollama_model: llama3.2
+narrator_profile:
+  enabled: true
+  groq_model: openai/gpt-oss-20b
+  chunk_chars: 6000
+  confidence_threshold: 0.70
+  resolver_version: "1"
 gender_detector:
   enabled: true
   groq_model: openai/gpt-oss-20b       # detecção/correção — modelo leve ok

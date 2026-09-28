@@ -1,75 +1,15 @@
 
-"""
-gender_detector.py
-==================
-Detecta e corrige consistencia de genero na narracao.
-
-Duas responsabilidades:
-    1. detect()           — detecta genero ANTES da naturalizacao
-    2. validate_and_fix() — valida e corrige o texto APOS a naturalizacao,
-                            antes do TTS
-
-Providers:
-    Groq API  (preferido) — entende semantica, nao usa regex
-    Ollama    (fallback)
-    Regras    (fallback final — apenas deteccao, sem correcao cega)
-
-PRINCIPIO DE DESIGN:
-    Nao usamos listas fixas de substituicao para correcao.
-    Substituicao cega por regex nao entende semantica:
-        'fiz certo' pode ser 'agi corretamente' (invariavel)
-        ou pode ser concordancia errada com o narrador (corrigivel)
-    Somente o LLM consegue distinguir os dois casos com seguranca.
-    Se LLM indisponivel: texto passa sem alteracao (mais seguro que correcao cega).
-"""
+"""Fachada do perfil travado e correção de concordância sem redetecção."""
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
 
+from stages.narrator_profile import NarratorProfile
+
 logger = logging.getLogger(__name__)
 
-
-# ── PROMPTS DE DETECCAO ───────────────────────────────────────────────────────
-
-DETECT_PROMPT_GROQ = {
-    "pt": (
-        "Analise o texto abaixo e identifique o genero do narrador.\n\n"
-        "Retorne APENAS um JSON valido com esta estrutura:\n"
-        '{"narrator_gender": "male" ou "female" ou "unknown", '
-        '"narrator_confidence": numero entre 0.0 e 1.0, '
-        '"corrections_needed": true ou false}\n\n'
-        "Pistas de genero em portugues:\n"
-        "- '28-year-old woman' ou 'mulher de 28 anos' = feminino\n"
-        "- '28-year-old man' ou 'homem de 28 anos' = masculino\n"
-        "- 'estava cansada', 'me senti humilhada', 'eu mesma' = feminino\n"
-        "- 'estava cansado', 'me senti humilhado', 'eu mesmo' = masculino\n"
-        "- 'trabalho de enfermeira' = feminino\n\n"
-        "Retorne APENAS o JSON. Nenhum texto adicional.\n\n"
-        "Texto:\n"
-    ),
-    "en": (
-        "Analyze the text below and identify the narrator's gender.\n\n"
-        "Return ONLY a valid JSON:\n"
-        '{"narrator_gender": "male" or "female" or "unknown", '
-        '"narrator_confidence": number 0.0-1.0, '
-        '"corrections_needed": true or false}\n\n'
-        "Gender clues: '28-year-old woman' = female, '28-year-old man' = male.\n\n"
-        "Return ONLY the JSON. No additional text.\n\n"
-        "Text:\n"
-    ),
-    "es": (
-        "Analiza el texto e identifica el genero del narrador.\n\n"
-        "Devuelve SOLO un JSON valido:\n"
-        '{"narrator_gender": "male" o "female" o "unknown", '
-        '"narrator_confidence": numero 0.0-1.0, '
-        '"corrections_needed": true o false}\n\n'
-        "Devuelve SOLO el JSON. Sin texto adicional.\n\n"
-        "Texto:\n"
-    ),
-}
 
 # ── PROMPTS DE CORRECAO ───────────────────────────────────────────────────────
 # Instrui o LLM a corrigir com entendimento semantico:
@@ -171,23 +111,6 @@ GENDER_LABELS = {
     "es": {"female": "femenino (mujer)",  "male": "masculino (hombre)"},
 }
 
-# ── SINAIS DE DETECCAO (apenas para fallback sem LLM) ────────────────────────
-
-_FEMALE_SIGNALS = [
-    r"\b\d+-year-old woman\b", r"\bmulher de \d+ anos\b", r"\(f\)",
-    r"\bmy husband\b", r"\bmeu marido\b", r"\bnamorado\b", r"\bboyfriend\b",
-    r"\bhumilhada\b", r"\bcansada\b", r"\bchateada\b", r"\benvergonhada\b",
-    r"\bsozinha\b", r"\bculpada\b", r"\beu mesma\b", r"\benfermeira\b",
-    r"\bmesquinha\b", r"\bconfusa\b", r"\bperdida\b",
-]
-_MALE_SIGNALS = [
-    r"\b\d+-year-old man\b", r"\bhomem de \d+ anos\b", r"\(m\)",
-    r"\bmy wife\b", r"\bminha esposa\b", r"\bnamorada\b", r"\bgirlfriend\b",
-    r"\bhumilhado\b", r"\bcansado\b", r"\bchateado\b", r"\benvergonhado\b",
-    r"\bsozinho\b", r"\bculpado\b", r"\beu mesmo\b", r"\benfermeiro\b",
-    r"\bmesquinho\b", r"\bconfuso\b", r"\bperdido\b",
-]
-
 # Sinais de POSSIVEL erro — usados apenas para decidir se chama o LLM
 # NAO sao usados para substituicao direta
 _ERROR_SIGNALS_FEMALE = [
@@ -216,19 +139,6 @@ _ERROR_SIGNALS_MALE = [
 ]
 
 
-def _detect_gender_by_rules(text: str) -> tuple[str, float]:
-    text_lower   = text.lower()
-    female_count = sum(1 for p in _FEMALE_SIGNALS if re.search(p, text_lower))
-    male_count   = sum(1 for p in _MALE_SIGNALS   if re.search(p, text_lower))
-    if female_count == 0 and male_count == 0:
-        return "unknown", 0.5
-    if female_count > male_count:
-        return "female", min(0.95, 0.6 + female_count * 0.08)
-    if male_count > female_count:
-        return "male",   min(0.95, 0.6 + male_count * 0.08)
-    return "unknown", 0.5
-
-
 def _has_gender_error_signals(text: str, gender: str) -> bool:
     """
     Detecta sinais de possivel erro para decidir se chama o LLM.
@@ -244,6 +154,7 @@ class GenderDetector:
     CONFIDENCE_THRESHOLD = 0.70
 
     def __init__(self, config: dict = None):
+        self._profile: NarratorProfile | None = None
         self.config       = config or {}
         self.groq_key     = os.environ.get("GROQ_API_KEY", "") or self.config.get("groq_api_key", "")
         self.groq_model   = self.config.get("groq_model", "openai/gpt-oss-20b")
@@ -251,52 +162,18 @@ class GenderDetector:
         self.ollama_model = self.config.get("ollama_model", "llama3.2")
         self.enabled      = self.config.get("enabled", True)
 
-    def _detect_via_groq(self, text: str, language: str) -> dict | None:
-        from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
-        if not groq_key:
-            return None
-        try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "gender_detector")
-            prompt = DETECT_PROMPT_GROQ.get(language, DETECT_PROMPT_GROQ["en"])
-            resp   = client.chat.completions.create(
-                model=self.groq_model,
-                messages=[
-                    {"role": "system", "content": "Return ONLY valid JSON. No additional text."},
-                    {"role": "user",   "content": prompt + text[:3000]},
-                ],
-                temperature=0.1,
-                max_tokens=128,
-            )
-            raw   = resp.choices[0].message.content.strip()
-            start = raw.find("{")
-            end   = raw.rfind("}") + 1
-            if start >= 0 and end > start:
-                data = json.loads(raw[start:end])
-                logger.info(
-                    "Genero detectado via Groq: narrador=%s (confianca=%.2f)",
-                    data.get("narrator_gender", "?"),
-                    data.get("narrator_confidence", 0),
-                )
-                return data
-        except Exception as e:
-            logger.debug("Groq falhou em gender detect: %s", e)
-        return None
+    def bind_profile(self, perfil: NarratorProfile) -> None:
+        self._profile = perfil
 
-    def detect(self, text: str, language: str) -> dict:
-        result = self._detect_via_groq(text, language)
-        if result:
-            return result
-        from utils import telemetry
-        telemetry.record_fallback("gender_detector", language, "Groq indisponivel — deteccao por regras")
-        gender, confidence = _detect_gender_by_rules(text)
-        logger.info("Genero detectado via regras: narrador=%s (confianca=%.2f)",
-                    gender, confidence)
+    def detect(self, text: str = "", language: str = "en") -> dict:
+        if self._profile is None:
+            raise RuntimeError("Perfil do narrador ainda nao foi travado")
+        perfil = self._profile
         return {
-            "narrator_gender":     gender,
-            "narrator_confidence": confidence,
-            "corrections_needed":  False,
+            "narrator_gender": perfil.narration_gender,
+            "narrator_confidence": perfil.confidence,
+            "corrections_needed": False,
+            "profile_id": perfil.profile_id,
         }
 
     def _correct_via_groq(self, text: str, gender: str, language: str) -> str | None:
