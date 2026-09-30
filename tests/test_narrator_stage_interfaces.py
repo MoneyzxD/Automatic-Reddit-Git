@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -70,3 +71,65 @@ def test_metadados_preservam_genero_no_resultado(monkeypatch):
     generator = MetadataGenerator({"llm_enabled": False})
     result = generator.generate({"id": "story", "title": "Titulo"}, "pt", narrator_gender="male")
     assert result["narrator_gender"] == "male"
+
+
+@pytest.mark.parametrize("stage", ["script", "titulo", "hook"])
+@pytest.mark.parametrize("gender", ["male", "female"])
+def test_validacao_correcao_e_revalidacao_preservam_genero(stage, gender, monkeypatch, tmp_path):
+    engine = ValidatorEngine({}, base_dir=tmp_path)
+    prompts = []
+    corrected = "Fiquei cansado de discutir." if gender == "male" else "Fiquei cansada de discutir."
+    issue = {"trecho": "Fiquei confuso." if stage == "script" else stage,
+             "problema": "Concordancia do narrador", "sugestao": "Reescreva com concordancia correta"}
+    responses = iter([
+        json.dumps({"approved": False, "score": 40, "issues": [issue]}),
+        corrected,
+        '{"approved":true,"score":100,"issues":[]}',
+    ])
+
+    def call(**kwargs):
+        prompts.append(kwargs["user_prompt"])
+        return next(responses)
+
+    monkeypatch.setattr(engine, "_call_groq", call)
+    if stage == "script":
+        result = engine.validate_and_fix_script("Fiquei confuso.", "pt", gender, "story")
+        assert result == corrected
+    else:
+        title, hook = engine.validate_and_fix_title_hook(
+            "Titulo original", "Hook original", "Contexto", "pt", "story", narrator_gender=gender)
+        assert (title, hook) == ((corrected, "Hook original") if stage == "titulo"
+                                 else ("Titulo original", corrected))
+    assert len(prompts) == 3
+    assert [f"NARRADOR: {gender}" in prompt for prompt in prompts] == [True, True, True]
+
+
+@pytest.mark.parametrize("invalid", ["unknown", "", "other"])
+@pytest.mark.parametrize("stage", ["script", "titulo"])
+def test_correcao_rejeita_genero_invalido_antes_de_qualquer_trabalho(stage, invalid, tmp_path):
+    engine = ValidatorEngine({}, base_dir=tmp_path)
+    with pytest.raises(ValueError, match="male ou female"):
+        if stage == "script":
+            engine.apply_surgical_fix("Texto", [], narrator_gender=invalid)
+        else:
+            engine.apply_title_hook_fix("Titulo", "Hook", [], "Texto", narrator_gender=invalid)
+
+
+def test_correcao_titulo_preserva_chamada_legada_sem_genero(monkeypatch, tmp_path):
+    engine = ValidatorEngine({}, base_dir=tmp_path)
+    prompts = []
+    responses = iter([
+        '{"approved":false,"score":40,"issues":[{"trecho":"titulo","problema":"Clareza","sugestao":"Reescreva o titulo"}]}',
+        "Uma decisao familiar",
+        '{"approved":true,"score":100,"issues":[]}',
+    ])
+
+    def call(**kwargs):
+        prompts.append(kwargs["user_prompt"])
+        return next(responses)
+
+    monkeypatch.setattr(engine, "_call_groq", call)
+    assert engine.validate_and_fix_title_hook(
+        "Titulo", "Hook", "Contexto", "pt", "story") == ("Uma decisao familiar", "Hook")
+    assert len(prompts) == 3
+    assert all("NARRADOR: None" not in prompt for prompt in prompts)

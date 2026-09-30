@@ -736,11 +736,11 @@ class ValidatorEngine:
 
     def validate_title_hook(self, title: str, hook: str, story_text: str,
                             language: str = "pt",
-                            narrator_gender: str = "unknown") -> ValidationResult:
+                            narrator_gender: str | None = None) -> ValidationResult:
         prompt_tpl = TITLE_HOOK_VALIDATION_PROMPTS.get(language, TITLE_HOOK_VALIDATION_PROMPTS["en"])
         gender_label = (
             self._UNKNOWN_GENDER_LABEL.get(language, self._UNKNOWN_GENDER_LABEL["en"])
-            if narrator_gender == "unknown" else narrator_gender
+            if narrator_gender in (None, "unknown") else narrator_gender
         )
         prompt = prompt_tpl.format(
             title=title,
@@ -764,7 +764,7 @@ class ValidatorEngine:
     # ── VALIDACAO: METADADOS ─────────────────────────────────────────────────
 
     @staticmethod
-    def _metadata_narrator_instruction(narrator_gender: str | None) -> str:
+    def _narrator_instruction(narrator_gender: str | None) -> str:
         if narrator_gender is None:
             return ""
         if narrator_gender not in ("male", "female"):
@@ -774,7 +774,7 @@ class ValidatorEngine:
 
     def validate_metadata(self, description: str, tags: list | str, story_text: str,
                           language: str = "pt", *, narrator_gender: str | None = None) -> ValidationResult:
-        gender_instruction = self._metadata_narrator_instruction(narrator_gender)
+        gender_instruction = self._narrator_instruction(narrator_gender)
         prompt_tpl = METADATA_VALIDATION_PROMPTS.get(language, METADATA_VALIDATION_PROMPTS["en"])
         tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
         prompt = prompt_tpl.format(
@@ -845,7 +845,8 @@ class ValidatorEngine:
 
     def apply_surgical_fix(self, original_text: str, issues: list[Issue],
                            language: str = "pt", previous_feedback: str = "",
-                           temperature: float = 0.2) -> str | None:
+                           temperature: float = 0.2, *,
+                           narrator_gender: str | None = None) -> str | None:
         """
         Corrige APENAS os trechos apontados em `issues`, preservando o
         resto do texto palavra por palavra. Usado para scripts longos.
@@ -862,6 +863,7 @@ class ValidatorEngine:
         e sugerido) para o modelo nao repetir a mesma correcao que ja
         falhou na validacao seguinte.
         """
+        gender_instruction = self._narrator_instruction(narrator_gender)
         if not issues:
             return original_text
 
@@ -888,6 +890,7 @@ class ValidatorEngine:
             original_text=text,
             issues_formatted=issues_formatted,
         )
+        prompt += gender_instruction
         if previous_feedback:
             prompt += (
                 "\n\nHISTORICO DA TENTATIVA ANTERIOR (a correcao abaixo ja foi tentada "
@@ -919,7 +922,8 @@ class ValidatorEngine:
     def apply_title_hook_fix(self, title: str, hook: str, issues: list[Issue],
                              story_text: str, language: str = "pt",
                              previous_feedback: str = "",
-                             temperature: float = 0.7) -> tuple[str, str]:
+                             temperature: float = 0.7, *,
+                             narrator_gender: str | None = None) -> tuple[str, str]:
         """
         Regenera titulo e/ou hook considerando especificamente os problemas
         apontados. So altera o campo (titulo ou hook) que teve problema
@@ -929,6 +933,7 @@ class ValidatorEngine:
         semanticos. Separadores de oracoes sao normalizados de forma
         deterministica porque titulo e hook devem ser uma unica frase coesa.
         """
+        gender_instruction = self._narrator_instruction(narrator_gender)
         title_issues = [i for i in issues if i.trecho.lower() == "titulo"]
         hook_issues  = [i for i in issues if i.trecho.lower() == "hook"]
 
@@ -989,6 +994,7 @@ class ValidatorEngine:
                 f"O titulo atual '{title}' tem este problema: {feedback}\n\n"
                 f"{examples}\n"
                 f"Contexto da historia: {story_text[:400]}"
+                f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere um titulo NOVO e MELHOR que corrija especificamente esse problema, "
                 f"usando os exemplos acima como calibracao de julgamento (nao como regra "
@@ -1010,6 +1016,7 @@ class ValidatorEngine:
                 f"O hook atual '{hook}' tem este problema: {feedback}\n\n"
                 f"{examples}\n"
                 f"Contexto da historia: {story_text[:400]}"
+                f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere um hook NOVO e MELHOR que corrija especificamente esse problema, "
                 f"usando os exemplos acima como calibracao de julgamento (nao como regra "
@@ -1035,7 +1042,7 @@ class ValidatorEngine:
                            previous_feedback: str = "",
                            temperature: float = 0.6, *,
                            narrator_gender: str | None = None) -> tuple[str, list]:
-        gender_instruction = self._metadata_narrator_instruction(narrator_gender)
+        gender_instruction = self._narrator_instruction(narrator_gender)
         desc_issues = [i for i in issues if i.trecho.lower() == "description"]
         tags_issues = [i for i in issues if i.trecho.lower() == "tags"]
 
@@ -1256,6 +1263,7 @@ class ValidatorEngine:
                 current_text, result.issues, language,
                 previous_feedback=previous_feedback,
                 temperature=temperature,
+                narrator_gender=narrator_gender,
             )
             self.log_attempt(story_id, "script", language, attempt, result, corrected=bool(fixed))
 
@@ -1298,7 +1306,7 @@ class ValidatorEngine:
     def validate_and_fix_title_hook(self, title: str, hook: str, story_text: str,
                                     language: str, story_id: str,
                                     story_title: str = "",
-                                    narrator_gender: str = "unknown") -> tuple[str, str]:
+                                    narrator_gender: str | None = None) -> tuple[str, str]:
         current_title = normalize_title_sentence(title, language)
         current_hook  = normalize_title_sentence(hook, language)
         attempt = 0
@@ -1341,6 +1349,7 @@ class ValidatorEngine:
                 current_title, current_hook, result.issues, story_text, language,
                 previous_feedback=previous_feedback,
                 temperature=temperature,
+                narrator_gender=narrator_gender,
             )
             new_title = normalize_title_sentence(new_title, language)
             new_hook = normalize_title_sentence(new_hook, language)
