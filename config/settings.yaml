@@ -156,6 +156,19 @@ validator:
   groq_validator_model: openai/gpt-oss-20b
   groq_call_delay: 6.0
 
+script_quality:
+  enabled: true
+  fail_closed: true
+  max_repair_attempts: 2
+  languagetool_enabled: true
+  languagetool_required: true
+  languagetool_url: http://127.0.0.1:8081/v2/check
+  languagetool_timeout_seconds: 15
+  languagetool_languages:
+    pt: pt-BR
+    en: en-US
+    es: es
+
 
 
 
