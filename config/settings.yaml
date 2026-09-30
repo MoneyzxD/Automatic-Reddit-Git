@@ -40,16 +40,17 @@ splitter:
 voice:
   primary: edge-tts
   fallback: gtts
+  allow_uncontrolled_gender_fallback: false
   voices:
     pt:
-      primary: pt-BR-FranciscaNeural
-      secondary: pt-BR-AntonioNeural
+      female: {primary: pt-BR-FranciscaNeural, fallback: null}
+      male: {primary: pt-BR-AntonioNeural, fallback: null}
     en:
-      primary: en-US-AriaNeural
-      secondary: en-US-GuyNeural
+      female: {primary: en-US-AriaNeural, fallback: null}
+      male: {primary: en-US-GuyNeural, fallback: null}
     es:
-      primary: es-MX-DaliaNeural
-      secondary: es-MX-JorgeNeural
+      female: {primary: es-MX-DaliaNeural, fallback: null}
+      male: {primary: es-MX-JorgeNeural, fallback: null}
   gtts_langs:
     pt: pt
     en: en

@@ -372,11 +372,13 @@ class MetadataGenerator:
 
     def generate(self, story: dict, language: str,
                  part: int = 1, total: int = 1,
-                 hook: str = "", narrator_gender: str = "unknown") -> dict:
+                 hook: str = "", narrator_gender: str | None = None) -> dict:
         """
         Gera metadados completos para uma parte de história.
         Inclui blocos youtube{} e tiktok{} prontos para o uploader.
         """
+        if narrator_gender is not None and narrator_gender not in ("male", "female"):
+            raise ValueError("Genero da narracao deve ser male ou female")
         title         = story.get("title", "Untitled")
         story_summary = story.get("text", "")[:300]
 
@@ -420,6 +422,7 @@ class MetadataGenerator:
             "part":            part,
             "total_parts":     total,
             "story_id":        story.get("id", ""),
+            "narrator_gender": narrator_gender,
         }
 
     def save(self, metadata: dict, output_path: Path) -> None:

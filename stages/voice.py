@@ -5,18 +5,18 @@ Geracao de narracao com pacing natural e extracao de timestamps.
 
 Stack gratuita:
     Primario : edge-tts v7.x (voz natural)
-    Fallback : gTTS
+    Fallback : voz Edge do mesmo genero; gTTS somente por permissao explicita
 
 Timestamps: faster-whisper CUDA via word_timing.py
 
 Selecao de voz por genero:
-    female / unknown -> voz primary  (ex: pt-BR-FranciscaNeural)
-    male             -> voz secondary (ex: pt-BR-AntonioNeural)
+    male / female obrigatorio, com vozes separadas por genero.
 """
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Literal
 
 from stages.word_timing import (
     generate_audio_with_timestamps,
@@ -36,28 +36,28 @@ class VoiceGenerator:
         # False = usa edge-tts + whisper (producao)
         # True  = forca gTTS (emergencia)
         self.force_gtts  = config.get("force_gtts", False)
+        self.allow_uncontrolled_gender_fallback = config.get("allow_uncontrolled_gender_fallback", False) is True
 
     def _add_natural_pauses(self, text: str) -> str:
         """Insere pausas naturais entre paragrafos."""
         return text.replace("\n\n", "\n. \n")
 
-    def _select_voice(self, language: str, narrator_gender: str) -> tuple[str, str]:
-        """
-        Retorna (voz_principal, voz_secundaria) baseado no genero detectado.
-        female / unknown -> primary
-        male             -> secondary (troca primary e secondary)
-        """
+    @staticmethod
+    def _validate_gender(narrator_gender: str) -> None:
+        if narrator_gender not in ("male", "female"):
+            raise ValueError("Genero da narracao deve ser male ou female")
+
+    def _select_voice(self, language: str, narrator_gender: str) -> tuple[str, str | None]:
+        """Seleciona exclusivamente o grupo de vozes do genero travado."""
+        self._validate_gender(narrator_gender)
         lang_key    = "pt" if language == "pt-br" else language
         lang_config = self.voices.get(lang_key, {})
-        primary     = lang_config.get("primary", "pt-BR-FranciscaNeural")
-        secondary   = lang_config.get("secondary", "pt-BR-AntonioNeural")
-
-        if narrator_gender == "male":
-            logger.info("Voz selecionada: %s (genero=male)", secondary)
-            return secondary, primary
-        else:
-            logger.info("Voz selecionada: %s (genero=%s)", primary, narrator_gender)
-            return primary, secondary
+        bucket = lang_config.get(narrator_gender, {})
+        primary = bucket.get("primary")
+        if not primary:
+            raise ValueError(f"Voz principal ausente para {lang_key}/{narrator_gender}")
+        logger.info("Voz selecionada: %s (genero=%s)", primary, narrator_gender)
+        return primary, bucket.get("fallback")
 
     def _gtts_generate(self, text: str, language: str, output_path: Path) -> bool:
         """Gera audio com gTTS (fallback)."""
@@ -89,7 +89,8 @@ class VoiceGenerator:
         text: str,
         language: str,
         output_path: Path,
-        narrator_gender: str = "female",
+        *,
+        narrator_gender: Literal["male", "female"],
     ) -> tuple[bool, list]:
         """
         Gera audio via edge-tts v7.x e extrai timestamps word-level reais
@@ -113,7 +114,8 @@ class VoiceGenerator:
         text: str,
         language: str,
         output_path: Path,
-        narrator_gender: str = "female",
+        *,
+        narrator_gender: Literal["male", "female"],
     ) -> bool:
         """
         Gera MP3 + JSON de timestamps.
@@ -122,14 +124,18 @@ class VoiceGenerator:
             text:            Script narrado
             language:        Idioma (pt / en / es)
             output_path:     Caminho de saida do .mp3
-            narrator_gender: Genero do narrador (female / male / unknown)
+            narrator_gender: Genero travado do narrador (female / male)
 
         Fluxo producao:
             1. edge-tts v7.x  -> audio natural
             2. faster-whisper -> timestamps word-level reais (CUDA)
-            3. gTTS           -> fallback se edge-tts falhar
+            3. gTTS           -> fallback somente com permissao explicita
             4. estimativa     -> fallback se whisper falhar
         """
+        self._validate_gender(narrator_gender)
+        if self.force_gtts and not self.allow_uncontrolled_gender_fallback:
+            logger.error("gTTS bloqueado: nao preserva o genero travado")
+            return False
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         json_path   = output_path.with_name(output_path.stem + "_boundaries.json")
@@ -141,12 +147,12 @@ class VoiceGenerator:
             # edge-tts como primario
             prepared = self._add_natural_pauses(text)
             success, boundaries = self._edge_tts_generate(
-                prepared, language, output_path, narrator_gender
+                prepared, language, output_path, narrator_gender=narrator_gender
             )
             if not success:
-                logger.warning("edge-tts falhou — usando gTTS como fallback")
+                logger.warning("edge-tts falhou para genero=%s", narrator_gender)
 
-        if not success:
+        if not success and self.allow_uncontrolled_gender_fallback:
             success = self._gtts_generate(text, language, output_path)
             if success and not boundaries:
                 duration   = self._get_mp3_duration(output_path)
@@ -180,6 +186,9 @@ class VoiceGenerator:
         return audio_path.with_name(audio_path.stem + "_boundaries.json")
 
     def generate_batch(self, parts: list, language: str, audio_dir: Path) -> list:
+        # Valida o lote inteiro antes de produzir qualquer audio parcial.
+        for part in parts:
+            self._validate_gender(part.get("narrator_gender"))
         generated = []
         for part in parts:
             story_id = part.get("id", "unknown")
@@ -191,7 +200,7 @@ class VoiceGenerator:
                 part.get("full_script", ""),
                 language,
                 out_path,
-                narrator_gender=part.get("narrator_gender", "female"),
+                narrator_gender=part["narrator_gender"],
             ):
                 part["audio_path"] = str(out_path)
                 generated.append(out_path)

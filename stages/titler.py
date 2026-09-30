@@ -535,9 +535,24 @@ class TitleGenerator:
 
     # ── TÍTULO DESCRITIVO (para slug do arquivo) ──────────────────────────────
 
+    @staticmethod
+    def _narrator_summary(story_text: str, narrator_gender: str | None) -> str:
+        """Acrescenta a identidade travada depois do limite do resumo."""
+        summary = story_text[:400].replace("\n", " ").strip()
+        if narrator_gender is not None:
+            if narrator_gender not in ("male", "female"):
+                raise ValueError("Genero da narracao deve ser male ou female")
+            summary += (
+                f"\nNARRADOR: {narrator_gender}. Preserve este genero na primeira pessoa; "
+                "nao altere o genero dos outros personagens."
+            )
+        return summary
+
     def generate(self, story_text: str, language: str = "pt",
-                 original_title: str = "", hook_type: str = None) -> str:
+                 original_title: str = "", hook_type: str = None,
+                 *, narrator_gender: str | None = None) -> str:
         """Gera título descritivo — usado apenas para nomear o arquivo."""
+        story_summary = self._narrator_summary(story_text, narrator_gender)
         if not self.enabled:
             return self._rule_based_title(original_title)
 
@@ -546,7 +561,6 @@ class TitleGenerator:
 
         logger.info("Gerando titulo descritivo (%s, tipo=%s)", language, hook_type)
 
-        story_summary = story_text[:400].replace("\n", " ").strip()
         result = self._groq_title(original_title, story_summary, language, hook_type)
         if result:
             return result
@@ -561,17 +575,17 @@ class TitleGenerator:
     # ── HOOK DE ENGAJAMENTO (para YouTube/TikTok E narração) ─────────────────
 
     def generate_hook(self, story_text: str, language: str = "pt",
-                      original_title: str = "") -> str:
+                      original_title: str = "", *, narrator_gender: str | None = None) -> str:
         """
         Gera hook de engajamento para abertura do vídeo.
         Essa frase é narrada no início E usada como título no YouTube/TikTok.
         """
+        story_summary = self._narrator_summary(story_text, narrator_gender)
         if not self.enabled:
             return self._rule_based_title(original_title)
 
         logger.info("Gerando hook de engajamento (%s)", language)
 
-        story_summary = story_text[:400].replace("\n", " ").strip()
         result = self._groq_hook(original_title, story_summary, language)
         if result:
             return result
@@ -586,18 +600,18 @@ class TitleGenerator:
     # ── HOOK DE ENCERRAMENTO (CTA para o fim do video / ultima parte) ────────
 
     def generate_closing_hook(self, story_text: str, language: str = "pt",
-                              original_title: str = "") -> str:
+                              original_title: str = "", *, narrator_gender: str | None = None) -> str:
         """
         Gera o hook de encerramento (call-to-action) narrado no final do video.
         Usado apenas na ultima parte de uma historia dividida, ou na unica parte
         quando a historia nao precisa de divisao.
         """
+        story_summary = self._narrator_summary(story_text, narrator_gender)
         if not self.enabled:
             return self._rule_based_closing(language)
 
         logger.info("Gerando hook de encerramento (%s)", language)
 
-        story_summary = story_text[:400].replace("\n", " ").strip()
         result = self._groq_closing(original_title, story_summary, language)
         if result:
             return result

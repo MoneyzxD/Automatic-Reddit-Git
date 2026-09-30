@@ -763,8 +763,18 @@ class ValidatorEngine:
 
     # ── VALIDACAO: METADADOS ─────────────────────────────────────────────────
 
+    @staticmethod
+    def _metadata_narrator_instruction(narrator_gender: str | None) -> str:
+        if narrator_gender is None:
+            return ""
+        if narrator_gender not in ("male", "female"):
+            raise ValueError("Genero da narracao deve ser male ou female")
+        return (f"\nNARRADOR: {narrator_gender}. Preserve este genero na primeira pessoa; "
+                "nao altere o genero dos outros personagens.\n")
+
     def validate_metadata(self, description: str, tags: list | str, story_text: str,
-                          language: str = "pt") -> ValidationResult:
+                          language: str = "pt", *, narrator_gender: str | None = None) -> ValidationResult:
+        gender_instruction = self._metadata_narrator_instruction(narrator_gender)
         prompt_tpl = METADATA_VALIDATION_PROMPTS.get(language, METADATA_VALIDATION_PROMPTS["en"])
         tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
         prompt = prompt_tpl.format(
@@ -772,6 +782,7 @@ class ValidatorEngine:
             tags=tags_str,
             story_text=story_text[:500].replace("\n", " "),
         )
+        prompt += gender_instruction
         raw = self._call_groq(
             system_prompt=f"Responda em {language}. Retorne APENAS JSON valido, sem texto adicional.",
             user_prompt=prompt,
@@ -1022,7 +1033,9 @@ class ValidatorEngine:
     def apply_metadata_fix(self, description: str, tags: list, issues: list[Issue],
                            story_text: str, language: str = "pt",
                            previous_feedback: str = "",
-                           temperature: float = 0.6) -> tuple[str, list]:
+                           temperature: float = 0.6, *,
+                           narrator_gender: str | None = None) -> tuple[str, list]:
+        gender_instruction = self._metadata_narrator_instruction(narrator_gender)
         desc_issues = [i for i in issues if i.trecho.lower() == "description"]
         tags_issues = [i for i in issues if i.trecho.lower() == "tags"]
 
@@ -1060,6 +1073,7 @@ class ValidatorEngine:
             prompt = (
                 f"A descricao atual '{description}' tem este problema: {feedback}\n\n"
                 f"Contexto da historia: {story_text[:400]}"
+                f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere uma descricao NOVA e MELHOR (1-2 frases, estilo SEO para YouTube) "
                 f"que corrija especificamente esse problema. Retorne APENAS a descricao."
@@ -1079,6 +1093,7 @@ class ValidatorEngine:
             prompt = (
                 f"As tags atuais '{', '.join(tags)}' tem este problema: {feedback}\n\n"
                 f"Contexto da historia: {story_text[:400]}"
+                f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere uma lista de 8-12 tags NOVAS e relevantes, separadas por virgula. "
                 f"Retorne APENAS as tags, nada mais."
@@ -1365,7 +1380,8 @@ class ValidatorEngine:
 
     def validate_and_fix_metadata(self, description: str, tags: list, story_text: str,
                                   language: str, story_id: str,
-                                  story_title: str = "") -> tuple[str, list]:
+                                  story_title: str = "", *,
+                                  narrator_gender: str | None = None) -> tuple[str, list]:
         current_desc = description
         current_tags = tags
         attempt = 0
@@ -1378,7 +1394,8 @@ class ValidatorEngine:
 
         while attempt < MAX_SAFETY_RETRIES:
             attempt += 1
-            result = self.validate_metadata(current_desc, current_tags, story_text, language)
+            result = self.validate_metadata(current_desc, current_tags, story_text, language,
+                                            narrator_gender=narrator_gender)
 
             if result.score > best_score:
                 best_score = result.score
@@ -1407,6 +1424,7 @@ class ValidatorEngine:
                 current_desc, current_tags, result.issues, story_text, language,
                 previous_feedback=previous_feedback,
                 temperature=temperature,
+                narrator_gender=narrator_gender,
             )
             corrected = (new_desc != current_desc) or (new_tags != current_tags)
             self.log_attempt(story_id, "metadata", language, attempt, result, corrected=corrected)

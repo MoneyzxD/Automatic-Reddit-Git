@@ -8,12 +8,12 @@ Fluxo por historia (1 historia por execucao):
     1.  Extracao       -> Reddit JSON publico
     2.  Filtragem      -> score 0-100
     3.  Siglas EN      -> expansao de siglas no texto original (28F -> 28-year-old woman)
+    3.5 Perfil        -> resolve e trava o narrador uma vez, antes de adaptar
     4.  Adaptacao      -> limpeza narrativa via Groq (fallback: regras)
     4.5 Validacao      -> valida script adaptado (EN) antes de traduzir
     5.  Traducao       -> script por idioma
     5.5 Validacao      -> valida script traduzido (por idioma)
     6.  Siglas PT/ES   -> expansao de siglas no texto traduzido
-    7.  Deteccao genero-> ANTES da naturalizacao
     8.  Naturalizacao  -> LLM com genero correto desde o inicio
     9.  Validacao      -> corrige erros de genero que escaparam da naturalizacao
     9.5 Validacao      -> valida script final (adaptacao+traducao+genero+naturalizacao)
@@ -50,6 +50,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import yaml
+from stages.narrator_profile import NarratorProfile
 
 BASE_DIR = Path(__file__).parent
 
@@ -550,6 +551,24 @@ def get_subreddits(cfg: dict) -> list:
     return list(dict.fromkeys(subs))
 
 
+def resolve_story_narrator(resolver, story_id: str, title: str, source_text: str) -> NarratorProfile:
+    """Resolve uma unica identidade a partir da fonte anterior a adaptacao."""
+    return resolver.resolve(story_id=story_id, title=title, original_text=source_text)
+
+
+def attach_narrator_profile(payload: dict, profile: NarratorProfile) -> dict:
+    """Enriquece uma copia do payload sem alterar o perfil nem o chamador."""
+    if profile.narration_gender not in ("male", "female"):
+        raise ValueError("Genero da narracao deve ser male ou female")
+    return {
+        **payload,
+        "narrator_gender": profile.narration_gender,
+        "narrator_profile_id": profile.profile_id,
+        "narrator_confidence": profile.confidence,
+        "narrator_method": profile.decision_method,
+    }
+
+
 def run_pipeline(
     config: dict,
     languages: list,
@@ -561,6 +580,7 @@ def run_pipeline(
     from stages.translator      import ScriptTranslator
     from stages.naturalizer     import ScriptNaturalizer
     from stages.gender_detector import GenderDetector
+    from stages.narrator_profile import NarratorProfileResolver, save_profile
     from stages.titler          import TitleGenerator
     from stages.splitter        import split_story
     from stages.voice           import VoiceGenerator
@@ -658,19 +678,38 @@ def run_pipeline(
         story_for_adapter["text"][:100].replace("\n", " "),
     )
 
+    # ── ETAPA 3.5 — Perfil unico, travado antes de qualquer adaptacao ────────
+    profile_resolver = NarratorProfileResolver(
+        config.get("narrator_profile", {}), semantic_enabled=not dry_run,
+    )
+    narrator_profile = resolve_story_narrator(
+        profile_resolver, story_id, story_title, story_for_adapter["text"],
+    )
+    story_for_adapter = attach_narrator_profile(story_for_adapter, narrator_profile)
+    narrator_gender = narrator_profile.narration_gender
+    gender_det.bind_profile(narrator_profile)
+    profile_trace = (
+        f"profile_id={narrator_profile.profile_id}; genero={narrator_gender}; "
+        f"metodo={narrator_profile.decision_method}; confianca={narrator_profile.confidence:.2f}"
+    )
+    logger.info("ETAPA 3.5 — Perfil do narrador: %s", profile_trace)
+    if not dry_run:
+        save_profile(narrator_profile, BASE_DIR)
+
     # ── ETAPA 4 — Adaptacao via Groq (fallback: regras) ──────────────────────
     logger.info("ETAPA 4 — Adaptacao e limpeza do script")
-    adapted      = adapter.adapt(story_for_adapter)
+    adapted      = attach_narrator_profile(adapter.adapt(story_for_adapter), narrator_profile)
     clean_script = adapted["full_script"]
     logger.info("Adaptado via: %s", adapted.get("adapted_by", "unknown"))
     if not dry_run:
-        save_script_trace(scripts_dir, story_id, "en", "ETAPA 4 — Adaptado (EN)", clean_script, reset=True)
+        save_script_trace(scripts_dir, story_id, "en", "ETAPA 3.5 — Perfil do narrador", profile_trace, reset=True)
+        save_script_trace(scripts_dir, story_id, "en", "ETAPA 4 — Adaptado (EN)", clean_script)
 
     # ── ETAPA 4.5 — Validacao do script adaptado (EN, antes de traduzir) ────
     if not dry_run:
         logger.info("ETAPA 4.5 — Validacao do script adaptado (en)")
         clean_script = validator.validate_and_fix_script(
-            clean_script, language="en", narrator_gender="unknown",
+            clean_script, language="en", narrator_gender=narrator_gender,
             story_id=story_id, story_title=story_title,
         )
         adapted["full_script"] = clean_script
@@ -705,13 +744,14 @@ def run_pipeline(
         logger.info("=" * 60)
         logger.info("IDIOMA: %s", lang.upper())
         if not dry_run:
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 5 — Traduzido", lang_script, reset=True)
+            save_script_trace(scripts_dir, story_id, lang, "ETAPA 3.5 — Perfil do narrador", profile_trace, reset=lang != "en")
+            save_script_trace(scripts_dir, story_id, lang, "ETAPA 5 — Traduzido", lang_script)
 
         # ── ETAPA 5.5 — Validacao do script traduzido (por idioma) ───────────
         if not dry_run:
             logger.info("ETAPA 5.5 — Validacao da traducao (%s)", lang)
             lang_script = validator.validate_and_fix_script(
-                lang_script, language=lang, narrator_gender="unknown",
+                lang_script, language=lang, narrator_gender=narrator_gender,
                 story_id=story_id, story_title=story_title,
             )
             save_script_trace(scripts_dir, story_id, lang, "ETAPA 5.5 — Validado (traducao)", lang_script)
@@ -722,19 +762,6 @@ def run_pipeline(
         if not dry_run:
             save_script_trace(scripts_dir, story_id, lang, "ETAPA 6 — Siglas expandidas", lang_script)
 
-        # ── ETAPA 7 — Deteccao de genero (ANTES da naturalizacao) ────────────
-        logger.info("ETAPA 7 — Deteccao de genero (%s)", lang)
-        if not dry_run:
-            gender_info     = gender_det.detect(lang_script, lang)
-            narrator_gender = gender_info.get("narrator_gender", "unknown")
-            logger.info(
-                "Genero detectado: %s (confianca=%.2f)",
-                narrator_gender,
-                gender_info.get("narrator_confidence", 0),
-            )
-        else:
-            narrator_gender = "unknown"
-
         # ── ETAPA 8 — Naturalizacao com genero correto desde o inicio ────────
         logger.info(
             "ETAPA 8 — Naturalizacao (%s, genero=%s)", lang, narrator_gender,
@@ -744,7 +771,7 @@ def run_pipeline(
             save_script_trace(scripts_dir, story_id, lang, f"ETAPA 8 — Naturalizado (genero={narrator_gender})", lang_script)
 
         # ── ETAPA 9 — Validacao de genero pos-naturalizacao ──────────────────
-        if not dry_run and narrator_gender != "unknown":
+        if not dry_run:
             logger.info(
                 "ETAPA 9 — Validacao de genero (%s, genero=%s)", lang, narrator_gender,
             )
@@ -775,6 +802,7 @@ def run_pipeline(
                 language=lang,
                 original_title=translated_title,
                 hook_type=hook_type,
+                narrator_gender=narrator_gender,
             )
             logger.info("Titulo arquivo (%s): %s", lang, title_for_lang)
 
@@ -782,6 +810,7 @@ def run_pipeline(
                 story_text=lang_script,
                 language=lang,
                 original_title=translated_title,
+                narrator_gender=narrator_gender,
             )
             logger.info("Hook engajamento (%s): %s", lang, hook_for_lang)
 
@@ -798,6 +827,7 @@ def run_pipeline(
                 story_text=lang_script,
                 language=lang,
                 original_title=translated_title,
+                narrator_gender=narrator_gender,
             )
             logger.info("Hook encerramento (%s): %s", lang, closing_hook_for_lang)
 
@@ -816,7 +846,7 @@ def run_pipeline(
             logger.info("Script final salvo: %s", final_script_path.name)
 
         # ── ETAPA 12 — Split ─────────────────────────────────────────────────
-        adapted_for_split                = adapted.copy()
+        adapted_for_split                = attach_narrator_profile(adapted, narrator_profile)
         adapted_for_split["full_script"] = lang_script
         adapted_for_split["language"]    = lang
         parts = split_story(
@@ -974,7 +1004,7 @@ def run_pipeline(
             meta_dir  = BASE_DIR / "data" / "scripts" / lang
             meta_path = meta_dir / (stem + "_meta.json")
             meta      = meta_gen.generate(
-                story,
+                attach_narrator_profile(story, narrator_profile),
                 lang,
                 part_num,
                 total,
@@ -982,7 +1012,8 @@ def run_pipeline(
                 narrator_gender=narrator_gender,
             )
             meta["title"]           = title_for_lang
-            meta["narrator_gender"] = narrator_gender
+            meta = attach_narrator_profile(meta, narrator_profile)
+            logger.info("Metadados (%s): %s", lang, profile_trace)
 
             # ── ETAPA 17.5 — Validacao de metadados (descricao + tags) ───
             logger.info("ETAPA 17.5 — Validacao de metadados (%s)", lang)
@@ -991,7 +1022,7 @@ def run_pipeline(
 
             new_description, new_tags = validator.validate_and_fix_metadata(
                 meta_description_orig, meta_tags_orig, part_script, lang, story_id,
-                story_title=story_title,
+                story_title=story_title, narrator_gender=narrator_gender,
             )
 
             if new_description != meta_description_orig or new_tags != meta_tags_orig:

@@ -66,6 +66,11 @@ _IDENTITY = re.compile(
     r"\bI(?:\s+am|['’]m)\s+(?:a\s+)?(?:\d{1,3}[- ]year[- ]old\s+)?"
     r"(?P<gender>man|woman|male|female)\b", re.IGNORECASE,
 )
+# A expansao de (28M)/(28F) preserva a aposicao sem inserir o verbo "am".
+_EXPANDED_AGE = re.compile(
+    r"\b(?:I|me)\s*(?:,\s*)?\d{1,3}-year-old\s+"
+    r"(?P<gender>man|woman)\b", re.IGNORECASE,
+)
 _SEMANTIC_IDENTITY = re.compile(
     r"\b(?:I\s+(?:identify|self-identify)\s+as|me\s+as)\s+(?:a\s+)?"
     r"(?P<gender>man|woman|male|female)\b", re.IGNORECASE,
@@ -98,7 +103,7 @@ def _narrator_assertion(source: str, start: int, end: int) -> bool:
 
 def _explicit_evidence(source: str) -> list[NarratorEvidence]:
     evidence = []
-    for pattern in (_AGE, _IDENTITY):
+    for pattern in (_AGE, _IDENTITY, _EXPANDED_AGE):
         for match in pattern.finditer(source):
             if not _narrator_assertion(source, match.start(), match.end()):
                 continue
