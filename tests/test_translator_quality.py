@@ -158,9 +158,41 @@ def test_nomes_reordenados_nao_escondem_corpo_ingles_parcial(monkeypatch):
     ).status == "rejected"
 
 
-def test_titulo_preservado_nao_autoriza_verbo_ingles_trocado(monkeypatch):
+@pytest.mark.parametrize("target", ["pt", "es"])
+def test_titulo_preservado_nao_autoriza_verbo_ingles_trocado(monkeypatch, target):
     translator = translator_with(monkeypatch, lambda *_: "I saw The End.")
-    assert translator.translate("I read The End.", "en", "pt").status == "rejected"
+    assert translator.translate("I read The End.", "en", target).status == "rejected"
+    assert not translator._cached_text_valid("I read The End.", "I saw The End.", "en", target)
+
+
+@pytest.mark.parametrize(("source", "target", "candidate"), [
+    ("The hotel.", "pt", "O hotel."),
+    ("The hospital.", "es", "El hospital."),
+])
+@pytest.mark.parametrize("path", ["translate", "title", "cache"])
+def test_cognato_curto_com_artigo_traduzido_e_aprovado(
+    monkeypatch, tmp_path, source, target, candidate, path,
+):
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    if path == "translate":
+        assert translator.translate(source, "en", target).require_text() == candidate
+    elif path == "title":
+        assert translator.translate_title(source, "en", target) == candidate
+    else:
+        lang_dir = tmp_path / target
+        lang_dir.mkdir()
+        script = lang_dir / f"script_cognato_{target}.txt"
+        script.write_text(candidate, encoding="utf-8")
+        script.with_suffix(".cache.json").write_text(json.dumps({
+            "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest(),
+            "source_lang": "en", "target_lang": target,
+            "glossary_version": translator.glossary.version,
+        }), encoding="utf-8")
+        monkeypatch.setattr(translator, "_translate_chunk_google",
+                            lambda *_: pytest.fail("cache válido dispensa provedor"))
+        result = translator.translate_all(source, "cognato", tmp_path, [target], "en")[target]
+        assert result.provider == "cache"
+        assert result.require_text() == candidate
 
 
 def test_the_dog_sem_cue_nao_e_titulo_protegido(monkeypatch):

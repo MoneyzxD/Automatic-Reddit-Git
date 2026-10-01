@@ -307,10 +307,9 @@ class ScriptTranslator:
             (len(source_words) >= 4 and coverage >= 0.75) or
             (len(source_words) == 3 and coverage >= 2 / 3) or
             (len(source_words) == 2 and coverage == 1.0) or
-            (len(source_words) == 2 and coverage >= 0.5 and any(
-                word.casefold() == kept and (len(word) == 1 or word.islower())
-                for word in re.findall(r"[^\W\d_]+", source)
-                for kept in candidate_words
+            # Um cognato isolado não basta; exige marcador inglês sem uso em PT/ES.
+            (len(source_words) == 2 and bool(
+                set(source_words) & set(candidate_words) & {"i", "you", "she", "it", "we", "they", "the"}
             ))
         ):
             return "Chunk permaneceu no idioma fonte"
