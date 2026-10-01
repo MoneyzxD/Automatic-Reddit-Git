@@ -146,10 +146,10 @@ def validate_and_apply_patches(
             continue
 
         if patch.start is None:
-            if text.count(patch.original) != 1:
+            start = text.find(patch.original)
+            if start < 0 or text.find(patch.original, start + 1) >= 0:
                 rejected.append(patch)
                 continue
-            start = text.index(patch.original)
         elif type(patch.start) is int and patch.start >= 0:
             start = patch.start
         else:

@@ -84,6 +84,7 @@ def test_patch_muda_apenas_ocorrencia_unica(perfil_feminino):
 @pytest.mark.parametrize("candidate,original", [
     ("trecho inexistente", "não existe"),
     ("repetido repetido", "repetido"),
+    ("aaa!", "aa"),
 ])
 def test_patch_ausente_ou_ambiguo_e_rejeitado(candidate, original, perfil_feminino):
     patch = patch_para(original)
@@ -127,6 +128,13 @@ def test_posicao_explica_ocorrencia_repetida(perfil_feminino):
     patch = patch_para("azul", "verde", start=5)
     result = validate_and_apply_patches("azul azul", [patch], "source", perfil_feminino)
     assert result.text == "azul verde"
+
+
+def test_posicao_explica_ocorrencia_sobreposta(perfil_feminino):
+    patch = patch_para("aa", "bb", start=1)
+    result = validate_and_apply_patches("aaa!", [patch], "source", perfil_feminino)
+    assert result.text == "abb!"
+    assert result.applied == (patch,)
 
 
 def test_posicao_invalida_e_rejeitada(perfil_feminino):
