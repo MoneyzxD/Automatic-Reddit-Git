@@ -6,6 +6,7 @@
 
 # ── Tradução (gratuito, sem API key)
 deep-translator>=1.11.4    # tradução PT/EN/ES via Google Translate (gratuito)
+langdetect>=1.0.9         # valida idioma offline antes de aprovar tradução e cache
 
 # ── HTTP e extração ──────────────────────────────────────────────────────
 requests>=2.31.0         # Reddit JSON público (sem API key)

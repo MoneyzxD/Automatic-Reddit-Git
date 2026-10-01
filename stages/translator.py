@@ -71,6 +71,10 @@ class TranslationFailed(RuntimeError):
         super().__init__(result.error or "Tradução não aprovada")
         self.result = result
 
+
+class LanguageDetectorUnavailable(RuntimeError):
+    """O detector local obrigatório não pôde avaliar um corpo elegível."""
+
 # Mapeamento de idioma para código Google Translate
 LANG_CODES = {
     "pt":    "pt",
@@ -210,7 +214,8 @@ class ScriptTranslator:
             return None
 
     @staticmethod
-    def _without_preserved_spans(source: str, candidate: str) -> tuple[str, str]:
+    def _without_preserved_spans(source: str, candidate: str,
+                                 target_lang: str) -> tuple[str, str]:
         """Remove títulos e nomes copiados de ambos os lados antes de comparar o corpo."""
         title_word = r"[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]+"
         connector = r"(?:and|of|the|a|an|to|in|on|for)"
@@ -221,25 +226,69 @@ class ScriptTranslator:
         for match in title_run.finditer(source):
             phrase = match.group()
             words = phrase.split()
-            if words[0] in {"The", "An"} or re.search(
+            title_shape = words[0] in {"The", "An"} or bool(re.search(
                 r"\b(?:of|the|in|on|to|for)\b", phrase
-            ):
-                # Títulos mantêm conectores internos como parte do nome.
-                phrases.append(phrase)
+            ))
+            prefix = source[:match.start()]
+            suffix = source[match.end():]
+            cue = bool(re.search(r"\b(?:named|called|titled|entitled|read)\s*$", prefix,
+                                 re.IGNORECASE))
+            delimited = (prefix.rstrip().endswith(('"', "'", "“", "‘")) and
+                         suffix.lstrip().startswith(('"', "'", "”", "’")))
+            if title_shape:
+                # Capitalização isolada no início da frase não prova que é título.
+                if cue or delimited:
+                    phrases.append((phrase, True))
             else:
-                # Nomes podem reaparecer em outra ordem; o conector é traduzível.
-                phrases.extend(re.findall(title_word, phrase))
-        for phrase in phrases:
+                phrases.append((phrase, False))
+        for phrase, is_title in phrases:
             pattern = re.compile(
                 r"(?<!\w)" + r"\s+".join(map(re.escape, phrase.split())) + r"(?!\w)",
                 re.IGNORECASE,
             )
-            if pattern.search(candidate):
+            if is_title and pattern.search(candidate):
                 source = pattern.sub(" ", source, count=1)
                 candidate = pattern.sub(" ", candidate, count=1)
+            elif not is_title:
+                names = re.findall(title_word, phrase)
+                if all(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", candidate,
+                                 re.IGNORECASE) for name in names):
+                    connector = {"pt": "e", "es": "y"}.get(target_lang)
+                    translated_connector = (re.search(rf"(?<!\w){connector}(?!\w)", candidate,
+                                                     re.IGNORECASE) if connector else None)
+                    if " and " in phrase and translated_connector:
+                        # Conector entre nomes foi traduzido; não entra no corpo.
+                        source = pattern.sub(" ", source, count=1)
+                        candidate = re.sub(rf"(?<!\w){connector}(?!\w)", " ", candidate,
+                                           count=1, flags=re.IGNORECASE)
+                    for name in names:
+                        name_pattern = rf"(?<!\w){re.escape(name)}(?!\w)"
+                        if not (" and " in phrase and translated_connector):
+                            source = re.sub(name_pattern, " ", source, count=1,
+                                            flags=re.IGNORECASE)
+                        candidate = re.sub(name_pattern, " ", candidate, count=1,
+                                           flags=re.IGNORECASE)
         return source, candidate
 
-    def _candidate_issue(self, source: str, candidate: str,
+    @staticmethod
+    def _detect_target_language(text: str) -> tuple[str, float]:
+        """Detecta idioma localmente e sempre com a mesma semente."""
+        try:
+            from langdetect import DetectorFactory, LangDetectException, detect_langs
+        except ImportError as exc:
+            raise LanguageDetectorUnavailable("langdetect não instalado") from exc
+        DetectorFactory.seed = 0
+        try:
+            choices = detect_langs(text)
+        except LangDetectException as exc:
+            raise LanguageDetectorUnavailable("detector sem evidência no corpo elegível") from exc
+        except Exception as exc:
+            raise LanguageDetectorUnavailable("detector de idioma indisponível") from exc
+        if not choices:
+            raise LanguageDetectorUnavailable("detector sem evidência no corpo elegível")
+        return choices[0].lang, choices[0].prob
+
+    def _candidate_issue(self, source: str, candidate: str, target_lang: str,
                          tokens: dict[str, str]) -> str | None:
         if not candidate.strip():
             return "Chunk traduzido vazio"
@@ -248,7 +297,7 @@ class ScriptTranslator:
         for token in tokens:
             source = source.replace(token, "")
             candidate = candidate.replace(token, "")
-        source, candidate = self._without_preserved_spans(source, candidate)
+        source, candidate = self._without_preserved_spans(source, candidate, target_lang)
         source_words = re.findall(r"[^\W\d_]+", source.casefold())
         candidate_words = re.findall(r"[^\W\d_]+", candidate.casefold())
         matched = sum((Counter(source_words) & Counter(candidate_words)).values())
@@ -257,9 +306,20 @@ class ScriptTranslator:
             source_words == candidate_words or
             (len(source_words) >= 4 and coverage >= 0.75) or
             (len(source_words) == 3 and coverage >= 2 / 3) or
-            (len(source_words) == 2 and coverage == 1.0)
+            (len(source_words) == 2 and coverage == 1.0) or
+            (len(source_words) == 2 and coverage >= 0.5 and any(
+                word.casefold() == kept and (len(word) == 1 or word.islower())
+                for word in re.findall(r"[^\W\d_]+", source)
+                for kept in candidate_words
+            ))
         ):
             return "Chunk permaneceu no idioma fonte"
+        # Frases curtas dão falsos positivos no detector; o filtro lexical
+        # permanece como única evidência até haver quatro palavras úteis.
+        if len(candidate_words) >= 4 and sum(len(word) for word in candidate_words) >= 15:
+            detected = self._detect_target_language(candidate)
+            if detected and detected[1] >= 0.90 and detected[0] != target_lang:
+                return "Idioma alvo não confirmado"
         return None
 
     def _cached_text_valid(self, source: str, cached: str, source_lang: str,
@@ -277,7 +337,10 @@ class ScriptTranslator:
         required = Counter(protected.tokens.values())
         if any(cached.count(term) < count for term, count in required.items()):
             return False
-        return self._candidate_issue(source, cached, {}) is None
+        try:
+            return self._candidate_issue(source, cached, target_lang, {}) is None
+        except (LanguageDetectorUnavailable, ImportError):
+            return False
 
     def _translate_one_chunk(self, index: int, chunk: str, source_lang: str,
                              target_lang: str, tokens: dict[str, str]) -> TranslationChunkResult:
@@ -298,7 +361,10 @@ class ScriptTranslator:
                 if candidate is None:
                     continue
                 candidate = _ensure_utf8(candidate).strip()
-                issue = self._candidate_issue(source_core, candidate, tokens)
+                try:
+                    issue = self._candidate_issue(source_core, candidate, target_lang, tokens)
+                except (LanguageDetectorUnavailable, ImportError) as exc:
+                    return TranslationChunkResult(index, chunk, None, None, "unavailable", str(exc))
                 if issue:
                     last_status, last_error = "rejected", issue
                     continue

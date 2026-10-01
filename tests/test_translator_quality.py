@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -139,6 +140,87 @@ def test_nomes_compostos_reordenados_nao_contam_como_ingles_residual(monkeypatch
 def test_nome_preservado_nao_mascara_corpo_ingles_residual(monkeypatch):
     translator = translator_with(monkeypatch, lambda *_: "John Smith drove home fast.")
     assert translator.translate("John Smith drove home quickly.", "en", "pt").status == "rejected"
+
+
+@pytest.mark.parametrize("target", ["pt", "es"])
+def test_detector_reprova_ingles_diferente_da_fonte(monkeypatch, target):
+    translator = translator_with(monkeypatch, lambda *_: "They walked into a shop.")
+    result = translator.translate("My neighbor lost his wallet yesterday.", "en", target)
+    assert result.status == "rejected"
+    assert result.text is None
+
+
+def test_nomes_reordenados_nao_escondem_corpo_ingles_parcial(monkeypatch):
+    candidate = "Mary Jones e John Smith drove home fast."
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate(
+        "John Smith and Mary Jones drove home quickly.", "en", "pt"
+    ).status == "rejected"
+
+
+def test_titulo_preservado_nao_autoriza_verbo_ingles_trocado(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "I saw The End.")
+    assert translator.translate("I read The End.", "en", "pt").status == "rejected"
+
+
+def test_the_dog_sem_cue_nao_e_titulo_protegido(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "The Dog correu.")
+    assert translator.translate("The Dog ran.", "en", "pt").status == "rejected"
+
+
+@pytest.mark.parametrize(("target", "candidate"), [
+    ("pt", "O livro se chamava The End por Mary Jones e John Smith."),
+    ("es", "El libro se llamaba The End por Mary Jones y John Smith."),
+])
+def test_detector_aceita_corpo_traduzido_com_titulo_e_nomes(monkeypatch, target, candidate):
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    source = "The book was named The End by John Smith and Mary Jones."
+    assert translator.translate(source, "en", target).require_text() == candidate
+
+
+def test_corpo_curto_pt_nao_e_bloqueado_por_detector_frances(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "Fui à loja.")
+    assert translator.translate("I went to the store.", "en", "pt").require_text() == "Fui à loja."
+
+
+def test_detector_indisponivel_bloqueia_corpo_com_evidencia(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "They walked into a shop.")
+
+    def unavailable(*_):
+        raise ImportError("langdetect ausente")
+
+    monkeypatch.setattr(translator, "_detect_target_language", unavailable, raising=False)
+    result = translator.translate("My neighbor lost his wallet yesterday.", "en", "pt")
+    assert result.status == "unavailable"
+    assert result.text is None
+
+
+def test_detector_sem_features_em_corpo_elegivel_falha_fechado(monkeypatch):
+    import langdetect
+
+    translator = translator_with(monkeypatch, lambda *_: "They walked into a shop.")
+    monkeypatch.setattr(langdetect, "detect_langs", lambda *_: [])
+    result = translator.translate("My neighbor lost his wallet yesterday.", "en", "pt")
+    assert result.status == "unavailable"
+    assert result.text is None
+
+
+def test_sem_features_dispensa_detector(monkeypatch):
+    translator = translator_with(monkeypatch, lambda text, *_: text)
+    monkeypatch.setattr(translator, "_detect_target_language",
+                        lambda *_: pytest.fail("detector não deve ser chamado"), raising=False)
+    assert translator.translate("Pokemon card", "en", "pt").require_text() == "carta Pokémon"
+
+
+def test_detector_offline_e_deterministico():
+    translator = ScriptTranslator({"delay": 0, "retry_waits": [0, 0]})
+    results = [translator._detect_target_language("They walked into a shop.") for _ in range(4)]
+    assert results == [results[0]] * 4
+
+
+def test_dependencia_detector_esta_no_manifesto():
+    requirements = (Path(__file__).parent.parent / "requirements.txt").read_text(encoding="utf-8")
+    assert "langdetect>=1.0.9" in requirements
 
 
 def test_corpo_curto_ingles_residual_reprova_apesar_de_artigo_traduzido(monkeypatch):
@@ -381,3 +463,24 @@ def test_cache_legado_com_corpo_ingles_curto_e_revalidado(monkeypatch, tmp_path,
         result = translator.translate_all("The dog ran.", "s8", tmp_path, ["pt"], "en")["pt"]
         assert result.provider != "cache"
         assert result.require_text() == provider_output
+
+
+@pytest.mark.parametrize("target", ["pt", "es"])
+def test_cache_legado_ingles_diferente_da_fonte_nao_e_aprovado(monkeypatch, tmp_path, target):
+    translator = translator_with(monkeypatch, lambda *_: None)
+    lang_dir = tmp_path / target
+    lang_dir.mkdir()
+    script = lang_dir / f"script_s9_{target}.txt"
+    cache = script.with_suffix(".cache.json")
+    source = "My neighbor lost his wallet yesterday."
+    script.write_text("They walked into a shop.", encoding="utf-8")
+    metadata = {
+        "source_sha256": hashlib.sha256(source.encode("utf-8")).hexdigest(),
+        "source_lang": "en", "target_lang": target,
+        "glossary_version": translator.glossary.version,
+    }
+    cache.write_text(json.dumps(metadata), encoding="utf-8")
+    with pytest.raises(TranslationFailed):
+        translator.translate_all(source, "s9", tmp_path, [target], "en")
+    assert script.read_text(encoding="utf-8") == "They walked into a shop."
+    assert json.loads(cache.read_text(encoding="utf-8")) == metadata
