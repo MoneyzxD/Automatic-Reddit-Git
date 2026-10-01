@@ -93,6 +93,37 @@ def test_ingles_residual_sem_marcadores_frequentes_reprova(monkeypatch):
     assert translator.translate("Helen drove home quickly.", "en", "pt").status == "rejected"
 
 
+@pytest.mark.parametrize(("source", "candidate"), [
+    ("Helen drove home quickly.", "Well Helen drove home quickly."),
+    ("Helen drove home quickly.", "Quickly home drove Helen."),
+    ("The story.", "Well The story."),
+])
+def test_insercao_nao_disfarca_ingles_residual(monkeypatch, source, candidate):
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate(source, "en", "pt").status == "rejected"
+
+
+@pytest.mark.parametrize(("target", "candidate"), [
+    ("pt", "O livro se chamava The End."),
+    ("es", "El libro se llamaba The End."),
+])
+def test_titulo_ingles_preservado_nao_bloqueia_traducao(monkeypatch, target, candidate):
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate("The book was named The End.", "en", target).require_text() == candidate
+
+
+def test_titulo_ingles_longo_preservado_nao_bloqueia_traducao(monkeypatch):
+    candidate = "O livro se chamava The Lord of the Rings."
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate("The book was named The Lord of the Rings.", "en", "pt").require_text() == candidate
+
+
+def test_nomes_proprios_preservados_com_conjuncao_traduzida(monkeypatch):
+    candidate = "Alice Bob Carol e Dave"
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate("Alice Bob Carol Dave", "en", "pt").require_text() == candidate
+
+
 @pytest.mark.parametrize(("source", "limit", "expected"), [
     ("bread and", 6, "pão e"),
     ("bread\n\nand", 7, "pão\n\ne"),
@@ -116,6 +147,28 @@ def test_sentinela_na_fronteira_nunca_e_partida(monkeypatch):
     assert translator.translate("bread Pokemon card", "en", "pt").require_text() == "pão carta Pokémon"
 
 
+def test_sentinela_em_texto_longo_respeita_limite_mymemory(monkeypatch):
+    source = "x" * 440 + "(Pokemon card)" + "y" * 460
+    translator = translator_with(monkeypatch, lambda *_: None)
+    protected = translator.glossary.prepare(source, "en", "pt")
+    token = next(iter(protected.tokens))
+    chunks = translator._split_chunks(protected.text, chunk_size=450)
+    assert "".join(chunks).encode("utf-8") == protected.text.encode("utf-8")
+    assert all(len(chunk) <= 450 for chunk in chunks)
+    assert sum(token in chunk for chunk in chunks) == 1
+
+    calls = []
+
+    def memory(chunk, *_):
+        calls.append(len(chunk))
+        assert len(chunk) <= 450
+        return "Texto " + token if token in chunk else "Texto."
+
+    monkeypatch.setattr(translator, "_translate_chunk_mymemory", memory)
+    assert translator.translate(source, "en", "pt").status == "approved"
+    assert calls
+
+
 def test_google_invalido_na_primeira_rodada_pode_aprovar_na_segunda(monkeypatch):
     calls = []
 
@@ -126,6 +179,34 @@ def test_google_invalido_na_primeira_rodada_pode_aprovar_na_segunda(monkeypatch)
     translator = translator_with(monkeypatch, google)
     assert translator.translate("I went to the store.", "en", "pt").require_text() == "Fui à loja."
     assert len(calls) == 2
+
+
+def test_retries_respeitam_ordem_e_param_apos_sucesso(monkeypatch):
+    calls = []
+    translator = translator_with(monkeypatch, lambda *_: None)
+
+    def google(*_):
+        calls.append("Google")
+        return None
+
+    def memory(*_):
+        calls.append("MyMemory")
+        return None
+
+    monkeypatch.setattr(translator, "_translate_chunk_google", google)
+    monkeypatch.setattr(translator, "_translate_chunk_mymemory", memory)
+    assert translator.translate("The story.", "en", "pt").status == "unavailable"
+    assert calls == ["Google", "MyMemory"] * 3
+
+    calls.clear()
+
+    def google_succeeds(*_):
+        calls.append("Google")
+        return "A história."
+
+    monkeypatch.setattr(translator, "_translate_chunk_google", google_succeeds)
+    assert translator.translate("The story.", "en", "pt").require_text() == "A história."
+    assert calls == ["Google"]
 
 
 def test_cache_exige_fonte_idiomas_e_versao_e_só_grava_aprovado(monkeypatch, tmp_path):
@@ -227,3 +308,28 @@ def test_fonte_vazia_nao_reaproveita_cache_antigo(monkeypatch, tmp_path):
     with pytest.raises(TranslationFailed) as failure:
         translator.translate_all("  ", "s6", tmp_path, ["pt"], "en")
     assert failure.value.result.status == "rejected"
+
+
+@pytest.mark.parametrize("provider_output", ["Fui à loja.", None])
+def test_cache_legado_em_ingles_e_revalidado(monkeypatch, tmp_path, provider_output):
+    translator = translator_with(monkeypatch, lambda *_: provider_output)
+    script_dir = tmp_path / "pt"
+    script_dir.mkdir()
+    script = script_dir / "script_s7_pt.txt"
+    cache = script.with_suffix(".cache.json")
+    script.write_text("I went to the store!", encoding="utf-8")
+    metadata = {
+        "source_sha256": hashlib.sha256("I went to the store.".encode("utf-8")).hexdigest(),
+        "source_lang": "en", "target_lang": "pt", "glossary_version": translator.glossary.version,
+    }
+    cache.write_text(json.dumps(metadata), encoding="utf-8")
+    if provider_output is None:
+        with pytest.raises(TranslationFailed):
+            translator.translate_all("I went to the store.", "s7", tmp_path, ["pt"], "en")
+        assert script.read_text(encoding="utf-8") == "I went to the store!"
+        assert json.loads(cache.read_text(encoding="utf-8")) == metadata
+    else:
+        result = translator.translate_all("I went to the store.", "s7", tmp_path, ["pt"], "en")["pt"]
+        assert result.provider != "cache"
+        assert result.require_text() == provider_output
+        assert script.read_text(encoding="utf-8") == provider_output

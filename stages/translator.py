@@ -29,6 +29,7 @@ import os
 import re
 import tempfile
 import time
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -166,13 +167,20 @@ class ScriptTranslator:
 
     def _split_chunks(self, text: str, chunk_size: int | None = None) -> list:
         """Divide sem perder separadores nem partir uma sentinela."""
-        raw_chunks = split_lossless(text, chunk_size or self.CHUNK_SIZE)
-        boundaries = {chunk.end for chunk in raw_chunks}
-        for marker in re.finditer(r"ZXQGLOSSARY\d{6}ZXQ", text):
-            boundaries = {end for end in boundaries if not marker.start() < end < marker.end()}
+        limit = chunk_size or self.CHUNK_SIZE
+        markers = [(match.start(), match.end()) for match in
+                   re.finditer(r"ZXQGLOSSARY\d{6}ZXQ", text)]
         start = 0
         chunks = []
-        for end in sorted(boundaries):
+        while start < len(text):
+            preview = text[start:min(len(text), start + limit + 2)]
+            end = start + split_lossless(preview, limit)[0].end
+            for marker_start, marker_end in markers:
+                if marker_start < end < marker_end:
+                    # Retrocede se há espaço antes da sentinela; se ela começa
+                    # no chunk, conserva o marcador inteiro mesmo num limite menor.
+                    end = marker_start if marker_start > start else marker_end
+                    break
             chunks.append(text[start:end])
             start = end
         return chunks
@@ -206,8 +214,6 @@ class ScriptTranslator:
         # Sentinelas não são evidência de idioma.
         text = re.sub(r"ZXQGLOSSARY\d{6}ZXQ", "", text)
         words = re.findall(r"[^\W\d_]+", text.casefold(), re.UNICODE)
-        if len(words) < 4:
-            return True
         markers = {
             "en": {"i", "to", "the", "and", "with", "that", "this", "were", "they",
                    "have", "from", "went", "was", "is"},
@@ -216,7 +222,55 @@ class ScriptTranslator:
         }
         source_hits = sum(word in markers.get(source_lang, set()) for word in words)
         target_hits = sum(word in markers.get(target_lang, set()) for word in words)
-        return not (source_hits >= 1 and target_hits == 0)
+        # Uma ilha curta em inglês (por exemplo um título) não define o idioma
+        # de toda a frase. A cobertura lexical já reprova cópias quase integrais.
+        return not (target_hits == 0 and words and source_hits / len(words) >= 0.4)
+
+    def _candidate_issue(self, source: str, candidate: str, source_lang: str,
+                         target_lang: str, tokens: dict[str, str]) -> str | None:
+        if not candidate.strip():
+            return "Chunk traduzido vazio"
+        if any(candidate.count(token) != 1 for token in tokens):
+            return "Placeholder ausente ou duplicado"
+        for token in tokens:
+            source = source.replace(token, "")
+            candidate = candidate.replace(token, "")
+        original_words = re.findall(r"[^\W\d_]+", source)
+        source_words = [word.casefold() for word in original_words]
+        candidate_words = re.findall(r"[^\W\d_]+", candidate.casefold())
+        matched = sum((Counter(source_words) & Counter(candidate_words)).values())
+        coverage = matched / len(source_words) if source_words else 0.0
+        connector = {"pt": "e", "es": "y"}.get(target_lang)
+        names_joined = (connector in candidate_words[1:-1] if connector else False)
+        names_joined = names_joined and bool(original_words) and all(
+            word[:1].isupper() for word in original_words
+        )
+        if source_words and not names_joined and (
+            source_words == candidate_words or
+            (len(source_words) >= 4 and coverage >= 0.75) or
+            (len(source_words) >= 2 and coverage == 1.0)
+        ):
+            return "Chunk permaneceu no idioma fonte"
+        if not self._target_language_ok(candidate, source_lang, target_lang):
+            return "Idioma alvo não confirmado"
+        return None
+
+    def _cached_text_valid(self, source: str, cached: str, source_lang: str,
+                           target_lang: str) -> bool:
+        if not cached.strip():
+            return False
+        if source_lang == target_lang:
+            return cached == source
+        try:
+            protected = self.glossary.prepare(source, source_lang, target_lang)
+        except GlossaryIntegrityError:
+            return False
+        if any(token in cached for token in protected.tokens):
+            return False
+        required = Counter(protected.tokens.values())
+        if any(cached.count(term) < count for term, count in required.items()):
+            return False
+        return self._candidate_issue(source, cached, source_lang, target_lang, {}) is None
 
     def _translate_one_chunk(self, index: int, chunk: str, source_lang: str,
                              target_lang: str, tokens: dict[str, str]) -> TranslationChunkResult:
@@ -237,32 +291,10 @@ class ScriptTranslator:
                 if candidate is None:
                     continue
                 candidate = _ensure_utf8(candidate).strip()
-                if not candidate.strip():
-                    last_status, last_error = "rejected", "Chunk traduzido vazio"
-                    continue
-                missing = [token for token in tokens if candidate.count(token) != 1]
-                if missing:
-                    last_status, last_error = "rejected", "Placeholder ausente ou duplicado"
-                    continue
-                remaining_source = source_core
-                for token in tokens:
-                    remaining_source = remaining_source.replace(token, "")
-                remaining_candidate = candidate
-                for token in tokens:
-                    remaining_candidate = remaining_candidate.replace(token, "")
-                source_words = re.findall(r"[^\W\d_]+", remaining_source.casefold())
-                candidate_words = re.findall(r"[^\W\d_]+", remaining_candidate.casefold())
-                unchanged_words = sum(left == right for left, right in
-                                      zip(source_words, candidate_words))
-                mostly_unchanged = (
-                    len(source_words) >= 4
-                    and unchanged_words / max(len(source_words), len(candidate_words)) >= 0.75
-                )
-                if source_words and (source_words == candidate_words or mostly_unchanged):
-                    last_status, last_error = "rejected", "Chunk permaneceu no idioma fonte"
-                    continue
-                if not self._target_language_ok(candidate, source_lang, target_lang):
-                    last_status, last_error = "rejected", "Idioma alvo não confirmado"
+                issue = self._candidate_issue(source_core, candidate, source_lang,
+                                              target_lang, tokens)
+                if issue:
+                    last_status, last_error = "rejected", issue
                     continue
                 return TranslationChunkResult(index, chunk, leading + candidate + trailing,
                                               provider, "approved")
@@ -337,7 +369,9 @@ class ScriptTranslator:
                 try:
                     metadata = json.loads(cache_path.read_text(encoding="utf-8"))
                     cached = script_path.read_text(encoding="utf-8")
-                    if metadata == expected and cached.strip():
+                    if metadata == expected and self._cached_text_valid(
+                        script_text, cached, source_key, lang_key,
+                    ):
                         results[lang] = TranslationResult("approved", cached, "cache",
                                                           source_lang, lang, ())
                         continue
