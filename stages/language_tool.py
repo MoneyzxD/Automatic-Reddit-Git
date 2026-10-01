@@ -28,6 +28,10 @@ class LanguageToolUnavailable(RuntimeError):
     """A instância local falhou ou devolveu uma resposta inválida."""
 
 
+class _TransportUnavailable(LanguageToolUnavailable):
+    """Falha de conexão ou HTTP do servidor local."""
+
+
 def _utf16_index_to_python(text: str, utf16_index: int) -> int:
     if type(utf16_index) is not int or utf16_index < 0:
         raise ValueError("offset UTF-16 inválido")
@@ -83,6 +87,15 @@ class LanguageToolClient:
         self._check_url, self._languages_url = _endpoints(
             os.environ.get("LANGUAGETOOL_URL") or config.get("languagetool_url", "http://127.0.0.1:8081/v2/check")
         )
+        host = urlsplit(self._check_url).hostname
+        self._direct_proxies = {
+            "http": None,
+            "https": None,
+            "all": None,
+            f"http://{host}": None,
+            f"all://{host}": None,
+        }
+        self._health_report: HealthReport | None = None
 
     def _post(self, text: str, locale: str):
         return self._session.post(
@@ -90,12 +103,20 @@ class LanguageToolClient:
             data={"text": text, "language": locale},
             timeout=self._timeout,
             allow_redirects=False,
+            proxies=self._direct_proxies.copy(),
         )
 
     def check(self, text: str, language: str) -> tuple[LanguageIssue, ...]:
         key = "pt" if language.lower() == "pt-br" else language.lower()
         if key not in self._languages:
             raise ValueError(f"Idioma desconhecido: {language}")
+        if self._health_report is None:
+            try:
+                self._health_report = self.health()
+            except _TransportUnavailable:
+                if not self._required:
+                    return ()
+                raise
         try:
             payload = _json(self._post(text, self._languages[key]))
         except (requests.RequestException, OSError) as exc:
@@ -134,10 +155,15 @@ class LanguageToolClient:
 
     def health(self, expected_version: str = "6.6") -> HealthReport:
         try:
-            languages = _json(self._session.get(self._languages_url, timeout=self._timeout, allow_redirects=False))
+            languages = _json(self._session.get(
+                self._languages_url,
+                timeout=self._timeout,
+                allow_redirects=False,
+                proxies=self._direct_proxies.copy(),
+            ))
             check = _json(self._post("ok", "en-US"))
         except (requests.RequestException, OSError) as exc:
-            raise LanguageToolUnavailable("LanguageTool local indisponível") from exc
+            raise _TransportUnavailable("LanguageTool local indisponível") from exc
 
         try:
             if not isinstance(languages, list) or not isinstance(check, dict):

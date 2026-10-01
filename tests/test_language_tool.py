@@ -1,6 +1,9 @@
+import json
 from unittest.mock import Mock
 
 import pytest
+import requests
+from requests.utils import select_proxy
 
 from stages.language_tool import LanguageIssue, LanguageToolClient, LanguageToolUnavailable
 
@@ -22,7 +25,21 @@ class FakeResponse:
 
 @pytest.fixture
 def session():
-    return Mock()
+    fake = Mock()
+    fake.get.return_value = FakeResponse([
+        {"name": "Portuguese (Brazil)", "code": "pt", "longCode": "pt-BR"},
+        {"name": "English (US)", "code": "en", "longCode": "en-US"},
+        {"name": "Spanish", "code": "es", "longCode": "es"},
+    ])
+    fake.post.return_value = FakeResponse({"software": {"version": "6.6"}, "matches": []})
+    return fake
+
+
+def resposta_check(session, payload, status_code=200):
+    session.post.side_effect = [
+        FakeResponse({"software": {"version": "6.6"}, "matches": []}),
+        FakeResponse(payload, status_code),
+    ]
 
 
 def cliente(session, required=True, url="http://127.0.0.1:8081/v2/check"):
@@ -37,20 +54,88 @@ def cliente(session, required=True, url="http://127.0.0.1:8081/v2/check"):
     )
 
 
+class RecordingAdapter(requests.adapters.BaseAdapter):
+    def __init__(self):
+        self.selected_proxies = []
+
+    def send(self, request, **kwargs):
+        self.selected_proxies.append(select_proxy(request.url, kwargs["proxies"]))
+        payload = (
+            [{"name": "Portuguese (Brazil)", "code": "pt", "longCode": "pt-BR"},
+             {"name": "English (US)", "code": "en", "longCode": "en-US"},
+             {"name": "Spanish", "code": "es", "longCode": "es"}]
+            if request.url.endswith("/languages")
+            else {"software": {"version": "6.6"}, "matches": []}
+        )
+        response = requests.Response()
+        response.status_code = 200
+        response.url = request.url
+        response._content = json.dumps(payload).encode("utf-8")
+        return response
+
+    def close(self):
+        pass
+
+
+@pytest.mark.parametrize("injetada", [False, True])
+def test_transporte_loopback_ignora_proxies_sem_alterar_sessao(monkeypatch, injetada):
+    for variable in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        monkeypatch.setenv(variable, "http://proxy.invalid:3128")
+    for variable in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(variable, raising=False)
+    session = requests.Session()
+    session.proxies = {
+        "http": "http://proxy-da-sessao.invalid:3128",
+        "http://127.0.0.1": "http://proxy-local-da-sessao.invalid:3128",
+    }
+    adapter = RecordingAdapter()
+    session.mount("http://", adapter)
+    proxies_originais = session.proxies.copy()
+    if not injetada:
+        monkeypatch.setattr("stages.language_tool.requests.Session", lambda: session)
+
+    config = {
+        "languagetool_url": "http://127.0.0.1:8081/v2/check",
+        "languagetool_languages": {"pt": "pt-BR", "en": "en-US", "es": "es"},
+    }
+    client = LanguageToolClient(config, session=session if injetada else None)
+    assert client.check("Texto", "pt") == ()
+    assert adapter.selected_proxies == [None, None, None]
+    assert session.proxies == proxies_originais
+    assert session.trust_env is True
+
+
+@pytest.mark.parametrize("version,locales", [
+    ("6.5", ["pt-BR", "en-US", "es"]),
+    (None, ["pt-BR", "en-US", "es"]),
+    ("6.6", ["pt-BR", "en-US"]),
+])
+@pytest.mark.parametrize("required", [True, False])
+def test_check_direto_recusa_versao_ou_locale_invalido(session, version, locales, required):
+    session.get.return_value = FakeResponse([
+        {"name": code, "code": code.split("-")[0], "longCode": code}
+        for code in locales
+    ])
+    session.post.return_value = FakeResponse({"software": {"version": version}, "matches": []})
+    with pytest.raises(LanguageToolUnavailable):
+        cliente(session, required=required).check("Texto", "pt")
+
+
 def test_check_envia_locale_url_e_timeout(session):
-    session.post.return_value = FakeResponse({"matches": []})
+    resposta_check(session, {"matches": []})
 
     assert cliente(session).check("Eu estou bem.", "pt-br") == ()
-    session.post.assert_called_once_with(
-        "http://127.0.0.1:8081/v2/check",
-        data={"text": "Eu estou bem.", "language": "pt-BR"},
-        timeout=15.0,
-        allow_redirects=False,
-    )
+    assert session.post.call_count == 2
+    args, kwargs = session.post.call_args
+    assert args == ("http://127.0.0.1:8081/v2/check",)
+    assert kwargs["data"] == {"text": "Eu estou bem.", "language": "pt-BR"}
+    assert kwargs["timeout"] == 15.0
+    assert kwargs["allow_redirects"] is False
+    assert select_proxy(args[0], kwargs["proxies"]) is None
 
 
 def test_url_base_v2_normaliza_e_usa_locale_es(session):
-    session.post.return_value = FakeResponse({"matches": []})
+    resposta_check(session, {"matches": []})
 
     assert cliente(session, url="http://localhost:8081/v2").check("Hola", "es") == ()
     assert session.post.call_args.args == ("http://localhost:8081/v2/check",)
@@ -59,7 +144,7 @@ def test_url_base_v2_normaliza_e_usa_locale_es(session):
 
 def test_override_de_ambiente_prevalece_e_normaliza(session, monkeypatch):
     monkeypatch.setenv("LANGUAGETOOL_URL", "http://[::1]:8081/v2/")
-    session.post.return_value = FakeResponse({"matches": []})
+    resposta_check(session, {"matches": []})
 
     assert cliente(session).check("Hello", "en") == ()
     assert session.post.call_args.args == ("http://[::1]:8081/v2/check",)
@@ -95,7 +180,7 @@ def test_locale_desconhecido_e_recusado_antes_da_requisicao(session):
 def test_offset_utf16_aponta_para_trecho_python_apos_emoji_composto(session):
     texto = "Oi 👨‍👨‍👦, eu estava cansado."
     # O emoji composto ocupa 8 unidades UTF-16 e 5 posições Python.
-    session.post.return_value = FakeResponse({"matches": [{
+    resposta_check(session, {"matches": [{
         "offset": 23,
         "length": 7,
         "message": "Concordância",
@@ -110,7 +195,7 @@ def test_offset_utf16_aponta_para_trecho_python_apos_emoji_composto(session):
 
 def test_offset_utf16_inclui_emoji_composto_no_trecho(session):
     texto = "A👨‍👨‍👦B"
-    session.post.return_value = FakeResponse({"matches": [{
+    resposta_check(session, {"matches": [{
         "offset": 1,
         "length": 8,
         "message": "Teste",
@@ -124,7 +209,7 @@ def test_offset_utf16_inclui_emoji_composto_no_trecho(session):
 
 @pytest.mark.parametrize("offset,length", [(2, 1), (0, 2), (0, 99), (-1, 1)])
 def test_span_dentro_de_surrogate_ou_fora_do_texto_e_recusado(session, offset, length):
-    session.post.return_value = FakeResponse({"matches": [{
+    resposta_check(session, {"matches": [{
         "offset": offset,
         "length": length,
         "message": "Teste",
@@ -144,19 +229,19 @@ def test_span_dentro_de_surrogate_ou_fora_do_texto_e_recusado(session, offset, l
     {"matches": [{"offset": True, "length": 1, "message": "x", "replacements": [], "rule": {"id": "X", "category": {"id": "Y"}}}]},
 ])
 def test_json_invalido_nunca_e_aprovado_mesmo_no_modo_opcional(session, payload):
-    session.post.return_value = FakeResponse(payload)
+    resposta_check(session, payload)
     with pytest.raises(LanguageToolUnavailable):
         cliente(session, required=False).check("Texto", "pt")
 
 
 def test_json_ilegivel_nunca_e_aprovado_mesmo_no_modo_opcional(session):
-    session.post.return_value = FakeResponse(ValueError("JSON inválido"))
+    resposta_check(session, ValueError("JSON inválido"))
     with pytest.raises(LanguageToolUnavailable):
         cliente(session, required=False).check("Texto", "pt")
 
 
 def test_redirecionamento_nao_e_tratado_como_resultado_valido(session):
-    session.post.return_value = FakeResponse({"matches": []}, 302)
+    resposta_check(session, {"matches": []}, 302)
     with pytest.raises(LanguageToolUnavailable):
         cliente(session, required=False).check("Texto", "pt")
 
@@ -164,16 +249,28 @@ def test_redirecionamento_nao_e_tratado_como_resultado_valido(session):
 @pytest.mark.parametrize("failure", [OSError("connection refused"), FakeResponse({}, 503)])
 def test_indisponibilidade_obrigatoria_nao_aprova(session, failure):
     if isinstance(failure, Exception):
-        session.post.side_effect = failure
+        session.post.side_effect = [FakeResponse({"software": {"version": "6.6"}, "matches": []}), failure]
     else:
-        session.post.return_value = failure
+        resposta_check(session, {}, failure.status_code)
     with pytest.raises(LanguageToolUnavailable):
         cliente(session).check("Texto", "pt")
 
 
 def test_indisponibilidade_opcional_retorna_sem_achados(session):
-    session.post.side_effect = OSError("connection refused")
+    session.post.side_effect = [
+        FakeResponse({"software": {"version": "6.6"}, "matches": []}),
+        OSError("connection refused"),
+    ]
     assert cliente(session, required=False).check("Texto", "pt") == ()
+
+
+def test_check_verifica_health_uma_vez_por_instancia(session):
+    client = cliente(session)
+
+    assert client.check("Primeiro", "pt") == ()
+    assert client.check("Segundo", "en") == ()
+    assert session.get.call_count == 1
+    assert session.post.call_count == 3
 
 
 def test_health_verifica_versao_e_locales_com_respostas_standalone(session):
@@ -191,7 +288,12 @@ def test_health_verifica_versao_e_locales_com_respostas_standalone(session):
     report = cliente(session, url="http://localhost:8081/v2").health()
     assert report.version == "6.6"
     assert set(report.locales) == {"pt-BR", "en-US", "es"}
-    session.get.assert_called_once_with("http://localhost:8081/v2/languages", timeout=15.0, allow_redirects=False)
+    session.get.assert_called_once()
+    args, kwargs = session.get.call_args
+    assert args == ("http://localhost:8081/v2/languages",)
+    assert kwargs["timeout"] == 15.0
+    assert kwargs["allow_redirects"] is False
+    assert select_proxy(args[0], kwargs["proxies"]) is None
     assert session.post.call_args.args == ("http://localhost:8081/v2/check",)
 
 
