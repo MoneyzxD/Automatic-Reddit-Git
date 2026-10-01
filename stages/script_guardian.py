@@ -437,7 +437,8 @@ class ScriptGuardian:
                         applied.extend(accepted)
                         text = result.text
                 status = "repairing" if accepted else (
-                    "rejected" if any(i.severity == "critical" for i in issues) else "approved")
+                    "rejected" if any(i.category != "style" or i.severity == "critical"
+                                      for i in issues) else "approved")
             except _ReviewUnavailable as exc:
                 issues.append(ReviewIssue("factual", "critical", str(exc)))
                 unavailable_reason = str(exc)

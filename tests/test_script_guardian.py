@@ -300,13 +300,33 @@ def test_omissao_global_bloqueia_mesmo_chunks_aprovados(tmp_path, perfil_feminin
         revisar(guardian_fake(tmp_path, semantic), perfil_feminino)
 
 
-def test_estilo_so_avisa(tmp_path, perfil_feminino):
+@pytest.mark.parametrize("final_gate", [False, True])
+def test_estilo_so_avisa(tmp_path, perfil_feminino, final_gate):
     semantic = FakeSemanticReviewer([resposta(False, [achado(
         original="", replacement="", category="style", severity="warning", source_quote="",
     )])])
-    review = revisar(guardian_fake(tmp_path, semantic), perfil_feminino)
+    review = revisar(guardian_fake(tmp_path, semantic), perfil_feminino, final_gate=final_gate)
     assert review.status == "approved"
     assert review.issues[0].severity == "warning"
+
+
+@pytest.mark.parametrize("severity", ["info", "warning"])
+@pytest.mark.parametrize("final_gate", [False, True])
+def test_omissao_nao_critica_ainda_bloqueia(tmp_path, perfil_feminino, severity, final_gate):
+    source = "The surgery never existed."
+    candidate = "A cirurgia foi cancelada."
+    semantic = FakeSemanticReviewer([resposta(False, [achado(
+        original="", replacement="", category="omission", severity=severity,
+        source_quote=source, reason="O fato final foi omitido",
+    )])] * 2)
+    guardian = guardian_fake(tmp_path, semantic)
+    with pytest.raises(QualityRejected) as error:
+        revisar(guardian, perfil_feminino, source_text=source, candidate_text=candidate,
+                final_gate=final_gate)
+    assert error.value.review.status == "rejected"
+    assert error.value.review.approved_text == candidate
+    assert error.value.review.issues[0].severity == severity
+    assert json.loads(guardian.report_path.read_text(encoding="utf-8"))["status"] == "rejected"
 
 
 def test_dependencia_obrigatoria_falha_no_preflight(tmp_path):
