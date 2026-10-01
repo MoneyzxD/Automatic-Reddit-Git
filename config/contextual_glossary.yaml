@@ -1,0 +1,27 @@
+version: "1"
+concepts:
+  pokemon_card:
+    source_patterns: ["pokemon card", "pokémon card"]
+    targets: {pt: "carta Pokémon", es: "carta Pokémon"}
+    forbidden: {pt: ["cartão Pokémon"], es: ["tarjeta Pokémon"]}
+  trading_card:
+    source_patterns: ["trading card", "collectible card"]
+    targets: {pt: "carta colecionável", es: "carta coleccionable"}
+  playing_card:
+    source_patterns: ["playing card"]
+    targets: {pt: "carta de baralho", es: "carta"}
+  credit_card:
+    source_patterns: ["credit card"]
+    targets: {pt: "cartão de crédito", es: "tarjeta de crédito"}
+  debit_card:
+    source_patterns: ["debit card"]
+    targets: {pt: "cartão de débito", es: "tarjeta de débito"}
+  birthday_card:
+    source_patterns: ["birthday card"]
+    targets: {pt: "cartão de aniversário", es: "tarjeta de cumpleaños"}
+  greeting_card:
+    source_patterns: ["greeting card"]
+    targets: {pt: "cartão comemorativo", es: "tarjeta de felicitación"}
+  business_card:
+    source_patterns: ["business card"]
+    targets: {pt: "cartão de visita", es: "tarjeta de presentación"}

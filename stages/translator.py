@@ -6,14 +6,12 @@ Estágio dedicado de tradução do script para PT-BR, EN e ES.
 Fluxo:
     1. Detecta idioma original do script
     2. Traduz para cada idioma alvo
-    3. Salva arquivos separados: script_pt.txt / script_en.txt / script_es.txt
-    4. Retorna dict com scripts prontos por idioma
+    3. Rejeita qualquer bloco vazio, inalterado ou com marcador perdido
+    4. Salva apenas scripts aprovados e retorna resultados tipados
 
 Stack gratuita (sem API key):
     Primário  : deep-translator (GoogleTranslator — gratuito)
     Fallback  : deep-translator (MyMemoryTranslator — gratuito, mesmo pacote)
-    Fallback 2: script original sem tradução
-
     Nota: googletrans (o pacote separado, nao o motor do deep-translator)
     foi descartado de proposito — ele fixa httpx numa versao de 2020,
     incompativel com groq/python-telegram-bot/huggingface-hub. MyMemory
@@ -24,12 +22,53 @@ Instalação:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
 import re
+import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+from stages.contextual_glossary import ContextualGlossary, GlossaryIntegrityError
+from utils.text_chunks import split_lossless
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TranslationChunkResult:
+    index: int
+    source_text: str
+    translated_text: str | None
+    provider: str | None
+    status: Literal["approved", "rejected", "unavailable"]
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class TranslationResult:
+    status: Literal["approved", "rejected", "unavailable"]
+    text: str | None
+    provider: str | None
+    source_lang: str
+    target_lang: str
+    chunks: tuple[TranslationChunkResult, ...]
+    error: str = ""
+
+    def require_text(self) -> str:
+        if self.status != "approved" or self.text is None:
+            raise TranslationFailed(self)
+        return self.text
+
+
+class TranslationFailed(RuntimeError):
+    def __init__(self, result: TranslationResult):
+        super().__init__(result.error or "Tradução não aprovada")
+        self.result = result
 
 # Mapeamento de idioma para código Google Translate
 LANG_CODES = {
@@ -87,9 +126,12 @@ class ScriptTranslator:
     TRANSLATE_MAX_TENTATIVAS = 3
     TRANSLATE_RETRY_ESPERA   = [5, 15]
 
-    def __init__(self, config: dict = None):
+    def __init__(self, config: dict = None, glossary: ContextualGlossary | None = None):
         self.config      = config or {}
         self.scripts_dir = None  # definido em translate_all()
+        self.glossary = glossary or ContextualGlossary.from_path(
+            Path(__file__).parent.parent / "config" / "contextual_glossary.yaml"
+        )
 
     # ── DETECÇÃO DE IDIOMA ────────────────────────────────────────────────
 
@@ -123,74 +165,8 @@ class ScriptTranslator:
     # ── TRADUÇÃO ──────────────────────────────────────────────────────────
 
     def _split_chunks(self, text: str, chunk_size: int | None = None) -> list:
-        """
-        Divide o texto em chunks menores respeitando parágrafos.
-        Evita cortar frases no meio.
-        """
-        chunk_size = chunk_size or self.CHUNK_SIZE
-        paragraphs = text.split("\n\n")
-        chunks     = []
-        current    = ""
-
-        for para in paragraphs:
-            if len(current) + len(para) + 2 <= chunk_size:
-                current += ("\n\n" if current else "") + para
-            else:
-                if current:
-                    chunks.append(current)
-                if len(para) > chunk_size:
-                    sentences = re.split(r"(?<=[.!?])\s+", para)
-                    buf = ""
-                    for sent in sentences:
-                        if len(buf) + len(sent) <= chunk_size:
-                            buf += (" " if buf else "") + sent
-                        else:
-                            if buf:
-                                chunks.append(buf)
-                            buf = sent
-                    if buf:
-                        chunks.append(buf)
-                    current = ""
-                else:
-                    current = para
-
-        if current:
-            chunks.append(current)
-
-        return chunks
-
-    def _translate_deep(self, text: str, source: str, target: str) -> str | None:
-        """Traduz usando deep-translator (GoogleTranslator)."""
-        try:
-            from deep_translator import GoogleTranslator
-        except ImportError:
-            return None
-
-        try:
-            chunks     = self._split_chunks(text)
-            translated = []
-            src_code   = LANG_CODES.get(source, source)
-            tgt_code   = LANG_CODES.get(target, target)
-
-            translator = GoogleTranslator(source=src_code, target=tgt_code)
-
-            for i, chunk in enumerate(chunks):
-                if not chunk.strip():
-                    translated.append(chunk)
-                    continue
-                result = translator.translate(chunk)
-                # Garantir UTF-8 correto na tradução
-                result = _ensure_utf8(result) if result else chunk
-                translated.append(result or chunk)
-                if i < len(chunks) - 1:
-                    time.sleep(self.DELAY)
-
-            final_result = "\n\n".join(translated)
-            return _ensure_utf8(final_result)
-
-        except Exception as e:
-            logger.warning(f"deep-translator falhou ({source}→{target}): {e}")
-            return None
+        """Divide o texto sem descartar espaços ou parágrafos."""
+        return [chunk.text for chunk in split_lossless(text, chunk_size or self.CHUNK_SIZE)]
 
     # MyMemory (API gratuita por tras do deep-translator) limita ~500
     # caracteres por requisicao — bem menor que o CHUNK_SIZE do Google
@@ -198,93 +174,108 @@ class ScriptTranslator:
     # acentuacao (alguns caracteres multibyte contam mais pro limite real).
     MYMEMORY_CHUNK_SIZE = 450
 
-    def _translate_mymemory(self, text: str, source: str, target: str) -> str | None:
-        """
-        Fallback: MyMemoryTranslator, motor gratuito ja embutido no
-        deep-translator (mesmo pacote da traducao primaria, sem dependencia
-        nova). Existe porque o GoogleTranslator do deep-translator falha as
-        vezes de forma transitoria (visto em producao: "No translation was
-        found using the current translator" para en->es especificamente) e
-        sem um segundo motor real o pipeline seguia com o texto original
-        sem traducao nenhuma.
-        """
+    def _translate_chunk_google(self, chunk: str, source: str, target: str) -> str | None:
+        try:
+            from deep_translator import GoogleTranslator
+            return GoogleTranslator(source=LANG_CODES.get(source, source),
+                                    target=LANG_CODES.get(target, target)).translate(chunk)
+        except Exception as exc:
+            logger.warning("Google falhou (%s→%s): %s", source, target, exc)
+            return None
+
+    def _translate_chunk_mymemory(self, chunk: str, source: str, target: str) -> str | None:
         try:
             from deep_translator import MyMemoryTranslator
-        except ImportError:
+            return MyMemoryTranslator(source=MYMEMORY_LANG_CODES.get(source, source),
+                                      target=MYMEMORY_LANG_CODES.get(target, target)).translate(chunk)
+        except Exception as exc:
+            logger.warning("MyMemory falhou (%s→%s): %s", source, target, exc)
             return None
 
-        try:
-            chunks   = self._split_chunks(text, chunk_size=self.MYMEMORY_CHUNK_SIZE)
-            results  = []
-            src_code = MYMEMORY_LANG_CODES.get(source, source)
-            tgt_code = MYMEMORY_LANG_CODES.get(target, target)
+    @staticmethod
+    def _target_language_ok(text: str, source_lang: str, target_lang: str) -> bool:
+        # Em trechos curtos não há evidência suficiente; igualdade literal já é rejeitada.
+        words = re.findall(r"[^\W\d_]+", text.casefold(), re.UNICODE)
+        if len(words) < 6:
+            return True
+        markers = {
+            "en": {"the", "and", "with", "that", "this", "were", "they", "have", "from"},
+            "pt": {"que", "uma", "com", "para", "não", "estava", "minha", "isso", "você"},
+            "es": {"que", "una", "con", "para", "estaba", "esto", "usted", "pero", "cuando"},
+        }
+        source_hits = sum(word in markers.get(source_lang, set()) for word in words)
+        target_hits = sum(word in markers.get(target_lang, set()) for word in words)
+        return not (source_hits >= 2 and source_hits > target_hits)
 
-            translator = MyMemoryTranslator(source=src_code, target=tgt_code)
-
-            for i, chunk in enumerate(chunks):
-                if not chunk.strip():
-                    results.append(chunk)
+    def _translate_one_chunk(self, index: int, chunk: str, source_lang: str,
+                             target_lang: str, tokens: dict[str, str]) -> TranslationChunkResult:
+        if not chunk.strip():
+            return TranslationChunkResult(index, chunk, chunk, "identity", "approved")
+        waits = self.config.get("retry_waits", self.TRANSLATE_RETRY_ESPERA)
+        last_status = "unavailable"
+        last_error = "Provedores indisponíveis"
+        for attempt in range(self.TRANSLATE_MAX_TENTATIVAS):
+            if attempt:
+                time.sleep(waits[attempt - 1])
+            for provider, method in (("Google", self._translate_chunk_google),
+                                     ("MyMemory", self._translate_chunk_mymemory)):
+                candidate = method(chunk, source_lang, target_lang)
+                if candidate is None:
                     continue
-                result = translator.translate(chunk)
-                result = _ensure_utf8(result) if result else chunk
-                results.append(result or chunk)
-                if i < len(chunks) - 1:
-                    time.sleep(self.DELAY)
+                candidate = _ensure_utf8(candidate)
+                if not candidate.strip():
+                    last_status, last_error = "rejected", "Chunk traduzido vazio"
+                    continue
+                missing = [token for token in tokens if candidate.count(token) != 1]
+                if missing:
+                    last_status, last_error = "rejected", "Placeholder ausente ou duplicado"
+                    continue
+                remaining_source = chunk
+                for token in tokens:
+                    remaining_source = remaining_source.replace(token, "")
+                if (candidate.strip().casefold() == chunk.strip().casefold()
+                        and remaining_source.strip()):
+                    last_status, last_error = "rejected", "Chunk permaneceu no idioma fonte"
+                    continue
+                if not self._target_language_ok(candidate, source_lang, target_lang):
+                    last_status, last_error = "rejected", "Idioma alvo não confirmado"
+                    continue
+                return TranslationChunkResult(index, chunk, candidate, provider, "approved")
+            if last_status == "rejected":
+                break
+        return TranslationChunkResult(index, chunk, None, None, last_status, last_error)
 
-            final_result = "\n\n".join(results)
-            return _ensure_utf8(final_result)
-        except Exception as e:
-            logger.warning(f"MyMemoryTranslator falhou ({source}→{target}): {e}")
-            return None
-
-    def translate(self, text: str, source_lang: str, target_lang: str) -> str:
-        """
-        Traduz texto do idioma fonte para o alvo.
-        Se source == target, retorna o texto original.
-        Tenta deep-translator (Google) → deep-translator (MyMemory) → texto original.
-        """
-        # Normaliza para comparação (pt-br == pt)
-        src_norm = _normalize_lang_key(source_lang)
-        tgt_norm = _normalize_lang_key(target_lang)
-
-        if src_norm == tgt_norm:
-            logger.info(f"  Idioma já é {target_lang} — sem tradução necessária")
-            return text
-
-        logger.info(
-            f"  Traduzindo {LANG_NAMES.get(source_lang, source_lang)} → "
-            f"{LANG_NAMES.get(target_lang, target_lang)}"
-        )
-
-        # Ambos os motores as vezes falham de forma transitoria (rate
-        # limit, hiccup do servidor) — sem retry, o texto original ficava
-        # no idioma errado e a deteccao de genero (que roda antes, sobre
-        # esse texto) saia com confianca baixa/errada, cascateando pra
-        # narracao com genero e voz trocados (visto em producao).
-        for tentativa in range(self.TRANSLATE_MAX_TENTATIVAS):
-            if tentativa > 0:
-                espera = self.TRANSLATE_RETRY_ESPERA[tentativa - 1]
-                logger.warning(
-                    f"  Tradução falhou nos dois motores — aguardando {espera}s "
-                    f"pra tentativa {tentativa + 1}/{self.TRANSLATE_MAX_TENTATIVAS}"
-                )
-                time.sleep(espera)
-
-            result = self._translate_deep(text, source_lang, target_lang)
-            if result:
-                logger.info(f"  ✓ Tradução concluída (deep-translator/Google)")
-                return result
-
-            result = self._translate_mymemory(text, source_lang, target_lang)
-            if result:
-                logger.info(f"  ✓ Tradução concluída (deep-translator/MyMemory fallback)")
-                return result
-
-        logger.error(
-            f"  Tradução falhou ({source_lang}→{target_lang}) nos dois motores. "
-            f"Usando texto original."
-        )
-        return text
+    def translate(self, text: str, source_lang: str, target_lang: str) -> TranslationResult:
+        source = _normalize_lang_key(source_lang)
+        target = _normalize_lang_key(target_lang)
+        if source == target:
+            return TranslationResult("approved", text, "identity", source_lang, target_lang,
+                                     (TranslationChunkResult(0, text, text, "identity", "approved"),))
+        try:
+            protected = self.glossary.prepare(text, source, target)
+        except GlossaryIntegrityError as exc:
+            return TranslationResult("rejected", None, None, source_lang, target_lang, (), str(exc))
+        chunks = self._split_chunks(protected.text, chunk_size=self.MYMEMORY_CHUNK_SIZE)
+        results = []
+        for index, chunk in enumerate(chunks):
+            tokens = {token: value for token, value in protected.tokens.items() if token in chunk}
+            result = self._translate_one_chunk(index, chunk, source, target, tokens)
+            results.append(result)
+            if result.status != "approved":
+                return TranslationResult(result.status, None, None, source_lang, target_lang,
+                                         tuple(results), result.error)
+            if index < len(chunks) - 1:
+                time.sleep(self.config.get("delay", self.DELAY))
+        translated = "".join(part.translated_text or "" for part in results)
+        try:
+            translated = self.glossary.restore(translated, protected)
+        except GlossaryIntegrityError as exc:
+            return TranslationResult("rejected", None, None, source_lang, target_lang,
+                                     tuple(results), str(exc))
+        providers = {part.provider for part in results if part.provider != "identity"}
+        provider = next(iter(providers)) if len(providers) == 1 else "mixed"
+        return TranslationResult("approved", translated, provider, source_lang, target_lang,
+                                 tuple(results))
 
     # ── PIPELINE PRINCIPAL ────────────────────────────────────────────────
 
@@ -293,68 +284,61 @@ class ScriptTranslator:
         script_text: str,
         story_id: str,
         scripts_dir: Path,
-        languages: list,
-        source_lang: str = None,
+        languages: list[str],
+        source_lang: str | None = None,
         force: bool = False,
-    ) -> dict:
-        """
-        Traduz o script para todos os idiomas e salva arquivos separados.
-
-        Retorna dict: { "pt-br": "texto...", "en": "texto...", "es": "texto..." }
-        Salva:        scripts_dir/{lang_key}/script_{story_id}_{lang_key}.txt
-
-        Nota: pt-br é normalizado para pt internamente (pasta e arquivo),
-        mas a chave do dict retornado preserva o idioma original passado.
-
-        force=True ignora o cache em disco e traduz de novo mesmo se o arquivo
-        já existir — usado em --test-story, onde o story_id é sempre o mesmo e
-        um cache antigo esconderia qualquer mudança nos estágios seguintes.
-        """
+    ) -> dict[str, TranslationResult]:
+        """Traduz idiomas pedidos e persiste apenas resultados integrais aprovados."""
         if not source_lang:
             source_lang = self.detect_language(script_text)
-            logger.info(f"Idioma detectado: {LANG_NAMES.get(source_lang, source_lang)}")
-
-        results = {}
+        source_key = _normalize_lang_key(source_lang)
+        source_hash = hashlib.sha256(script_text.encode("utf-8")).hexdigest()
+        results: dict[str, TranslationResult] = {}
 
         for lang in languages:
-            # Normaliza para nome de pasta/arquivo (pt-br → pt)
-            lang_key    = _normalize_lang_key(lang)
-            lang_dir    = scripts_dir / lang_key
-            lang_dir.mkdir(parents=True, exist_ok=True)
+            lang_key = _normalize_lang_key(lang)
+            lang_dir = scripts_dir / lang_key
             script_path = lang_dir / f"script_{story_id}_{lang_key}.txt"
-
-            if script_path.exists() and not force:
-                logger.info(f"  Script {lang} já existe — carregando")
-                results[lang] = script_path.read_text(encoding="utf-8")
-                continue
-
-            translated    = self.translate(script_text, source_lang, lang)
-            # Garantir UTF-8 correto antes de salvar
-            translated    = _ensure_utf8(translated)
-            results[lang] = translated
-            script_path.write_text(translated, encoding="utf-8")
-            logger.info(f"  Salvo: {script_path.name}")
+            cache_path = script_path.with_suffix(".cache.json")
+            expected = {"source_sha256": source_hash, "source_lang": source_key,
+                        "target_lang": lang_key, "glossary_version": self.glossary.version}
+            if not force and script_path.is_file() and cache_path.is_file():
+                try:
+                    metadata = json.loads(cache_path.read_text(encoding="utf-8"))
+                    cached = script_path.read_text(encoding="utf-8")
+                    if metadata == expected and cached.strip():
+                        results[lang] = TranslationResult("approved", cached, "cache",
+                                                          source_lang, lang, ())
+                        continue
+                except (OSError, ValueError):
+                    pass
+            result = self.translate(script_text, source_lang, lang)
+            translated = result.require_text()
+            lang_dir.mkdir(parents=True, exist_ok=True)
+            self._write_atomic(script_path, translated)
+            self._write_atomic(cache_path, json.dumps(expected, ensure_ascii=False))
+            results[lang] = result
 
         return results
 
-    def translate_title(self, title: str, source_lang: str, target_lang: str) -> str:
-        """
-        Traduz apenas o título para o idioma alvo.
-        Usado para gerar o nome do arquivo de export.
-        """
-        src_norm = _normalize_lang_key(source_lang)
-        tgt_norm = _normalize_lang_key(target_lang)
-
-        if src_norm == tgt_norm:
-            return title
+    @staticmethod
+    def _write_atomic(path: Path, content: str) -> None:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=f".{path.name}.", suffix=".tmp",
+                                         delete=False) as handle:
+            temporary = Path(handle.name)
+            try:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            except Exception:
+                temporary.unlink(missing_ok=True)
+                raise
         try:
-            from deep_translator import GoogleTranslator
-            tgt    = LANG_CODES.get(target_lang, target_lang)
-            src    = LANG_CODES.get(source_lang, source_lang)
-            result = GoogleTranslator(source=src, target=tgt).translate(title)
-            # Garantir UTF-8 correto
-            result = _ensure_utf8(result) if result else title
-            return result or title
-        except Exception as e:
-            logger.warning(f"Falha ao traduzir título ({source_lang}→{target_lang}): {e}")
-            return title
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    def translate_title(self, title: str, source_lang: str, target_lang: str) -> str:
+        """Traduz o título pelo mesmo contrato de aprovação do roteiro."""
+        return self.translate(title, source_lang, target_lang).require_text()
