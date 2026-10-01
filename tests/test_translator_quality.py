@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import pytest
@@ -71,6 +72,62 @@ def test_ingles_residual_reprova_idioma_alvo(monkeypatch):
     assert result.text is None
 
 
+@pytest.mark.parametrize("target", ["pt", "es"])
+@pytest.mark.parametrize("candidate", [
+    "I went to the store!", "i went to the store.", "I  went   to the store. ",
+])
+def test_pontuacao_diferente_nao_disfarca_ingles_inalterado(monkeypatch, target, candidate):
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    result = translator.translate("I went to the store.", "en", target)
+    assert result.status == "rejected"
+    assert result.text is None
+
+
+def test_ingles_quase_inteiro_com_uma_palavra_trocada_reprova(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "I went to the shop.")
+    assert translator.translate("I went to the store.", "en", "pt").status == "rejected"
+
+
+def test_ingles_residual_sem_marcadores_frequentes_reprova(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "Helen drove home fast.")
+    assert translator.translate("Helen drove home quickly.", "en", "pt").status == "rejected"
+
+
+@pytest.mark.parametrize(("source", "limit", "expected"), [
+    ("bread and", 6, "pão e"),
+    ("bread\n\nand", 7, "pão\n\ne"),
+])
+def test_separadores_de_chunks_sobrevivem_provedor_que_remove_espacos(
+    monkeypatch, source, limit, expected,
+):
+    translator = translator_with(monkeypatch, lambda chunk, *_: "pão" if "bread" in chunk else "e")
+    monkeypatch.setattr(translator, "MYMEMORY_CHUNK_SIZE", limit)
+    assert translator.translate(source, "en", "pt").require_text() == expected
+
+
+def test_sentinela_na_fronteira_nunca_e_partida(monkeypatch):
+    translator = translator_with(monkeypatch, lambda chunk, *_: chunk.replace("bread", "pão"))
+    monkeypatch.setattr(translator, "MYMEMORY_CHUNK_SIZE", 18)
+    protected = translator.glossary.prepare("bread Pokemon card", "en", "pt")
+    chunks = translator._split_chunks(protected.text, chunk_size=18)
+    token = next(iter(protected.tokens))
+    assert sum(token in chunk for chunk in chunks) == 1
+    assert "".join(chunks) == protected.text
+    assert translator.translate("bread Pokemon card", "en", "pt").require_text() == "pão carta Pokémon"
+
+
+def test_google_invalido_na_primeira_rodada_pode_aprovar_na_segunda(monkeypatch):
+    calls = []
+
+    def google(*_):
+        calls.append(1)
+        return "" if len(calls) == 1 else "Fui à loja."
+
+    translator = translator_with(monkeypatch, google)
+    assert translator.translate("I went to the store.", "en", "pt").require_text() == "Fui à loja."
+    assert len(calls) == 2
+
+
 def test_cache_exige_fonte_idiomas_e_versao_e_só_grava_aprovado(monkeypatch, tmp_path):
     calls = []
 
@@ -134,3 +191,39 @@ def test_cache_com_idioma_fonte_ou_alvo_divergente_retraduz(monkeypatch, tmp_pat
         cache.write_text(json.dumps(metadata), encoding="utf-8")
         translator.translate_all("The source.", "s3", tmp_path, ["pt"], "en")
     assert len(calls) == 3
+
+
+def test_force_ignora_cache_valido(monkeypatch, tmp_path):
+    calls = []
+
+    def google(*_):
+        calls.append(1)
+        return "Texto traduzido."
+
+    translator = translator_with(monkeypatch, google)
+    translator.translate_all("The source.", "s4", tmp_path, ["pt"], "en")
+    translator.translate_all("The source.", "s4", tmp_path, ["pt"], "en", force=True)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("source_lang,target_lang", [("en", "pt"), ("pt", "pt")])
+def test_fonte_vazia_rejeitada_sem_arquivos(monkeypatch, tmp_path, source_lang, target_lang):
+    translator = translator_with(monkeypatch, lambda *_: pytest.fail("provedor não deve ser chamado"))
+    with pytest.raises(TranslationFailed) as failure:
+        translator.translate_all("  \n\t", "s5", tmp_path, [target_lang], source_lang)
+    assert failure.value.result.status == "rejected"
+    assert not list(tmp_path.rglob("script_s5_*"))
+
+
+def test_fonte_vazia_nao_reaproveita_cache_antigo(monkeypatch, tmp_path):
+    translator = translator_with(monkeypatch, lambda *_: pytest.fail("provedor não deve ser chamado"))
+    script_dir = tmp_path / "pt"
+    script_dir.mkdir()
+    (script_dir / "script_s6_pt.txt").write_text("Texto antigo.", encoding="utf-8")
+    (script_dir / "script_s6_pt.cache.json").write_text(json.dumps({
+        "source_sha256": hashlib.sha256("  ".encode("utf-8")).hexdigest(),
+        "source_lang": "en", "target_lang": "pt", "glossary_version": translator.glossary.version,
+    }), encoding="utf-8")
+    with pytest.raises(TranslationFailed) as failure:
+        translator.translate_all("  ", "s6", tmp_path, ["pt"], "en")
+    assert failure.value.result.status == "rejected"

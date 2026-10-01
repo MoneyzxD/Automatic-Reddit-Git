@@ -47,3 +47,11 @@ def test_token_perdido_duplicado_ou_alterado_bloqueia(glossary, change):
     token = next(iter(protected.tokens))
     with pytest.raises(GlossaryIntegrityError):
         glossary.restore(change(token), protected)
+
+
+def test_colisao_com_sentinela_literal_escolhe_outro_marcador(glossary):
+    literal = "ZXQGLOSSARY000000ZXQ"
+    protected = glossary.prepare(f"{literal} Pokemon card", "en", "pt")
+    token = next(iter(protected.tokens))
+    assert token != literal
+    assert glossary.restore(protected.text, protected) == f"{literal} carta Pokémon"

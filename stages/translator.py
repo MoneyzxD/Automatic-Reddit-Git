@@ -165,8 +165,17 @@ class ScriptTranslator:
     # ── TRADUÇÃO ──────────────────────────────────────────────────────────
 
     def _split_chunks(self, text: str, chunk_size: int | None = None) -> list:
-        """Divide o texto sem descartar espaços ou parágrafos."""
-        return [chunk.text for chunk in split_lossless(text, chunk_size or self.CHUNK_SIZE)]
+        """Divide sem perder separadores nem partir uma sentinela."""
+        raw_chunks = split_lossless(text, chunk_size or self.CHUNK_SIZE)
+        boundaries = {chunk.end for chunk in raw_chunks}
+        for marker in re.finditer(r"ZXQGLOSSARY\d{6}ZXQ", text):
+            boundaries = {end for end in boundaries if not marker.start() < end < marker.end()}
+        start = 0
+        chunks = []
+        for end in sorted(boundaries):
+            chunks.append(text[start:end])
+            start = end
+        return chunks
 
     # MyMemory (API gratuita por tras do deep-translator) limita ~500
     # caracteres por requisicao — bem menor que o CHUNK_SIZE do Google
@@ -194,23 +203,28 @@ class ScriptTranslator:
 
     @staticmethod
     def _target_language_ok(text: str, source_lang: str, target_lang: str) -> bool:
-        # Em trechos curtos não há evidência suficiente; igualdade literal já é rejeitada.
+        # Sentinelas não são evidência de idioma.
+        text = re.sub(r"ZXQGLOSSARY\d{6}ZXQ", "", text)
         words = re.findall(r"[^\W\d_]+", text.casefold(), re.UNICODE)
-        if len(words) < 6:
+        if len(words) < 4:
             return True
         markers = {
-            "en": {"the", "and", "with", "that", "this", "were", "they", "have", "from"},
+            "en": {"i", "to", "the", "and", "with", "that", "this", "were", "they",
+                   "have", "from", "went", "was", "is"},
             "pt": {"que", "uma", "com", "para", "não", "estava", "minha", "isso", "você"},
             "es": {"que", "una", "con", "para", "estaba", "esto", "usted", "pero", "cuando"},
         }
         source_hits = sum(word in markers.get(source_lang, set()) for word in words)
         target_hits = sum(word in markers.get(target_lang, set()) for word in words)
-        return not (source_hits >= 2 and source_hits > target_hits)
+        return not (source_hits >= 1 and target_hits == 0)
 
     def _translate_one_chunk(self, index: int, chunk: str, source_lang: str,
                              target_lang: str, tokens: dict[str, str]) -> TranslationChunkResult:
         if not chunk.strip():
             return TranslationChunkResult(index, chunk, chunk, "identity", "approved")
+        leading = chunk[:len(chunk) - len(chunk.lstrip())]
+        trailing = chunk[len(chunk.rstrip()):]
+        source_core = chunk.strip()
         waits = self.config.get("retry_waits", self.TRANSLATE_RETRY_ESPERA)
         last_status = "unavailable"
         last_error = "Provedores indisponíveis"
@@ -219,10 +233,10 @@ class ScriptTranslator:
                 time.sleep(waits[attempt - 1])
             for provider, method in (("Google", self._translate_chunk_google),
                                      ("MyMemory", self._translate_chunk_mymemory)):
-                candidate = method(chunk, source_lang, target_lang)
+                candidate = method(source_core, source_lang, target_lang)
                 if candidate is None:
                     continue
-                candidate = _ensure_utf8(candidate)
+                candidate = _ensure_utf8(candidate).strip()
                 if not candidate.strip():
                     last_status, last_error = "rejected", "Chunk traduzido vazio"
                     continue
@@ -230,24 +244,36 @@ class ScriptTranslator:
                 if missing:
                     last_status, last_error = "rejected", "Placeholder ausente ou duplicado"
                     continue
-                remaining_source = chunk
+                remaining_source = source_core
                 for token in tokens:
                     remaining_source = remaining_source.replace(token, "")
-                if (candidate.strip().casefold() == chunk.strip().casefold()
-                        and remaining_source.strip()):
+                remaining_candidate = candidate
+                for token in tokens:
+                    remaining_candidate = remaining_candidate.replace(token, "")
+                source_words = re.findall(r"[^\W\d_]+", remaining_source.casefold())
+                candidate_words = re.findall(r"[^\W\d_]+", remaining_candidate.casefold())
+                unchanged_words = sum(left == right for left, right in
+                                      zip(source_words, candidate_words))
+                mostly_unchanged = (
+                    len(source_words) >= 4
+                    and unchanged_words / max(len(source_words), len(candidate_words)) >= 0.75
+                )
+                if source_words and (source_words == candidate_words or mostly_unchanged):
                     last_status, last_error = "rejected", "Chunk permaneceu no idioma fonte"
                     continue
                 if not self._target_language_ok(candidate, source_lang, target_lang):
                     last_status, last_error = "rejected", "Idioma alvo não confirmado"
                     continue
-                return TranslationChunkResult(index, chunk, candidate, provider, "approved")
-            if last_status == "rejected":
-                break
+                return TranslationChunkResult(index, chunk, leading + candidate + trailing,
+                                              provider, "approved")
         return TranslationChunkResult(index, chunk, None, None, last_status, last_error)
 
     def translate(self, text: str, source_lang: str, target_lang: str) -> TranslationResult:
         source = _normalize_lang_key(source_lang)
         target = _normalize_lang_key(target_lang)
+        if not text.strip():
+            return TranslationResult("rejected", None, None, source_lang, target_lang, (),
+                                     "Fonte vazia")
         if source == target:
             return TranslationResult("approved", text, "identity", source_lang, target_lang,
                                      (TranslationChunkResult(0, text, text, "identity", "approved"),))
@@ -289,6 +315,11 @@ class ScriptTranslator:
         force: bool = False,
     ) -> dict[str, TranslationResult]:
         """Traduz idiomas pedidos e persiste apenas resultados integrais aprovados."""
+        if not script_text.strip():
+            raise TranslationFailed(TranslationResult(
+                "rejected", None, None, source_lang or "", languages[0] if languages else "",
+                (), "Fonte vazia",
+            ))
         if not source_lang:
             source_lang = self.detect_language(script_text)
         source_key = _normalize_lang_key(source_lang)
