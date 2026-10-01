@@ -124,6 +124,30 @@ def test_nomes_proprios_preservados_com_conjuncao_traduzida(monkeypatch):
     assert translator.translate("Alice Bob Carol Dave", "en", "pt").require_text() == candidate
 
 
+def test_titulo_composto_ingles_preservado_nao_conta_como_corpo(monkeypatch):
+    candidate = "Li The End and The Beginning."
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate("I read The End and The Beginning.", "en", "pt").require_text() == candidate
+
+
+def test_nomes_compostos_reordenados_nao_contam_como_ingles_residual(monkeypatch):
+    candidate = "Mary Jones e John Smith"
+    translator = translator_with(monkeypatch, lambda *_: candidate)
+    assert translator.translate("John Smith and Mary Jones", "en", "pt").require_text() == candidate
+
+
+def test_nome_preservado_nao_mascara_corpo_ingles_residual(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "John Smith drove home fast.")
+    assert translator.translate("John Smith drove home quickly.", "en", "pt").status == "rejected"
+
+
+def test_corpo_curto_ingles_residual_reprova_apesar_de_artigo_traduzido(monkeypatch):
+    translator = translator_with(monkeypatch, lambda *_: "O dog ran.")
+    result = translator.translate("The dog ran.", "en", "pt")
+    assert result.status == "rejected"
+    assert result.text is None
+
+
 @pytest.mark.parametrize(("source", "limit", "expected"), [
     ("bread and", 6, "pão e"),
     ("bread\n\nand", 7, "pão\n\ne"),
@@ -333,3 +357,27 @@ def test_cache_legado_em_ingles_e_revalidado(monkeypatch, tmp_path, provider_out
         assert result.provider != "cache"
         assert result.require_text() == provider_output
         assert script.read_text(encoding="utf-8") == provider_output
+
+
+@pytest.mark.parametrize("provider_output", ["O cachorro correu.", None])
+def test_cache_legado_com_corpo_ingles_curto_e_revalidado(monkeypatch, tmp_path, provider_output):
+    translator = translator_with(monkeypatch, lambda *_: provider_output)
+    script_dir = tmp_path / "pt"
+    script_dir.mkdir()
+    script = script_dir / "script_s8_pt.txt"
+    cache = script.with_suffix(".cache.json")
+    script.write_text("O dog ran.", encoding="utf-8")
+    metadata = {
+        "source_sha256": hashlib.sha256("The dog ran.".encode("utf-8")).hexdigest(),
+        "source_lang": "en", "target_lang": "pt", "glossary_version": translator.glossary.version,
+    }
+    cache.write_text(json.dumps(metadata), encoding="utf-8")
+    if provider_output is None:
+        with pytest.raises(TranslationFailed):
+            translator.translate_all("The dog ran.", "s8", tmp_path, ["pt"], "en")
+        assert script.read_text(encoding="utf-8") == "O dog ran."
+        assert json.loads(cache.read_text(encoding="utf-8")) == metadata
+    else:
+        result = translator.translate_all("The dog ran.", "s8", tmp_path, ["pt"], "en")["pt"]
+        assert result.provider != "cache"
+        assert result.require_text() == provider_output

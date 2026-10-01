@@ -210,24 +210,37 @@ class ScriptTranslator:
             return None
 
     @staticmethod
-    def _target_language_ok(text: str, source_lang: str, target_lang: str) -> bool:
-        # Sentinelas não são evidência de idioma.
-        text = re.sub(r"ZXQGLOSSARY\d{6}ZXQ", "", text)
-        words = re.findall(r"[^\W\d_]+", text.casefold(), re.UNICODE)
-        markers = {
-            "en": {"i", "to", "the", "and", "with", "that", "this", "were", "they",
-                   "have", "from", "went", "was", "is"},
-            "pt": {"que", "uma", "com", "para", "não", "estava", "minha", "isso", "você"},
-            "es": {"que", "una", "con", "para", "estaba", "esto", "usted", "pero", "cuando"},
-        }
-        source_hits = sum(word in markers.get(source_lang, set()) for word in words)
-        target_hits = sum(word in markers.get(target_lang, set()) for word in words)
-        # Uma ilha curta em inglês (por exemplo um título) não define o idioma
-        # de toda a frase. A cobertura lexical já reprova cópias quase integrais.
-        return not (target_hits == 0 and words and source_hits / len(words) >= 0.4)
+    def _without_preserved_spans(source: str, candidate: str) -> tuple[str, str]:
+        """Remove títulos e nomes copiados de ambos os lados antes de comparar o corpo."""
+        title_word = r"[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]+"
+        connector = r"(?:and|of|the|a|an|to|in|on|for)"
+        title_run = re.compile(
+            rf"(?<!\w){title_word}(?:[ \t]+(?:{connector}[ \t]+)*{title_word})+(?!\w)"
+        )
+        phrases = []
+        for match in title_run.finditer(source):
+            phrase = match.group()
+            words = phrase.split()
+            if words[0] in {"The", "An"} or re.search(
+                r"\b(?:of|the|in|on|to|for)\b", phrase
+            ):
+                # Títulos mantêm conectores internos como parte do nome.
+                phrases.append(phrase)
+            else:
+                # Nomes podem reaparecer em outra ordem; o conector é traduzível.
+                phrases.extend(re.findall(title_word, phrase))
+        for phrase in phrases:
+            pattern = re.compile(
+                r"(?<!\w)" + r"\s+".join(map(re.escape, phrase.split())) + r"(?!\w)",
+                re.IGNORECASE,
+            )
+            if pattern.search(candidate):
+                source = pattern.sub(" ", source, count=1)
+                candidate = pattern.sub(" ", candidate, count=1)
+        return source, candidate
 
-    def _candidate_issue(self, source: str, candidate: str, source_lang: str,
-                         target_lang: str, tokens: dict[str, str]) -> str | None:
+    def _candidate_issue(self, source: str, candidate: str,
+                         tokens: dict[str, str]) -> str | None:
         if not candidate.strip():
             return "Chunk traduzido vazio"
         if any(candidate.count(token) != 1 for token in tokens):
@@ -235,24 +248,18 @@ class ScriptTranslator:
         for token in tokens:
             source = source.replace(token, "")
             candidate = candidate.replace(token, "")
-        original_words = re.findall(r"[^\W\d_]+", source)
-        source_words = [word.casefold() for word in original_words]
+        source, candidate = self._without_preserved_spans(source, candidate)
+        source_words = re.findall(r"[^\W\d_]+", source.casefold())
         candidate_words = re.findall(r"[^\W\d_]+", candidate.casefold())
         matched = sum((Counter(source_words) & Counter(candidate_words)).values())
         coverage = matched / len(source_words) if source_words else 0.0
-        connector = {"pt": "e", "es": "y"}.get(target_lang)
-        names_joined = (connector in candidate_words[1:-1] if connector else False)
-        names_joined = names_joined and bool(original_words) and all(
-            word[:1].isupper() for word in original_words
-        )
-        if source_words and not names_joined and (
+        if source_words and (
             source_words == candidate_words or
             (len(source_words) >= 4 and coverage >= 0.75) or
-            (len(source_words) >= 2 and coverage == 1.0)
+            (len(source_words) == 3 and coverage >= 2 / 3) or
+            (len(source_words) == 2 and coverage == 1.0)
         ):
             return "Chunk permaneceu no idioma fonte"
-        if not self._target_language_ok(candidate, source_lang, target_lang):
-            return "Idioma alvo não confirmado"
         return None
 
     def _cached_text_valid(self, source: str, cached: str, source_lang: str,
@@ -270,7 +277,7 @@ class ScriptTranslator:
         required = Counter(protected.tokens.values())
         if any(cached.count(term) < count for term, count in required.items()):
             return False
-        return self._candidate_issue(source, cached, source_lang, target_lang, {}) is None
+        return self._candidate_issue(source, cached, {}) is None
 
     def _translate_one_chunk(self, index: int, chunk: str, source_lang: str,
                              target_lang: str, tokens: dict[str, str]) -> TranslationChunkResult:
@@ -291,8 +298,7 @@ class ScriptTranslator:
                 if candidate is None:
                     continue
                 candidate = _ensure_utf8(candidate).strip()
-                issue = self._candidate_issue(source_core, candidate, source_lang,
-                                              target_lang, tokens)
+                issue = self._candidate_issue(source_core, candidate, tokens)
                 if issue:
                     last_status, last_error = "rejected", issue
                     continue
