@@ -29,6 +29,8 @@ Uso:
 from __future__ import annotations
 
 import logging
+import json
+from pathlib import Path
 import threading
 from collections import defaultdict
 
@@ -46,6 +48,25 @@ _fallbacks: list[dict[str, str]] = []
 
 # Modelos efetivamente usados: {stage: modelo}
 _models: dict[str, str] = {}
+
+
+def append_quality_report(path: Path, event: dict) -> None:
+    """Acrescenta um evento sanitizado sem substituir linhas anteriores."""
+    def redact(value):
+        if isinstance(value, dict):
+            return {key: "[REDACTED]" if any(word in str(key).lower() for word in
+                    ("token", "secret", "cookie", "authorization", "api_key")) else redact(item)
+                    for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [redact(item) for item in value]
+        return value
+
+    line = json.dumps(redact(event), ensure_ascii=False) + "\n"
+    # ponytail: lock por processo; usar escritor único se houver revisões multiprocesso concorrentes.
+    with _lock:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line)
 
 
 def reset() -> None:

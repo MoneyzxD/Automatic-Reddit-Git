@@ -72,3 +72,19 @@ class ContextualGlossary:
         for token, target in protected.tokens.items():
             translated_text = translated_text.replace(token, target)
         return translated_text
+
+    def findings(self, source_text: str, candidate_text: str, language: str):
+        """Propõe somente formas proibidas declaradas no conceito presente na fonte."""
+        from stages.script_guardian import TextPatch
+        patches = []
+        for concept in self.concepts.values():
+            quotes = [match.group() for pattern in concept["source_patterns"]
+                      for match in re.finditer(rf"(?<!\w){re.escape(pattern)}(?!\w)", source_text, re.IGNORECASE)]
+            target = concept.get("targets", {}).get(language)
+            if not quotes or not target:
+                continue
+            for forbidden in concept.get("forbidden", {}).get(language, []):
+                for match in re.finditer(rf"(?<!\w){re.escape(forbidden)}(?!\w)", candidate_text, re.IGNORECASE):
+                    patches.append(TextPatch(match.group(), target, "terminology", "critical", "concept",
+                                             "Termo contextual incompatível com a fonte", quotes[0], match.start()))
+        return tuple(patches)
