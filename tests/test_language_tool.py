@@ -8,6 +8,11 @@ from requests.utils import select_proxy
 from stages.language_tool import LanguageIssue, LanguageToolClient, LanguageToolUnavailable
 
 
+@pytest.fixture(autouse=True)
+def sem_url_ambiente(monkeypatch):
+    monkeypatch.delenv("LANGUAGETOOL_URL", raising=False)
+
+
 class FakeResponse:
     def __init__(self, payload, status_code=200):
         self.payload = payload
