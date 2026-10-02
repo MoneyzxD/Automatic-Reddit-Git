@@ -298,6 +298,9 @@ class MetadataGenerator:
                 temperature=0.75,
                 max_tokens=120,
             )
+            if getattr(resp.choices[0], "finish_reason", None) == "length":
+                logger.warning("Groq interrompeu a descricao por limite de tokens (%s)", language)
+                return None
             result = resp.choices[0].message.content.strip().strip('"\'')
             if result and len(result) > 10:
                 logger.info("Descrição gerada via Groq (%s): %s", language, result[:80])
@@ -371,7 +374,7 @@ class MetadataGenerator:
         }
 
     def generate(self, story: dict, language: str,
-                 part: int = 1, total: int = 1,
+                 part_number: int = 1, total_parts: int = 1,
                  hook: str = "", narrator_gender: str | None = None,
                  localized_script: str = "", factual_context: str = "") -> dict:
         """
@@ -380,6 +383,7 @@ class MetadataGenerator:
         """
         if narrator_gender is not None and narrator_gender not in ("male", "female"):
             raise ValueError("Genero da narracao deve ser male ou female")
+        part, total = part_number, total_parts
         title         = story.get("title", "Untitled")
         story_summary = localized_script or ("" if factual_context else story.get("text", ""))
         if factual_context:

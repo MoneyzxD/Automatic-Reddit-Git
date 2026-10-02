@@ -177,3 +177,53 @@ def test_metadata_sem_contexto_usa_script_localizado(monkeypatch):
                         lambda title, summary, language, gender: seen.append(summary) or "Resumo da história.\nVocê faria o mesmo?")
     generator.generate({"text": "ENGLISH RAW PREFIX"}, "pt", localized_script="Texto português no fim.")
     assert seen == ["Texto português no fim."]
+
+
+@pytest.mark.parametrize("method", ["generate", "generate_hook", "generate_closing_hook"])
+def test_titler_rejeita_resposta_groq_interrompida(method, monkeypatch):
+    from utils import environment, groq_client
+
+    monkeypatch.setattr(environment, "groq_api_key", lambda language: "key-test")
+    choice = SimpleNamespace(finish_reason="length", message=SimpleNamespace(content="PARTIAL PUBLIC TEXT"))
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **kwargs: SimpleNamespace(choices=[choice]))))
+    monkeypatch.setattr(groq_client, "tracked_groq", lambda *args: client)
+    generator = TitleGenerator({})
+    monkeypatch.setattr(generator, "_ollama_title", lambda *args: None)
+    monkeypatch.setattr(generator, "_ollama_hook", lambda *args: None)
+    monkeypatch.setattr(generator, "_ollama_closing", lambda *args: None)
+
+    result = getattr(generator, method)("Story text", original_title="Original conflict")
+    assert "PARTIAL" not in result
+
+
+def test_metadata_rejeita_descricao_groq_interrompida(monkeypatch):
+    from utils import environment, groq_client
+
+    monkeypatch.setattr(environment, "groq_api_key", lambda language: "key-test")
+    choice = SimpleNamespace(finish_reason="length", message=SimpleNamespace(content="PARTIAL description never finished"))
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **kwargs: SimpleNamespace(choices=[choice]))))
+    monkeypatch.setattr(groq_client, "tracked_groq", lambda *args: client)
+    generator = MetadataGenerator({})
+    monkeypatch.setattr(generator, "_description_via_template", lambda language: "Texto completo.\nVocê faria o mesmo?")
+
+    result = generator.generate({"title": "Title"}, "pt", localized_script="História completa.")
+    assert result["description"] == "Texto completo.\nVocê faria o mesmo?"
+
+
+def test_metadata_aceita_nomes_de_parte_da_interface():
+    result = MetadataGenerator({"llm_enabled": False}).generate(
+        {"title": "Title"}, "pt", part_number=2, total_parts=3,
+        localized_script="Parte localizada.",
+    )
+    assert (result["part"], result["total_parts"]) == (2, 3)
+    assert "Parte 2 de 3" in result["full_description"]
+
+
+def test_validator_nao_registra_resposta_bruta_nem_valor_invalido(caplog, tmp_path):
+    secret = "SECRET_TOKEN_SENTINEL"
+    raw = '{"approved":true,"issues":[],"score":"' + secret + '"}'
+    result = ValidatorEngine({}, base_dir=tmp_path)._parse_validation_json(raw)
+    assert result.status == "unavailable"
+    assert secret not in caplog.text

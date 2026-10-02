@@ -723,6 +723,9 @@ class TitleGenerator:
                 # (visto em producao: titulo cortado "por interromper...").
                 max_tokens=400,
             )
+            if getattr(resp.choices[0], "finish_reason", None) == "length":
+                logger.warning("Groq interrompeu o titulo por limite de tokens (%s)", language)
+                return None
             title = self._clean_title(
                 resp.choices[0].message.content.strip(),
                 language=language,
@@ -764,6 +767,9 @@ class TitleGenerator:
                 # (visto em producao: titulo cortado "por interromper...").
                 max_tokens=400,
             )
+            if getattr(resp.choices[0], "finish_reason", None) == "length":
+                logger.warning("Groq interrompeu o hook por limite de tokens (%s)", language)
+                return None
             hook = self._clean_title(
                 resp.choices[0].message.content.strip(),
                 max_len=120,
@@ -807,6 +813,9 @@ class TitleGenerator:
                 # (visto em producao: titulo cortado "por interromper...").
                 max_tokens=400,
             )
+            if getattr(resp.choices[0], "finish_reason", None) == "length":
+                logger.warning("Groq interrompeu o encerramento por limite de tokens (%s)", language)
+                return None
             closing = self._clean_title(
                 resp.choices[0].message.content.strip(),
                 max_len=140,

@@ -663,12 +663,13 @@ class ValidatorEngine:
             if recovered:
                 logger.warning(
                     "JSON de validacao truncado/malformado, mas %d problema(s) recuperado(s) "
-                    "parcialmente — tratando como REPROVADO em vez de aprovar as cegas (%s)",
-                    len(recovered), e,
+                    "parcialmente — status=rejected, erro=%s",
+                    len(recovered), type(e).__name__,
                 )
                 return ValidationResult(status="rejected", approved=False, score=50, issues=recovered, raw=raw)
             logger.warning(
-                "Falha ao parsear JSON de validacao e nada recuperavel: %s | raw=%s", e, raw[:300],
+                "Falha ao parsear JSON de validacao e nada recuperavel: status=unavailable, erro=%s",
+                type(e).__name__,
             )
             return ValidationResult(status="unavailable", approved=False, score=0, raw=raw)
 
