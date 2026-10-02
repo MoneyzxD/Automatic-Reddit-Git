@@ -9,6 +9,7 @@ fi
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_dir/config/languagetool_runtime.env"
 source /etc/os-release
+python_bin=python3
 
 # O repositório Adoptium usa codenames DEB e a versão MAIOR no RHEL/Oracle.
 case "$ID:$VERSION_ID" in
@@ -26,9 +27,13 @@ case "$ID:$VERSION_ID" in
   ol:8|ol:8.*|ol:9|ol:9.*|rhel:8|rhel:8.*|rhel:9|rhel:9.*)
     command -v dnf >/dev/null
     major_version=${VERSION_ID%%.*}
+    if [[ $major_version == 8 ]]; then
+      # Python 3.11 vem do AppStream de EL8 8.8+; python3 permanece em 3.6.
+      python_bin=python3.11
+    fi
     # Oracle Linux mantém compatibilidade com os pacotes oficiais RHEL.
     printf '[Adoptium]\nname=Adoptium\nbaseurl=https://packages.adoptium.net/artifactory/rpm/rhel/%s/$basearch\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.adoptium.net/artifactory/api/gpg/key/public\n' "$major_version" > /etc/yum.repos.d/adoptium.repo
-    dnf install -y temurin-17-jdk ca-certificates curl unzip python3 shadow-utils
+    dnf install -y temurin-17-jdk ca-certificates curl unzip "$python_bin" shadow-utils
     java_bin=$(rpm -ql temurin-17-jdk | awk '/\/bin\/java$/ { print; exit }')
     ;;
   *)
@@ -36,6 +41,11 @@ case "$ID:$VERSION_ID" in
     exit 1
     ;;
 esac
+
+if ! "$python_bin" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then
+  echo "A verificação do LanguageTool exige Python 3.9 ou superior." >&2
+  exit 1
+fi
 
 java_version=$("$java_bin" -version 2>&1)
 if [[ ! $java_version =~ version\ \"17\. || $java_version != *Temurin* ]]; then
@@ -60,6 +70,6 @@ sed "s|@JAVA_BIN@|$java_bin|g" "$repo_dir/deploy/languagetool/languagetool.servi
 systemctl daemon-reload
 systemctl enable languagetool.service
 systemctl restart languagetool.service
-python3 "$repo_dir/scripts/check_languagetool.py" \
+"$python_bin" "$repo_dir/scripts/check_languagetool.py" \
   --url http://127.0.0.1:8081/v2/check --expected-version "$LANGUAGETOOL_VERSION" \
   --required-locales pt-BR en-US es --timeout-seconds 120

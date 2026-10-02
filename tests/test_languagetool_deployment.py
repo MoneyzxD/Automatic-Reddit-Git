@@ -4,6 +4,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -65,13 +66,41 @@ def test_instalador_conecta_manifesto_sha_java_unit_e_saude():
     assert "--system" in user and "--user-group" in user and "--no-create-home" in user
     assert user[user.index("--shell") + 1] == "$(command -v nologin)"
     assert user[-1] == "languagetool"
-    assert index(["systemctl", "daemon-reload"]) < index(["systemctl", "enable", "languagetool.service"]) < index(["systemctl", "restart", "languagetool.service"]) < index(["python3", "$repo_dir/scripts/check_languagetool.py"])
+    assert index(["systemctl", "daemon-reload"]) < index(["systemctl", "enable", "languagetool.service"]) < index(["systemctl", "restart", "languagetool.service"]) < index(["$python_bin", "$repo_dir/scripts/check_languagetool.py"])
     assert any(words[:4] == ["apt-get", "install", "-y", "temurin-17-jdk"] for words in commands)
     assert any(words[:4] == ["dnf", "install", "-y", "temurin-17-jdk"] for words in commands)
     assert any(words[0] == "sed" and "s|@JAVA_BIN@|$java_bin|g" in words for words in commands)
-    health = next(words for words in commands if words[0] == "python3")
+    health = next(words for words in commands if words[:2] == ["$python_bin", "$repo_dir/scripts/check_languagetool.py"])
     assert health[health.index("--expected-version") + 1] == "$LANGUAGETOOL_VERSION"
     assert health[health.index("--required-locales") + 1:health.index("--timeout-seconds")] == ["pt-BR", "en-US", "es"]
+
+
+@pytest.mark.parametrize("major, expected", [("8", "python3.11"), ("9", "python3")])
+def test_el8_instala_e_seleciona_python_versionado(major, expected):
+    installer = (BASE_DIR / "scripts/install_languagetool.sh").read_text(encoding="utf-8")
+    selection = "if [[ $major_version" + installer.split("if [[ $major_version", 1)[1].split("    fi", 1)[0] + "    fi\n"
+    commands = shell_commands(installer)
+    packages = next(words for words in commands if words[:4] == ["dnf", "install", "-y", "temurin-17-jdk"])
+    assert "$python_bin" in packages
+    assert "python3" not in packages
+    command = "set -euo pipefail\npython_bin=python3\nmajor_version=" + major + "\n" + selection + '\nprintf "%s" "$python_bin"'
+    bash = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
+    result = subprocess.run([bash, "-c", command], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert result.stdout == expected
+
+
+@pytest.mark.parametrize("version, expected", [((3, 6), 1), ((3, 8), 1), ((3, 9), 0), ((3, 11), 0)])
+def test_python_antigo_falha_antes_de_instalar_servico(version, expected):
+    installer = (BASE_DIR / "scripts/install_languagetool.sh").read_text(encoding="utf-8")
+    validation = 'if ! "$python_bin" -c' + installer.split('if ! "$python_bin" -c', 1)[1].split("\nfi", 1)[0] + "\nfi\n"
+    assert installer.index(validation.strip()) < installer.index('sed "s|@JAVA_BIN@|$java_bin|g"')
+    # Executa a expressão Python real com versão controlada, sem root/systemd.
+    function = "python_mock() { " + shlex.quote(sys.executable.replace("\\", "/")) + " -c " + shlex.quote("import sys; sys.version_info=" + repr(version) + "; ") + '"$2"; }\n'
+    command = "set -euo pipefail\npython_bin=python_mock\n" + function + validation
+    bash = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
+    result = subprocess.run([bash, "-c", command], capture_output=True, text=True)
+    assert result.returncode == expected
 
 
 @pytest.mark.parametrize("version, expected", [
