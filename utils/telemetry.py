@@ -30,6 +30,9 @@ from __future__ import annotations
 
 import logging
 import json
+import os
+import re
+from http.cookies import SimpleCookie, CookieError
 from pathlib import Path
 import threading
 from collections import defaultdict
@@ -52,13 +55,63 @@ _models: dict[str, str] = {}
 
 def append_quality_report(path: Path, event: dict) -> None:
     """Acrescenta um evento sanitizado sem substituir linhas anteriores."""
-    def redact(value):
+    secret_names = ("token", "secret", "cookie", "authorization", "api_key", "api-key",
+                    "credentials", "password", "passwd")
+    def sensitive(key):
+        return any(word in key.lower() for word in secret_names)
+
+    configured = set()
+    def collect_json(value):
         if isinstance(value, dict):
-            return {key: "[REDACTED]" if any(word in str(key).lower() for word in
-                    ("token", "secret", "cookie", "authorization", "api_key")) else redact(item)
-                    for key, item in value.items()}
+            for key, item in value.items():
+                if sensitive(key) and isinstance(item, str) and item:
+                    configured.add(item)
+                else:
+                    collect_json(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect_json(item)
+
+    for key, value in os.environ.items():
+        if not sensitive(key) or not value.strip():
+            continue
+        normalized = value.strip().strip('"').strip("'")
+        configured.update((value, normalized))
+        try:
+            collect_json(json.loads(normalized))
+        except ValueError:
+            pass
+        if "cookie" in key.lower():
+            try:
+                cookies = SimpleCookie()
+                cookies.load(normalized)
+                configured.update(item.value for item in cookies.values() if item.value)
+            except CookieError:
+                pass
+    configured.discard("")
+    configured_values = sorted(configured, key=len, reverse=True)
+    headers = re.compile(r"(?im)(\b(?:cookie|set-cookie|authorization|proxy-authorization)\s*:\s*)[^\r\n]+")
+    assignments = re.compile(
+        r'''(?i)(\b[\w-]*(?:api[_-]?key|token|secret|cookie|authorization|credentials|password|passwd|reddit_session)[\w-]*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,;}&]+|[^\s,;}&]+)'''
+    )
+
+    def redact(value, key=""):
+        # Os hashes auditam o original: nunca recalcular nem sanitizar seus dígitos.
+        if key in {"source_sha256", "candidate_sha256"} and isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value):
+            return value
+        if sensitive(key):
+            return "[REDACTED]"
+        if isinstance(value, dict):
+            return {key: redact(item, str(key)) for key, item in value.items()}
         if isinstance(value, (list, tuple)):
             return [redact(item) for item in value]
+        if isinstance(value, str):
+            for secret in configured_values:
+                value = value.replace(secret, "[REDACTED]")
+            value = headers.sub(r"\1[REDACTED]", value)
+            value = assignments.sub(r"\1[REDACTED]", value)
+            value = re.sub(r"(?i)(\bBearer\s+)[-A-Za-z0-9._~+/]+=*", r"\1[REDACTED]", value)
+            return re.sub(r"(https?://api\.telegram\.org/bot)\d+:[A-Za-z0-9_-]+", r"\1[REDACTED]", value)
         return value
 
     line = json.dumps(redact(event), ensure_ascii=False) + "\n"

@@ -425,6 +425,19 @@ def test_telemetria_append_only_redige_chaves_aninhadas(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8").splitlines()[1])["nested"][0]["ok"] == 1
 
 
+def test_redactor_nao_adivinha_opacos_e_preserva_hash_original(tmp_path, monkeypatch):
+    import os
+    from utils.telemetry import append_quality_report
+    monkeypatch.setattr(os, "environ", {"TEST_PASSWORD": "abc"})
+    path = tmp_path / "quality.jsonl"
+    text = "Personagem AQ.historia-sem-contexto e AIza.historia-sem-contexto: abc."
+    digest = "abc" * 21 + "a"
+    append_quality_report(path, {"candidate_text": text, "source_sha256": digest})
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["candidate_text"] == "Personagem AQ.historia-sem-contexto e AIza.historia-sem-contexto: [REDACTED]."
+    assert data["source_sha256"] == digest
+
+
 def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfil_feminino, monkeypatch):
     import stages.script_guardian as module
     import utils.groq_client as groq_client

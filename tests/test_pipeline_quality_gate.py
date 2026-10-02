@@ -397,3 +397,58 @@ def test_codigo_2_da_cli_interrompe_lote_sem_buscar_proxima_historia(pipeline, m
         generate_daily_batch.preencher_lote(["pt"], meta=1, max_tentativas=6)
     assert len(launches) == 1
     assert pipeline.audios == []
+
+
+@pytest.mark.parametrize("quoted", [False, True])
+def test_jsonl_e_quarentena_sanitizam_strings_e_preservam_hashes(tmp_path, monkeypatch, quoted):
+    import hashlib
+    import os
+    from dataclasses import asdict
+    from stages.script_guardian import ScriptReview, ReviewIssue, TextPatch
+    from utils import telemetry
+
+    # O redactor vê somente configurações sintéticas, sem consultar .env/arquivos de token.
+    opaque = "AQ.chave-opaca-sintetica-sem-prefixo-legado"
+    oauth = "oauth-valor-sintetico-aninhado"
+    client_secret = "cliente-segredo-sintetico-aninhado"
+    session = "sessao-opaca-sintetica"
+    monkeypatch.setattr(os, "environ", {
+        "GROQ_API_KEY_PT": f"'{opaque}'" if quoted else opaque,
+        "YOUTUBE_TOKEN_PT": f"'{json.dumps({'token': oauth})}'" if quoted else json.dumps({"token": oauth}),
+        "YOUTUBE_CREDENTIALS": json.dumps({"installed": {"client_secret": client_secret}}),
+        "REDDIT_SESSION_COOKIE": f"reddit_session={session}; csrftoken=csrf-sintetico",
+    })
+    candidate = (
+        f"Texto normal. {opaque} {oauth} {session} {client_secret}\n"
+        "Cookie: reddit_session=COOKIE_SINTETICO; other=OUTRO_COOKIE\n"
+        "Authorization: Bearer AUTH_SINTETICO\n"
+        "api_key=KEY_SINTETICA password='SENHA SINTETICA' credentials=CREDS_SINTETICAS\n"
+        "Bearer TOKEN_BEARER_SINTETICO\n"
+        "https://api.telegram.org/bot123456789:AAAAAAAAAAAAAAAAAAAAAAAA/sendMessage"
+    )
+    source = "Fonte original com token=TOKEN_FONTE"
+    review = ScriptReview("rejected", candidate, (
+        ReviewIssue("grammar", "critical", candidate, candidate, source_quote=candidate),
+    ), (TextPatch(candidate, candidate, "grammar", "critical", "text", candidate, candidate),),
+        1, False, candidate)
+    path = tmp_path / "quality.jsonl"
+    telemetry.append_quality_report(path, {
+        "review": asdict(review), "candidate_text": candidate,
+        "credentials": "CAMPO_CREDENCIAL", "password": "CAMPO_SENHA",
+    })
+    quarantine = main.quarantine_review(
+        tmp_path, review, candidate, story_id="s1", language="pt", stage="metadata",
+        profile=locked_profile(), source_text=source,
+    )
+    for report_path in (path, quarantine):
+        persisted = report_path.read_text(encoding="utf-8")
+        assert "Texto normal." in persisted
+        assert "[REDACTED]" in persisted
+        for secret in (opaque, oauth, session, client_secret, "COOKIE_SINTETICO", "OUTRO_COOKIE", "AUTH_SINTETICO",
+                       "KEY_SINTETICA", "SENHA SINTETICA", "CREDS_SINTETICAS", "TOKEN_BEARER_SINTETICO",
+                       "123456789:AAAAAAAAAAAAAAAAAAAAAAAA", "CAMPO_CREDENCIAL", "CAMPO_SENHA"):
+            assert secret not in persisted
+        json.loads(persisted)
+    data = json.loads(quarantine.read_text(encoding="utf-8"))
+    assert data["source_sha256"] == hashlib.sha256(source.encode("utf-8")).hexdigest()
+    assert data["candidate_sha256"] == hashlib.sha256(candidate.encode("utf-8")).hexdigest()
