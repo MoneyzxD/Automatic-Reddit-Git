@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import logging
+from utils.text_chunks import split_lossless
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,8 @@ STRICT RULES:
 - DO NOT invent events, characters or details
 - DO NOT add a hook or introduction — start naturally from the story
 - Remove all Reddit usernames (u/username -> omit completely)
-- Remove markdown formatting (**bold**, *italic*, >quotes)
-- Remove "Edit:", "Update:", "TLDR:", "TL;DR:" sections
+- Remove markdown markers (**bold**, *italic*, > quote markers), preserving quoted dialogue
+- Remove only "Edit:", "Update:", "TLDR:", "TL;DR:" labels; preserve their facts and dialogue
 - Replace "OP" with "I" or "the author"
 - Keep the story complete — do NOT summarize
 - Use natural English narration style
@@ -39,6 +40,7 @@ STRICT RULES:
 - Return ONLY the cleaned story text, no explanations
 
 Story title: {title}
+Chunk {index} of {total}. Clean only this chunk; add no introduction, conclusion, or facts.
 
 Story text:
 {text}
@@ -53,6 +55,7 @@ class StoryAdapter:
         self.llm_enabled = config.get("llm_enabled", True)
         self.groq_key    = os.environ.get("GROQ_API_KEY", "") or config.get("groq_api_key", "")
         self.groq_model  = config.get("groq_model", "openai/gpt-oss-20b")
+        self.chunk_chars = config.get("chunk_chars", 3000)
 
     def _clean_usernames(self, text: str) -> str:
         text = re.sub(r"\bu/[A-Za-z0-9_-]+\b", "", text, flags=re.IGNORECASE)
@@ -63,12 +66,10 @@ class StoryAdapter:
     def _clean_reddit_formatting(self, text: str) -> str:
         text = re.sub(r"\*\*(.*?)\*\*",     r"\1",  text)
         text = re.sub(r"\*(.*?)\*",         r"\1",  text)
-        text = re.sub(r"&gt;[^\n]*\n",      "",     text)
+        text = re.sub(r"(?m)^[ \t]*(?:&gt;|>)[ \t]?", "", text)
         text = re.sub(r"\n{3,}",            "\n\n", text)
-        text = re.sub(r"Edit\s*\d*\s*:",    "",     text, flags=re.IGNORECASE)
-        text = re.sub(r"Update\s*\d*\s*:",  "",     text, flags=re.IGNORECASE)
-        text = re.sub(r"TLDR.*",            "",     text, flags=re.IGNORECASE)
-        text = re.sub(r"TL;DR.*",           "",     text, flags=re.IGNORECASE)
+        text = re.sub(r"(?im)^[ \t]*(?:Edit|Update)[ \t]*\d*[ \t]*:[ \t]*", "", text)
+        text = re.sub(r"(?im)^[ \t]*TL;?DR[ \t]*:[ \t]*", "", text)
         return text.strip()
 
     def _remove_duplicate_words(self, text: str) -> str:
@@ -98,6 +99,32 @@ class StoryAdapter:
             "adapted_by":  "rules",
         }
 
+    def _adapt_chunk_via_groq(self, chunk: str, index: int, total: int) -> str | None:
+        from utils import environment as env
+        from utils.groq_client import tracked_groq
+
+        client = tracked_groq(env.groq_api_key("en") or self.groq_key, "adapter")
+        prompt = ADAPTER_PROMPT_GROQ.format(
+            title=self._current_title, text=chunk, index=index, total=total,
+        )
+        resp = client.chat.completions.create(
+            model=self.groq_model,
+            messages=[
+                {"role": "system", "content": "Clean only this story chunk. Preserve every fact. Return only the cleaned text."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=3000,
+        )
+        choice = resp.choices[0]
+        if getattr(choice, "finish_reason", None) == "length" or not choice.message.content:
+            return None
+        result = re.sub(r"^```[a-z]*\n?|\n?```$", "", choice.message.content.strip()).strip()
+        if not result:
+            return None
+        suffix = re.search(r"\s+$", chunk)
+        return self._remove_duplicate_words(result) + (suffix.group() if suffix else "")
+
     def _groq_adapt(self, story: dict) -> dict | None:
         from utils import environment as env
         # Adapter so processa o texto original em ingles (antes da traducao)
@@ -109,36 +136,15 @@ class StoryAdapter:
             return None
 
         title = story.get("title", "")
-        text  = story.get("text", "")[:5000]
+        text = story.get("text", "")
+        chunks = split_lossless(text, self.chunk_chars)
+        self._current_title = title
 
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "adapter")
-            prompt = ADAPTER_PROMPT_GROQ.format(title=title, text=text)
-
-            resp = client.chat.completions.create(
-                model=self.groq_model,
-                messages=[
-                    {
-                        "role":    "system",
-                        "content": (
-                            "You are a story cleaning specialist. "
-                            "Return ONLY the cleaned story text. "
-                            "No introduction, no hook, no explanations."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=3000,
-            )
-
-            result = resp.choices[0].message.content.strip()
-            result = re.sub(r"^```[a-z]*\n?", "", result)
-            result = re.sub(r"\n?```$",        "", result).strip()
-            result = self._remove_duplicate_words(result)
-
-            if result and len(result) > 100:
+            results = [self._adapt_chunk_via_groq(chunk.text, i + 1, len(chunks))
+                       for i, chunk in enumerate(chunks)]
+            if chunks and all(results):
+                result = "".join(results).strip()
                 logger.info("Script adaptado via Groq")
                 return {
                     "title":       title,
@@ -162,7 +168,8 @@ class StoryAdapter:
         Retorna texto em ingles sem hook.
         Ordem: Groq → regras.
         """
-        if self.llm_enabled and self.groq_key:
+        from utils import environment as env
+        if self.llm_enabled and (env.groq_api_key("en") or self.groq_key):
             result = self._groq_adapt(story)
             if result:
                 return result

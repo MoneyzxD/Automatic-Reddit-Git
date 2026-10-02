@@ -536,9 +536,10 @@ class TitleGenerator:
     # ── TÍTULO DESCRITIVO (para slug do arquivo) ──────────────────────────────
 
     @staticmethod
-    def _narrator_summary(story_text: str, narrator_gender: str | None) -> str:
-        """Acrescenta a identidade travada depois do limite do resumo."""
-        summary = story_text[:400].replace("\n", " ").strip()
+    def _narrator_summary(story_text: str, narrator_gender: str | None,
+                          factual_context: str = "") -> str:
+        """Usa os fatos validados e acrescenta a identidade do narrador."""
+        summary = (factual_context or story_text).strip()
         if narrator_gender is not None:
             if narrator_gender not in ("male", "female"):
                 raise ValueError("Genero da narracao deve ser male ou female")
@@ -550,9 +551,10 @@ class TitleGenerator:
 
     def generate(self, story_text: str, language: str = "pt",
                  original_title: str = "", hook_type: str = None,
-                 *, narrator_gender: str | None = None) -> str:
+                 *, narrator_gender: str | None = None,
+                 factual_context: str = "") -> str:
         """Gera título descritivo — usado apenas para nomear o arquivo."""
-        story_summary = self._narrator_summary(story_text, narrator_gender)
+        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
         if not self.enabled:
             return self._rule_based_title(original_title)
 
@@ -575,12 +577,13 @@ class TitleGenerator:
     # ── HOOK DE ENGAJAMENTO (para YouTube/TikTok E narração) ─────────────────
 
     def generate_hook(self, story_text: str, language: str = "pt",
-                      original_title: str = "", *, narrator_gender: str | None = None) -> str:
+                      original_title: str = "", *, narrator_gender: str | None = None,
+                      factual_context: str = "") -> str:
         """
         Gera hook de engajamento para abertura do vídeo.
         Essa frase é narrada no início E usada como título no YouTube/TikTok.
         """
-        story_summary = self._narrator_summary(story_text, narrator_gender)
+        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
         if not self.enabled:
             return self._rule_based_title(original_title)
 
@@ -600,13 +603,14 @@ class TitleGenerator:
     # ── HOOK DE ENCERRAMENTO (CTA para o fim do video / ultima parte) ────────
 
     def generate_closing_hook(self, story_text: str, language: str = "pt",
-                              original_title: str = "", *, narrator_gender: str | None = None) -> str:
+                              original_title: str = "", *, narrator_gender: str | None = None,
+                              factual_context: str = "") -> str:
         """
         Gera o hook de encerramento (call-to-action) narrado no final do video.
         Usado apenas na ultima parte de uma historia dividida, ou na unica parte
         quando a historia nao precisa de divisao.
         """
-        story_summary = self._narrator_summary(story_text, narrator_gender)
+        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
         if not self.enabled:
             return self._rule_based_closing(language)
 
@@ -980,21 +984,26 @@ class TitleGenerator:
 
 def generate_title(story_text: str, language: str = "pt",
                    original_title: str = "", config: dict = None,
-                   hook_type: str = None) -> str:
+                   hook_type: str = None, factual_context: str = "") -> str:
     gen = TitleGenerator(config or {})
-    return gen.generate(story_text, language, original_title, hook_type)
+    return gen.generate(story_text, language, original_title, hook_type,
+                        factual_context=factual_context)
 
 
 def generate_hook(story_text: str, language: str = "pt",
-                  original_title: str = "", config: dict = None) -> str:
+                  original_title: str = "", config: dict = None,
+                  factual_context: str = "") -> str:
     gen = TitleGenerator(config or {})
-    return gen.generate_hook(story_text, language, original_title)
+    return gen.generate_hook(story_text, language, original_title,
+                             factual_context=factual_context)
 
 
 def generate_closing_hook(story_text: str, language: str = "pt",
-                          original_title: str = "", config: dict = None) -> str:
+                          original_title: str = "", config: dict = None,
+                          factual_context: str = "") -> str:
     gen = TitleGenerator(config or {})
-    return gen.generate_closing_hook(story_text, language, original_title)
+    return gen.generate_closing_hook(story_text, language, original_title,
+                                     factual_context=factual_context)
 
 
 

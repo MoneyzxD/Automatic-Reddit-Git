@@ -48,9 +48,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 from stages.titler import normalize_title_sentence
+from stages.script_guardian import QualityRejected, QualityUnavailable, ReviewIssue, ScriptReview
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class Issue:
 
 @dataclass
 class ValidationResult:
+    status: Literal["approved", "rejected", "unavailable"]
     approved: bool
     score:    int              # 0-100, apenas informativo
     issues:   list[Issue] = field(default_factory=list)
@@ -607,6 +609,7 @@ class ValidatorEngine:
                     "estar incompleto. Considere aumentar max_tokens para este caso.",
                     max_tokens,
                 )
+                return None
 
             usage = getattr(resp, "usage", None)
             if usage is not None:
@@ -626,16 +629,18 @@ class ValidatorEngine:
 
     def _parse_validation_json(self, raw: str | None) -> ValidationResult:
         if not raw:
-            # Sem resposta do LLM — aprova por seguranca (nao bloqueia o pipeline
-            # por indisponibilidade da API) mas registra o problema
-            from utils import telemetry
-            telemetry.record_fallback("validator", "-", "sem resposta do Groq — aprovou sem validar")
-            logger.warning("Validador sem resposta do Groq — aprovando por seguranca")
-            return ValidationResult(approved=True, score=0, issues=[], raw="")
+            logger.warning("Validador sem resposta do Groq")
+            return ValidationResult(status="unavailable", approved=False, score=0, raw="")
 
         cleaned = re.sub(r"^```json\s*|```\s*$", "", raw.strip(), flags=re.MULTILINE).strip()
         try:
             data = json.loads(cleaned)
+            if not isinstance(data, dict) or type(data.get("approved")) is not bool:
+                raise ValueError("Campo approved ausente ou nao booleano")
+            if not isinstance(data.get("issues"), list):
+                raise ValueError("Campo issues ausente ou invalido")
+            if not all(isinstance(i, dict) for i in data["issues"]):
+                raise ValueError("Issue invalida")
             issues = [
                 Issue(
                     trecho=i.get("trecho", ""),
@@ -645,9 +650,11 @@ class ValidatorEngine:
                 )
                 for i in data.get("issues", [])
             ]
+            approved = data["approved"] and not issues
             return ValidationResult(
-                approved=bool(data.get("approved", True)),
-                score=int(data.get("score", 100)),
+                status="approved" if approved else "rejected",
+                approved=approved,
+                score=int(data.get("score", 0)),
                 issues=issues,
                 raw=raw,
             )
@@ -659,12 +666,11 @@ class ValidatorEngine:
                     "parcialmente — tratando como REPROVADO em vez de aprovar as cegas (%s)",
                     len(recovered), e,
                 )
-                return ValidationResult(approved=False, score=50, issues=recovered, raw=raw)
+                return ValidationResult(status="rejected", approved=False, score=50, issues=recovered, raw=raw)
             logger.warning(
-                "Falha ao parsear JSON de validacao e nada recuperavel — aprovando por "
-                "seguranca (nao ha o que corrigir): %s | raw=%s", e, raw[:300],
+                "Falha ao parsear JSON de validacao e nada recuperavel: %s | raw=%s", e, raw[:300],
             )
-            return ValidationResult(approved=True, score=0, issues=[], raw=raw)
+            return ValidationResult(status="unavailable", approved=False, score=0, raw=raw)
 
     @staticmethod
     def _salvage_issues(cleaned: str) -> list[Issue]:
@@ -736,7 +742,8 @@ class ValidatorEngine:
 
     def validate_title_hook(self, title: str, hook: str, story_text: str,
                             language: str = "pt",
-                            narrator_gender: str | None = None) -> ValidationResult:
+                            narrator_gender: str | None = None,
+                            factual_context: str = "") -> ValidationResult:
         prompt_tpl = TITLE_HOOK_VALIDATION_PROMPTS.get(language, TITLE_HOOK_VALIDATION_PROMPTS["en"])
         gender_label = (
             self._UNKNOWN_GENDER_LABEL.get(language, self._UNKNOWN_GENDER_LABEL["en"])
@@ -745,7 +752,7 @@ class ValidatorEngine:
         prompt = prompt_tpl.format(
             title=title,
             hook=hook,
-            story_text=story_text[:500].replace("\n", " "),
+            story_text=factual_context or story_text,
             narrator_gender=gender_label,
         )
         raw = self._call_groq(
@@ -773,14 +780,15 @@ class ValidatorEngine:
                 "nao altere o genero dos outros personagens.\n")
 
     def validate_metadata(self, description: str, tags: list | str, story_text: str,
-                          language: str = "pt", *, narrator_gender: str | None = None) -> ValidationResult:
+                          language: str = "pt", *, narrator_gender: str | None = None,
+                          factual_context: str = "") -> ValidationResult:
         gender_instruction = self._narrator_instruction(narrator_gender)
         prompt_tpl = METADATA_VALIDATION_PROMPTS.get(language, METADATA_VALIDATION_PROMPTS["en"])
         tags_str = ", ".join(tags) if isinstance(tags, list) else str(tags)
         prompt = prompt_tpl.format(
             description=description,
             tags=tags_str,
-            story_text=story_text[:500].replace("\n", " "),
+            story_text=factual_context or story_text,
         )
         prompt += gender_instruction
         raw = self._call_groq(
@@ -923,7 +931,8 @@ class ValidatorEngine:
                              story_text: str, language: str = "pt",
                              previous_feedback: str = "",
                              temperature: float = 0.7, *,
-                             narrator_gender: str | None = None) -> tuple[str, str]:
+                             narrator_gender: str | None = None,
+                             factual_context: str = "") -> tuple[str, str]:
         """
         Regenera titulo e/ou hook considerando especificamente os problemas
         apontados. So altera o campo (titulo ou hook) que teve problema
@@ -993,7 +1002,7 @@ class ValidatorEngine:
             prompt = (
                 f"O titulo atual '{title}' tem este problema: {feedback}\n\n"
                 f"{examples}\n"
-                f"Contexto da historia: {story_text[:400]}"
+                f"Contexto da historia: {factual_context or story_text}"
                 f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere um titulo NOVO e MELHOR que corrija especificamente esse problema, "
@@ -1015,7 +1024,7 @@ class ValidatorEngine:
             prompt = (
                 f"O hook atual '{hook}' tem este problema: {feedback}\n\n"
                 f"{examples}\n"
-                f"Contexto da historia: {story_text[:400]}"
+                f"Contexto da historia: {factual_context or story_text}"
                 f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere um hook NOVO e MELHOR que corrija especificamente esse problema, "
@@ -1041,7 +1050,8 @@ class ValidatorEngine:
                            story_text: str, language: str = "pt",
                            previous_feedback: str = "",
                            temperature: float = 0.6, *,
-                           narrator_gender: str | None = None) -> tuple[str, list]:
+                           narrator_gender: str | None = None,
+                           factual_context: str = "") -> tuple[str, list]:
         gender_instruction = self._narrator_instruction(narrator_gender)
         desc_issues = [i for i in issues if i.trecho.lower() == "description"]
         tags_issues = [i for i in issues if i.trecho.lower() == "tags"]
@@ -1079,7 +1089,7 @@ class ValidatorEngine:
             feedback = "; ".join(f"{i.problema} (sugestao: {i.sugestao})" for i in desc_issues)
             prompt = (
                 f"A descricao atual '{description}' tem este problema: {feedback}\n\n"
-                f"Contexto da historia: {story_text[:400]}"
+                f"Contexto da historia: {factual_context or story_text}"
                 f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere uma descricao NOVA e MELHOR (1-2 frases, estilo SEO para YouTube) "
@@ -1099,7 +1109,7 @@ class ValidatorEngine:
             feedback = "; ".join(f"{i.problema} (sugestao: {i.sugestao})" for i in tags_issues)
             prompt = (
                 f"As tags atuais '{', '.join(tags)}' tem este problema: {feedback}\n\n"
-                f"Contexto da historia: {story_text[:400]}"
+                f"Contexto da historia: {factual_context or story_text}"
                 f"{gender_instruction}"
                 f"{history_block}\n\n"
                 f"Gere uma lista de 8-12 tags NOVAS e relevantes, separadas por virgula. "
@@ -1206,6 +1216,15 @@ class ValidatorEngine:
         """Resumo compacto dos problemas + sugestoes para dar contexto na proxima tentativa."""
         return "; ".join(f"{i.problema} -> sugerido: {i.sugestao}" for i in issues[:5])
 
+    @staticmethod
+    def _raise_unapproved(result: ValidationResult, text: str, attempts: int) -> None:
+        issues = tuple(ReviewIssue(i.categoria, "warning", i.problema, i.trecho)
+                       for i in result.issues)
+        review = ScriptReview(result.status, text, issues, (), attempts, False, "")
+        if result.status == "unavailable":
+            raise QualityUnavailable(review)
+        raise QualityRejected(review)
+
     # ── LOOP DE RETRY GENERICO ────────────────────────────────────────────────
 
     def validate_and_fix_script(self, script_text: str, language: str,
@@ -1222,23 +1241,13 @@ class ValidatorEngine:
         previous_feedback = ""
         identical_streak = 0
 
-        # Guarda a melhor versao vista (maior score), nao so a ultima
-        # tentativa — evita devolver uma versao pior que o original ou que
-        # uma tentativa anterior quando o teto de retries e atingido sem
-        # aprovacao (ver caso real: hook final com fato inventado que nao
-        # estava em nenhuma versao anterior nem na historia original).
-        best_text = script_text
-        best_score = -1
-
         while attempt < MAX_SAFETY_RETRIES:
             attempt += 1
             result = self.validate_script(current_text, language, narrator_gender)
+            if result.status == "unavailable":
+                self._raise_unapproved(result, current_text, attempt)
 
-            if result.score > best_score:
-                best_score = result.score
-                best_text = current_text
-
-            if result.approved:
+            if result.status == "approved" and result.approved:
                 self.log_attempt(story_id, "script", language, attempt, result, corrected=False)
                 if attempt > 1:
                     logger.info(
@@ -1290,23 +1299,14 @@ class ValidatorEngine:
             previous_fixed_text = fixed
             current_text = fixed
 
-        if best_text != current_text:
-            logger.warning(
-                "Script nao aprovado apos %d tentativas — usando a MELHOR versao "
-                "vista (score=%d), nao a ultima tentativa (%s)",
-                attempt, best_score, language,
-            )
-        else:
-            logger.warning(
-                "Script nao aprovado apos %d tentativas — seguindo com a ultima versao (%s)",
-                attempt, language,
-            )
-        return best_text
+        self._raise_unapproved(result, current_text, attempt)
 
     def validate_and_fix_title_hook(self, title: str, hook: str, story_text: str,
                                     language: str, story_id: str,
                                     story_title: str = "",
-                                    narrator_gender: str | None = None) -> tuple[str, str]:
+                                    narrator_gender: str | None = None,
+                                    factual_context: str = "") -> tuple[str, str]:
+        story_text = factual_context or story_text
         current_title = normalize_title_sentence(title, language)
         current_hook  = normalize_title_sentence(hook, language)
         attempt = 0
@@ -1314,19 +1314,15 @@ class ValidatorEngine:
         previous_feedback = ""
         identical_streak = 0
 
-        best_title, best_hook = current_title, current_hook
-        best_score = -1
-
         while attempt < MAX_SAFETY_RETRIES:
             attempt += 1
             result = self.validate_title_hook(current_title, current_hook, story_text, language,
                                                narrator_gender=narrator_gender)
 
-            if result.score > best_score:
-                best_score = result.score
-                best_title, best_hook = current_title, current_hook
+            if result.status == "unavailable":
+                self._raise_unapproved(result, current_title + "\n" + current_hook, attempt)
 
-            if result.approved:
+            if result.status == "approved" and result.approved:
                 self.log_attempt(story_id, "title_hook", language, attempt, result, corrected=False)
                 if attempt > 1:
                     logger.info("Titulo/hook aprovados apos %d tentativa(s) (%s)", attempt, language)
@@ -1374,23 +1370,14 @@ class ValidatorEngine:
             previous_pair = current_pair
             current_title, current_hook = new_title, new_hook
 
-        if (best_title, best_hook) != (current_title, current_hook):
-            logger.warning(
-                "Titulo/hook nao aprovados apos %d tentativas — usando a MELHOR "
-                "versao vista (score=%d), nao a ultima tentativa (%s)",
-                attempt, best_score, language,
-            )
-        else:
-            logger.warning(
-                "Titulo/hook nao aprovados apos %d tentativas — seguindo com a ultima versao (%s)",
-                attempt, language,
-            )
-        return best_title, best_hook
+        self._raise_unapproved(result, current_title + "\n" + current_hook, attempt)
 
     def validate_and_fix_metadata(self, description: str, tags: list, story_text: str,
                                   language: str, story_id: str,
                                   story_title: str = "", *,
-                                  narrator_gender: str | None = None) -> tuple[str, list]:
+                                  narrator_gender: str | None = None,
+                                  factual_context: str = "") -> tuple[str, list]:
+        story_text = factual_context or story_text
         current_desc = description
         current_tags = tags
         attempt = 0
@@ -1398,19 +1385,15 @@ class ValidatorEngine:
         previous_feedback = ""
         identical_streak = 0
 
-        best_desc, best_tags = description, tags
-        best_score = -1
-
         while attempt < MAX_SAFETY_RETRIES:
             attempt += 1
             result = self.validate_metadata(current_desc, current_tags, story_text, language,
                                             narrator_gender=narrator_gender)
 
-            if result.score > best_score:
-                best_score = result.score
-                best_desc, best_tags = current_desc, current_tags
+            if result.status == "unavailable":
+                self._raise_unapproved(result, current_desc, attempt)
 
-            if result.approved:
+            if result.status == "approved" and result.approved:
                 self.log_attempt(story_id, "metadata", language, attempt, result, corrected=False)
                 if attempt > 1:
                     logger.info("Metadados aprovados apos %d tentativa(s) (%s)", attempt, language)
@@ -1456,15 +1439,4 @@ class ValidatorEngine:
             previous_pair = current_pair
             current_desc, current_tags = new_desc, new_tags
 
-        if (best_desc, best_tags) != (current_desc, current_tags):
-            logger.warning(
-                "Metadados nao aprovados apos %d tentativas — usando a MELHOR "
-                "versao vista (score=%d), nao a ultima tentativa (%s)",
-                attempt, best_score, language,
-            )
-        else:
-            logger.warning(
-                "Metadados nao aprovados apos %d tentativas — seguindo com a ultima versao (%s)",
-                attempt, language,
-            )
-        return best_desc, best_tags
+        self._raise_unapproved(result, current_desc, attempt)

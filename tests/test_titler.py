@@ -37,7 +37,7 @@ def test_validacao_aprovada_nao_deixa_separador_escapar(monkeypatch, tmp_path):
     monkeypatch.setattr(
         validador,
         "validate_title_hook",
-        lambda *args, **kwargs: ValidationResult(approved=True, score=100),
+        lambda *args, **kwargs: ValidationResult(status="approved", approved=True, score=100),
     )
     monkeypatch.setattr(validador, "log_attempt", lambda *args, **kwargs: None)
 

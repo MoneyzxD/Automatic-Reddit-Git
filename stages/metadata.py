@@ -284,7 +284,7 @@ class MetadataGenerator:
 
             prompt = DESCRIPTION_PROMPTS.get(language, DESCRIPTION_PROMPTS["en"]).format(
                 title=title,
-                story_summary=story_summary[:300],
+                story_summary=story_summary,
                 narrator_gender=gender_str,
             )
             system = DESCRIPTION_SYSTEM_PROMPTS.get(language, DESCRIPTION_SYSTEM_PROMPTS["en"])
@@ -372,7 +372,8 @@ class MetadataGenerator:
 
     def generate(self, story: dict, language: str,
                  part: int = 1, total: int = 1,
-                 hook: str = "", narrator_gender: str | None = None) -> dict:
+                 hook: str = "", narrator_gender: str | None = None,
+                 localized_script: str = "", factual_context: str = "") -> dict:
         """
         Gera metadados completos para uma parte de história.
         Inclui blocos youtube{} e tiktok{} prontos para o uploader.
@@ -380,7 +381,9 @@ class MetadataGenerator:
         if narrator_gender is not None and narrator_gender not in ("male", "female"):
             raise ValueError("Genero da narracao deve ser male ou female")
         title         = story.get("title", "Untitled")
-        story_summary = story.get("text", "")[:300]
+        story_summary = localized_script or ("" if factual_context else story.get("text", ""))
+        if factual_context:
+            story_summary += f"\n\nFatos validados:\n{factual_context}"
 
         hashtags, hashtags_str = _pick_hashtags(language)
         cta = _get_channel_cta(language)
