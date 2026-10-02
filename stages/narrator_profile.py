@@ -75,7 +75,12 @@ _SEMANTIC_IDENTITY = re.compile(
     r"\b(?:I\s+(?:identify|self-identify)\s+as|me\s+as)\s+(?:a\s+)?"
     r"(?P<gender>man|woman|male|female)\b", re.IGNORECASE,
 )
-_QUOTED = re.compile(r'"[^"]*"|“[^”]*”|‘.*?’(?!\w)|(?<!\w)\x27.*?\x27(?!\w)', re.DOTALL)
+_QUOTED = re.compile(
+    r'"[^"]*"|“[^”]*”|‘(?:[^’]|(?<=\w)’(?=\w))*?’(?!\w)|'
+    r'(?<!\w)\x27(?:[^\x27]|(?<=\w)\x27(?=\w))*?\x27(?!\w)', re.DOTALL,
+)
+# Aspas não unem parágrafos independentes; apóstrofos intrapalavra não são delimitadores.
+_PARAGRAPH = re.compile(r'^[^\n]*\S[^\n]*(?:\n(?![ \t]*\r?$)[^\n]+)*', re.MULTILINE)
 # ponytail: blockquote de parágrafo inclui continuação sem ">" até linha vazia;
 # um parser Markdown seria necessário para distinguir outros blocos sem separação.
 _BLOCKQUOTED = re.compile(r'^[ \t]{0,3}>[^\n]*(?:\n(?![ \t]*\r?$)[^\n]+)*', re.MULTILINE)
@@ -87,8 +92,12 @@ _BELIEF = re.compile(
 
 def _outside_quotes(source: str, start: int, end: int) -> bool:
     # Trechos citados são conservadoramente excluídos; o sujeito pode ser terceiro.
+    if any(start < m.end() and end > m.start() for m in _BLOCKQUOTED.finditer(source)):
+        return False
     return not any(start < m.end() and end > m.start()
-                   for pattern in (_QUOTED, _BLOCKQUOTED) for m in pattern.finditer(source))
+                   for paragraph in _PARAGRAPH.finditer(source)
+                   if start < paragraph.end() and end > paragraph.start()
+                   for m in _QUOTED.finditer(source, paragraph.start(), paragraph.end()))
 
 
 def _narrator_assertion(source: str, start: int, end: int) -> bool:

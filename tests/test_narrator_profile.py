@@ -498,3 +498,42 @@ def test_primeira_pessoa_fora_da_citacao_preserva_atribuicao_valida(relato):
     assert {e.kind for e in perfil.evidence} == {"explicit", "semantic"}
     assert all(e.gender == "male" for e in perfil.evidence)
     assert any(e.quote == quote for e in perfil.evidence)
+
+
+@pytest.mark.parametrize("titulo,texto", [
+    ('Title with "unfinished', 'I (28M) answered. She said "hi".'),
+    ("Title", "'cause\nI (28M) answered.\nShe said 'hi'."),
+    ("Title", 'An "unfinished thought.\n\nI (28M) answered. She said "hi".'),
+    ("Title", 'An “unfinished thought.\n \t\nI (28M) answered. She said “hi”.'),
+])
+@pytest.mark.parametrize("marcador,genero", [("28M", "male"), ("28F", "female")])
+def test_aspa_solta_ou_apostrofo_nao_apaga_identidade(titulo, texto, marcador, genero):
+    texto = texto.replace("28M", marcador)
+    perfil = NarratorProfileResolver({}, semantic_enabled=False).resolve(
+        story_id="test_001", title=titulo, original_text=texto,
+    )
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert perfil.decision_method == "explicit"
+    assert [e.quote for e in perfil.evidence] == [f"I ({marcador})"]
+    fonte = titulo + "\n\n" + texto
+    evidencia = perfil.evidence[0]
+    assert evidencia.start == fonte.index(f"I ({marcador})")
+    assert fonte[evidencia.start:evidencia.start + len(evidencia.quote)] == f"I ({marcador})"
+
+
+@pytest.mark.parametrize("marcador,genero,terceiro", [
+    ("28M", "male", "woman"), ("28F", "female", "man"),
+])
+def test_apostrofo_inicial_preserva_citacao_real_seguinte(marcador, genero, terceiro):
+    alegacao = f"I identify as a {terceiro}"
+    texto = f"'cause\nI ({marcador}) answered.\nThey said 'I don't agree.\n{alegacao}.'"
+    perfil = NarratorProfileResolver({}, semantic_provider=lambda chunk: [
+        NarratorEvidence("semantic", alegacao, -1, "female" if terceiro == "woman" else "male",
+                         1, "narrator", "groq"),
+    ]).resolve(story_id="test_001", title="Title", original_text=texto)
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert [(e.kind, e.quote, e.gender) for e in perfil.evidence] == [
+        ("explicit", f"I ({marcador})", genero),
+    ]
