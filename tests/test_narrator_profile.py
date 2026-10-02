@@ -424,3 +424,77 @@ def test_sujeito_nominal_com_crenca_exclui_so_a_alegacao_governada(marcador, gen
     assert perfil.source_gender == genero
     assert perfil.narration_gender == genero
     assert [e.quote for e in perfil.evidence] == [f"I ({marcador})"]
+
+
+@pytest.mark.parametrize("relato", [
+    'My sister wrote:\n> I am a woman and you never understand me.',
+    'My sister said, "Listen to me.\nI am a woman and you never understand me."',
+])
+@pytest.mark.parametrize("story_id", ["test_001", "historia"])
+@pytest.mark.parametrize("expandido", [False, True])
+@pytest.mark.parametrize("marcador,genero", [("28M", "male"), ("28F", "female")])
+def test_citacao_multilinha_nao_substitui_identidade_explicita(relato, story_id, expandido, marcador, genero):
+    texto = f"I ({marcador}) live with my husband. " + relato
+    if genero == "female":
+        texto = texto.replace("sister", "brother").replace("woman", "man")
+    if expandido:
+        from main import expand_acronyms_translated, expand_age_gender_en
+        texto = expand_acronyms_translated(expand_age_gender_en(texto), "en")
+    perfil = NarratorProfileResolver({}, semantic_enabled=False).resolve(
+        story_id=story_id, title="Title", original_text=texto,
+    )
+    assert perfil.source_gender == genero
+    assert perfil.narration_gender == genero
+    assert perfil.decision_method == "explicit"
+    assert len(perfil.evidence) == 1
+    assert perfil.evidence[0].gender == genero
+    fonte = "Title\n\n" + texto
+    evidencia = perfil.evidence[0]
+    assert evidencia.start == 7
+    assert fonte[evidencia.start:evidencia.start + len(evidencia.quote)] == evidencia.quote
+
+
+@pytest.mark.parametrize("abertura,fecho", [
+    ('My sister said, "Listen to me.\n', '"'),
+    ('My sister wrote:\n> Listen to me.\n', ''),
+])
+@pytest.mark.parametrize("alegacao", ["I am a woman", "I identify as a woman"])
+def test_semantica_nao_admite_terceiro_em_citacao_entre_chunks(abertura, fecho, alegacao):
+    texto = "I (28M) answered. " + abertura + "Please listen. " * 20 + alegacao + "." + fecho
+    fonte = "Title\n\n" + texto
+    recebidos = []
+    def provider(chunk):
+        recebidos.append(chunk)
+        if alegacao in chunk.text:
+            return [NarratorEvidence("semantic", alegacao, -1, "female", 1, "narrator", "groq")]
+        return []
+    perfil = NarratorProfileResolver({"chunk_chars": 96}, semantic_provider=provider).resolve(
+        story_id="test_001", title="Title", original_text=texto,
+    )
+    assert perfil.source_gender == "male"
+    assert perfil.narration_gender == "male"
+    assert [(e.kind, e.quote, e.start, e.gender) for e in perfil.evidence] == [
+        ("explicit", "I (28M)", 7, "male"),
+    ]
+    assert "".join(c.text for c in recebidos) == fonte
+    assert all(c.text == fonte[c.start:c.end] for c in recebidos)
+    assert any(alegacao in c.text and c.start > fonte.index(abertura) for c in recebidos)
+
+
+@pytest.mark.parametrize("relato", [
+    'My sister wrote:\n> Listen to me.\n> I am a woman.\n\n',
+    'My sister wrote:\n> Listen to me.\nI am a woman.\n\n',
+    'My sister said, “Listen to me.\nI’m a woman.”\n',
+    "My sister said, ‘Listen to me.\nI’m a woman.’\n",
+])
+def test_primeira_pessoa_fora_da_citacao_preserva_atribuicao_valida(relato):
+    texto = relato + "They described me as a man. I (28M) disagreed."
+    quote = "They described me as a man."
+    perfil = NarratorProfileResolver({}, semantic_provider=lambda chunk: [
+        NarratorEvidence("semantic", quote, -1, "male", .94, "narrator", "groq"),
+    ]).resolve(story_id="historia", title="Title", original_text=texto)
+    assert perfil.source_gender == "male"
+    assert perfil.narration_gender == "male"
+    assert {e.kind for e in perfil.evidence} == {"explicit", "semantic"}
+    assert all(e.gender == "male" for e in perfil.evidence)
+    assert any(e.quote == quote for e in perfil.evidence)
