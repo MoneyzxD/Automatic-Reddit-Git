@@ -423,6 +423,7 @@ def test_jsonl_e_quarentena_sanitizam_strings_e_preservam_hashes(tmp_path, monke
         "Cookie: reddit_session=COOKIE_SINTETICO; other=OUTRO_COOKIE\n"
         "Authorization: Bearer AUTH_SINTETICO\n"
         "api_key=KEY_SINTETICA password='SENHA SINTETICA' credentials=CREDS_SINTETICAS\n"
+        "API key: VALOR_SINTETICO\n"
         "Bearer TOKEN_BEARER_SINTETICO\n"
         "https://api.telegram.org/bot123456789:AAAAAAAAAAAAAAAAAAAAAAAA/sendMessage"
     )
@@ -446,7 +447,7 @@ def test_jsonl_e_quarentena_sanitizam_strings_e_preservam_hashes(tmp_path, monke
         assert "[REDACTED]" in persisted
         for secret in (opaque, oauth, session, client_secret, "COOKIE_SINTETICO", "OUTRO_COOKIE", "AUTH_SINTETICO",
                        "KEY_SINTETICA", "SENHA SINTETICA", "CREDS_SINTETICAS", "TOKEN_BEARER_SINTETICO",
-                       "123456789:AAAAAAAAAAAAAAAAAAAAAAAA", "CAMPO_CREDENCIAL", "CAMPO_SENHA"):
+                       "123456789:AAAAAAAAAAAAAAAAAAAAAAAA", "CAMPO_CREDENCIAL", "CAMPO_SENHA", "VALOR_SINTETICO"):
             assert secret not in persisted
         json.loads(persisted)
     data = json.loads(quarantine.read_text(encoding="utf-8"))

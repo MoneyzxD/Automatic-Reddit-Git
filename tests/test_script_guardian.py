@@ -419,7 +419,7 @@ def test_telemetria_append_only_redige_chaves_aninhadas(tmp_path):
     before = path.read_bytes()
     append_quality_report(path, {"nested": [{"ACCESS_TOKEN": "NAO_GRAVAR", "client_secret": "NAO_GRAVAR",
                                            "Cookie": "NAO_GRAVAR", "authorization": "NAO_GRAVAR",
-                                           "GROQ_API_KEY_PT": "NAO_GRAVAR", "ok": 1}]})
+                                           "GROQ_API_KEY_PT": "NAO_GRAVAR", "API key": "NAO_GRAVAR", "ok": 1}]})
     assert path.read_bytes().startswith(before)
     assert "NAO_GRAVAR" not in path.read_text(encoding="utf-8")
     assert json.loads(path.read_text(encoding="utf-8").splitlines()[1])["nested"][0]["ok"] == 1

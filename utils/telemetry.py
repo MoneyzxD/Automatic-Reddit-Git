@@ -55,7 +55,7 @@ _models: dict[str, str] = {}
 
 def append_quality_report(path: Path, event: dict) -> None:
     """Acrescenta um evento sanitizado sem substituir linhas anteriores."""
-    secret_names = ("token", "secret", "cookie", "authorization", "api_key", "api-key",
+    secret_names = ("token", "secret", "cookie", "authorization", "api_key", "api-key", "api key",
                     "credentials", "password", "passwd")
     def sensitive(key):
         return any(word in key.lower() for word in secret_names)
@@ -92,7 +92,7 @@ def append_quality_report(path: Path, event: dict) -> None:
     configured_values = sorted(configured, key=len, reverse=True)
     headers = re.compile(r"(?im)(\b(?:cookie|set-cookie|authorization|proxy-authorization)\s*:\s*)[^\r\n]+")
     assignments = re.compile(
-        r'''(?i)(\b[\w-]*(?:api[_-]?key|token|secret|cookie|authorization|credentials|password|passwd|reddit_session)[\w-]*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,;}&]+|[^\s,;}&]+)'''
+        r'''(?i)(\b[\w-]*(?:api[ _-]?key|token|secret|cookie|authorization|credentials|password|passwd|reddit_session)[\w-]*["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,;}&]+|[^\s,;}&]+)'''
     )
 
     def redact(value, key=""):
