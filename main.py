@@ -5,7 +5,8 @@ main.py
 Orquestrador principal do Reddit Stories Pipeline — v3.
 
 Fluxo por historia (1 historia por execucao):
-    1.  Extracao       -> Reddit JSON publico
+    0.  Preflight      -> LanguageTool obrigatorio, antes da extracao (exceto dry-run)
+    1.  Extracao       -> Reddit com sessao logada
     2.  Filtragem      -> score 0-100
     3.  Siglas EN      -> expansao de siglas no texto original (28F -> 28-year-old woman)
     3.5 Perfil        -> resolve e trava o narrador uma vez, antes de adaptar
@@ -15,19 +16,20 @@ Fluxo por historia (1 historia por execucao):
     5.5 Validacao      -> valida script traduzido (por idioma)
     6.  Siglas PT/ES   -> expansao de siglas no texto traduzido
     8.  Naturalizacao  -> LLM com genero correto desde o inicio
-    9.  Validacao      -> corrige erros de genero que escaparam da naturalizacao
-    9.5 Validacao      -> valida script final (adaptacao+traducao+genero+naturalizacao)
+    9.5 Guardiao       -> revisa naturalizacao contra traducao aprovada e perfil travado
     10. Titulo         -> gerador viral baseado no titulo original do Reddit
-    10.5 Validacao     -> valida titulo + hook
+    10.5 Guardiao      -> revisa titulo, hook inicial e encerramento contra fatos validados
     11. Hook           -> titulo injetado como primeira frase do script
     12. Split          -> partes de ate 2:45 (teto de Short do YouTube), com hook repetido e encerramento
+    12.5 Guardiao      -> revisa todas as partes completas
+    12.6 Metadados     -> SEO localizado por parte, antes de voz/renderizacao
+    12.7 Guardiao      -> revisa descricoes localizadas
+    12.9 Gate final    -> revisa exatamente a parte completa imediatamente antes da voz
     13. Voz            -> edge-tts com voz do genero correto
     14. Legendas       -> ASS animado palavra por palavra
     15. Video          -> FFmpeg 1080x1920 + ASS + background automatico (Shorts/)
     16. Thumbnail      -> Pillow (JPG estatica + .mov card com fade)
-    17. Metadados      -> SEO por idioma
-    17.5 Validacao     -> valida descricao + tags
-    18. Organizacao    -> exports/{lang}/{slug}_{data}_{lang}.mp4
+    18. Organizacao    -> exporta/enfileira somente depois de concluir todas as partes do idioma
 
 Execucao normal:
     python main.py --lang pt
@@ -51,6 +53,7 @@ load_dotenv()
 
 import yaml
 from stages.narrator_profile import NarratorProfile
+from stages.script_guardian import QualityRejected, QualityUnavailable, ScriptReview, ReviewIssue
 
 BASE_DIR = Path(__file__).parent
 
@@ -569,527 +572,388 @@ def attach_narrator_profile(payload: dict, profile: NarratorProfile) -> dict:
     }
 
 
+def review_and_generate_audio(*, guardian, voice_generator, source_text: str,
+                              part_script: str, language: str, story_id: str,
+                              profile: NarratorProfile, part_number: int,
+                              audio_path: Path) -> tuple[str, bool]:
+    """A última revisão recebe exatamente a parte que será narrada."""
+    review = guardian.review_and_fix(
+        source_text=source_text, candidate_text=part_script, language=language,
+        stage="pre_tts", story_id=story_id, profile=profile,
+        final_gate=True, part=part_number,
+    )
+    if review.status != "approved":
+        raise (QualityUnavailable if review.status == "unavailable" else QualityRejected)(review)
+    approved = review.approved_text
+    return approved, voice_generator.generate(
+        approved, language, audio_path, narrator_gender=profile.narration_gender,
+    )
+
+
+def quarantine_review(base_dir: Path, review: ScriptReview, candidate_text: str, *,
+                      story_id: str, language: str, stage: str,
+                      profile: NarratorProfile, source_text: str,
+                      part_number: int | None = None) -> Path:
+    """Persiste a revisão atomicamente, dentro da raiz e com a política do log."""
+    from dataclasses import asdict
+    import hashlib
+    import os
+    import tempfile
+    from utils.telemetry import append_quality_report
+
+    for value in (story_id, language, stage):
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+            raise ValueError("Identificador inseguro para quarentena")
+    if part_number is not None and (type(part_number) is not int or part_number < 1):
+        raise ValueError("Número de parte inválido")
+    root = Path(base_dir).resolve()
+    directory = root / "data" / "quarantine" / story_id
+    suffix = f"_part{part_number}" if part_number is not None else ""
+    destination = directory / f"{language}_{stage}{suffix}.json"
+    if not destination.resolve().is_relative_to(root):
+        raise ValueError("Quarentena fora da raiz do projeto")
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "story_id": story_id, "language": language, "stage": stage,
+        "part_number": part_number, "profile_id": profile.profile_id,
+        "profile": asdict(profile), "source_sha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest(),
+        "candidate_sha256": hashlib.sha256(candidate_text.encode("utf-8")).hexdigest(),
+        "candidate_text": candidate_text,
+        "review": {**asdict(review), "report_path": str(review.report_path) if review.report_path else None},
+    }
+    with tempfile.NamedTemporaryFile(dir=directory, prefix=".review-", suffix=".tmp", delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        append_quality_report(temporary, payload)
+        os.replace(temporary, destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination
+
+
 def run_pipeline(
-    config: dict,
-    languages: list,
-    dry_run: bool = False,
-    test_story: bool = False,
-    max_parts: int | None = None,
+    config: dict, languages: list, dry_run: bool = False,
+    test_story: bool = False, max_parts: int | None = None,
 ) -> None:
-    from stages.adapter         import StoryAdapter
-    from stages.translator      import ScriptTranslator
-    from stages.naturalizer     import ScriptNaturalizer
-    from stages.gender_detector import GenderDetector
+    from stages.adapter import StoryAdapter
+    from stages.translator import ScriptTranslator, TranslationFailed
+    from stages.naturalizer import ScriptNaturalizer
     from stages.narrator_profile import NarratorProfileResolver, save_profile
-    from stages.titler          import TitleGenerator
-    from stages.splitter        import split_story
-    from stages.voice           import VoiceGenerator
-    from stages.word_timing     import load_word_boundaries
-    from stages.subtitle        import SubtitleGenerator
-    from stages.video           import VideoRenderer
-    from stages.thumbnail       import ThumbnailGenerator
-    from stages.metadata        import MetadataGenerator
-    from stages.organizer       import FileOrganizer
-    from stages.validator       import ValidatorEngine
-    from utils.db               import PipelineDB
-    from scheduler.notifier     import notify_pipeline_result
+    from stages.titler import TitleGenerator
+    from stages.splitter import split_story
+    from stages.voice import VoiceGenerator
+    from stages.word_timing import load_word_boundaries
+    from stages.subtitle import SubtitleGenerator
+    from stages.video import VideoRenderer
+    from stages.thumbnail import ThumbnailGenerator
+    from stages.metadata import MetadataGenerator
+    from stages.organizer import FileOrganizer
+    from stages.script_guardian import ScriptGuardian
+    from utils.db import PipelineDB
+    from utils import environment as env, telemetry
+    from scheduler.notifier import notify_pipeline_result
 
-    # Normaliza pt-br → pt para uso interno no pipeline
-    languages = ["pt" if l == "pt-br" else l for l in languages]
-
+    languages = list(dict.fromkeys("pt" if lang == "pt-br" else lang for lang in languages))
     logger = logging.getLogger("pipeline.main")
     pipeline_started_at = datetime.now()
-
-    # Ambiente (local/VM x runner efemero) — resolve onde vivem backgrounds
-    # e banco. Sem variavel de ambiente definida, tudo aponta para os
-    # caminhos locais de sempre.
-    from utils import environment as env
-    from utils import telemetry
-    telemetry.reset()   # contadores de token/fallback zerados por execucao
+    telemetry.reset()
     logger.info("Ambiente: %s", env.describe(BASE_DIR))
+    guardian = None if dry_run else ScriptGuardian(config.get("script_quality", {}), base_dir=BASE_DIR)
+    if guardian:
+        try:
+            guardian.assert_ready()
+        except QualityUnavailable:
+            notify_pipeline_result("failure", {
+                "stage": "preflight", "dependency": "LanguageTool / guardião",
+                "reason": "Dependência obrigatória indisponível; lote interrompido",
+            }, config)
+            raise
 
-    # Configuracao do VideoRenderer com pasta de backgrounds
-    video_config = config.get("video", {})
-    video_config["background_dir"] = str(env.background_dir(BASE_DIR))
-
-    db          = PipelineDB(env.db_path(BASE_DIR))
-    adapter     = StoryAdapter(config.get("adapter", {}))
-    translator  = ScriptTranslator(config.get("translator", {}))
+    video_config = {**config.get("video", {}), "background_dir": str(env.background_dir(BASE_DIR))}
+    db = PipelineDB(env.db_path(BASE_DIR))
+    adapter_config = {**config.get("adapter", {})}
+    if dry_run:
+        adapter_config["llm_enabled"] = False
+    adapter = StoryAdapter(adapter_config)
+    translator = ScriptTranslator(config.get("translator", {}))
     naturalizer = ScriptNaturalizer(config.get("naturalizer", {}))
-    gender_det  = GenderDetector(config.get("gender_detector", {}))
-    title_gen   = TitleGenerator(config.get("naturalizer", {}))
-    voice_gen   = VoiceGenerator(config.get("voice", {}))
-    sub_gen     = SubtitleGenerator(config.get("subtitles", {}))
-    vid_ren     = VideoRenderer(video_config)
-    thumb_gen   = ThumbnailGenerator(config.get("thumbnail", {}))
-    meta_gen    = MetadataGenerator(config.get("metadata", {}))
-    organizer   = FileOrganizer(config, db)
-    validator   = ValidatorEngine(config.get("validator", {}), base_dir=BASE_DIR)
-
+    title_gen = TitleGenerator(config.get("naturalizer", {}))
+    voice_gen = VoiceGenerator(config.get("voice", {}))
+    sub_gen = SubtitleGenerator(config.get("subtitles", {}))
+    vid_ren = VideoRenderer(video_config)
+    thumb_gen = ThumbnailGenerator(config.get("thumbnail", {}))
+    meta_gen = MetadataGenerator(config.get("metadata", {}))
+    organizer = FileOrganizer(config, db)
     scripts_dir = BASE_DIR / "data" / "scripts"
+    parts_attempted = parts_done = 0
+    quality_skipped = False
 
-    # Contadores para o resumo final no Telegram (notify_pipeline_result)
-    parts_attempted = 0
-    parts_done      = 0
-
-    # ── ETAPAS 1 e 2 — Extracao e Filtragem ──────────────────────────────────
     if test_story:
-        logger.info("=" * 60)
-        logger.info("[TEST-STORY] Pulando etapas 1 e 2 — usando historia de teste")
         story = TEST_STORY
-        db.insert_story(story)
     else:
         from stages.extractor import RedditExtractor
-        from stages.filter    import StoryFilter
-
+        from stages.filter import StoryFilter
         extractor = RedditExtractor(config.get("extraction", {}))
-        f_filter  = StoryFilter(config.get("filtering", {}), db)
-        raw_dir   = BASE_DIR / "data" / "raw"
-
-        logger.info("=" * 60)
-        logger.info("ETAPA 1 — Extracao de historias")
-        subreddits = get_subreddits(config)
+        f_filter = StoryFilter(config.get("filtering", {}), db)
         if not dry_run:
-            extractor.run(subreddits)
+            extractor.run(get_subreddits(config))
         else:
-            logger.info("[dry-run] Extracao ignorada")
-
-        logger.info("ETAPA 2 — Filtragem e ranking")
-        approved = f_filter.run(raw_dir)
+            logger.info("[dry-run] Extração ignorada")
+        approved = f_filter.run(BASE_DIR / "data" / "raw")
         if not approved:
-            logger.warning("Nenhuma historia aprovada. Verifique data/raw/")
+            logger.warning("Nenhuma história aprovada. Verifique data/raw/")
             return
-
         story = approved[0]
+    if not dry_run:
         db.insert_story(story)
 
-    story_id    = story["id"]
+    story_id = story["id"]
     story_title = story.get("title", story_id)
-
-    logger.info("=" * 60)
-    logger.info("Processando: %s", story_title[:70])
-
-    # ── ETAPA 3 — Expansao de siglas no texto original (ingles) ──────────────
-    logger.info("ETAPA 3 — Expansao de siglas Reddit (texto original)")
-    story_for_adapter         = story.copy()
-    story_for_adapter["text"] = expand_age_gender_en(story.get("text", ""))
-    logger.info(
-        "Siglas expandidas: '%s...'",
-        story_for_adapter["text"][:100].replace("\n", " "),
-    )
-
-    # ── ETAPA 3.5 — Perfil unico, travado antes de qualquer adaptacao ────────
-    profile_resolver = NarratorProfileResolver(
-        config.get("narrator_profile", {}), semantic_enabled=not dry_run,
-    )
-    narrator_profile = resolve_story_narrator(
-        profile_resolver, story_id, story_title, story_for_adapter["text"],
-    )
-    story_for_adapter = attach_narrator_profile(story_for_adapter, narrator_profile)
-    narrator_gender = narrator_profile.narration_gender
-    gender_det.bind_profile(narrator_profile)
-    profile_trace = (
-        f"profile_id={narrator_profile.profile_id}; genero={narrator_gender}; "
-        f"metodo={narrator_profile.decision_method}; confianca={narrator_profile.confidence:.2f}"
-    )
-    logger.info("ETAPA 3.5 — Perfil do narrador: %s", profile_trace)
+    expanded_source = expand_acronyms_translated(expand_age_gender_en(story.get("text", "")), "en")
+    resolver = NarratorProfileResolver(config.get("narrator_profile", {}), semantic_enabled=not dry_run)
+    profile = resolve_story_narrator(resolver, story_id, story_title, expanded_source)
+    narrator_gender = profile.narration_gender
+    story_for_adapter = attach_narrator_profile({**story, "text": expanded_source}, profile)
+    profile_trace = (f"profile_id={profile.profile_id}; genero={narrator_gender}; "
+                     f"metodo={profile.decision_method}; confianca={profile.confidence:.2f}")
+    logger.info("Perfil do narrador: %s", profile_trace)
     if not dry_run:
-        save_profile(narrator_profile, BASE_DIR)
-
-    # ── ETAPA 4 — Adaptacao via Groq (fallback: regras) ──────────────────────
-    logger.info("ETAPA 4 — Adaptacao e limpeza do script")
-    adapted      = attach_narrator_profile(adapter.adapt(story_for_adapter), narrator_profile)
+        save_profile(profile, BASE_DIR)
+    adapted = attach_narrator_profile(adapter.adapt(story_for_adapter), profile)
     clean_script = adapted["full_script"]
-    logger.info("Adaptado via: %s", adapted.get("adapted_by", "unknown"))
-    if not dry_run:
-        save_script_trace(scripts_dir, story_id, "en", "ETAPA 3.5 — Perfil do narrador", profile_trace, reset=True)
-        save_script_trace(scripts_dir, story_id, "en", "ETAPA 4 — Adaptado (EN)", clean_script)
+    context = {}
 
-    # ── ETAPA 4.5 — Validacao do script adaptado (EN, antes de traduzir) ────
-    if not dry_run:
-        logger.info("ETAPA 4.5 — Validacao do script adaptado (en)")
-        clean_script = validator.validate_and_fix_script(
-            clean_script, language="en", narrator_gender=narrator_gender,
-            story_id=story_id, story_title=story_title,
+    def checkpoint(source, candidate, language, stage, part=None):
+        context.update(source_text=source, candidate_text=candidate, language=language,
+                       stage=stage, part_number=part)
+        review = guardian.review_and_fix(
+            source_text=source, candidate_text=candidate, language=language,
+            stage=stage, story_id=story_id, profile=profile, part=part,
         )
-        adapted["full_script"] = clean_script
-        save_script_trace(scripts_dir, story_id, "en", "ETAPA 4.5 — Validado (EN)", clean_script)
+        if review.status != "approved":
+            raise (QualityUnavailable if review.status == "unavailable" else QualityRejected)(review)
+        save_script_trace(scripts_dir, story_id, language, stage, review.approved_text)
+        return review
 
-    # ── ETAPA 5 — Traducao por idioma ────────────────────────────────────────
-    logger.info("ETAPA 5 — Traducao para: %s", ", ".join(languages).upper())
-    if dry_run:
-        translated_scripts = {lang: clean_script for lang in languages}
-        logger.info("[dry-run] Traducao simulada")
-    else:
-        translated_scripts = translator.translate_all(
-            script_text=clean_script,
-            story_id=story_id,
-            scripts_dir=scripts_dir,
-            languages=languages,
-            source_lang="en",
-            force=test_story,
+    def translation_text(result, source, language, stage):
+        candidate = result.text or "".join(chunk.translated_text or "" for chunk in result.chunks)
+        context.update(source_text=source, candidate_text=candidate, language=language,
+                       stage=stage, part_number=None)
+        try:
+            return result.require_text()
+        except TranslationFailed:
+            review = ScriptReview(result.status, candidate, (
+                ReviewIssue("language", "critical", "Tradução não aprovada", origin="translation"),
+            ), (), 0, False, "")
+            raise (QualityUnavailable if result.status == "unavailable" else QualityRejected)(review) from None
+
+    def failed_review(error):
+        nonlocal quality_skipped
+        quality_skipped = True
+        quarantine_path = quarantine_review(
+            BASE_DIR, error.review, context["candidate_text"], story_id=story_id,
+            language=context["language"], stage=context["stage"], profile=profile,
+            source_text=context["source_text"], part_number=context["part_number"],
         )
-
-    # Ordem de prioridade: PT -> ES -> EN
-    lang_order = []
-    for priority_lang in ["pt-br", "pt", "es", "en"]:
-        if priority_lang in languages:
-            lang_order.append(priority_lang)
-    for lang in languages:
-        if lang not in lang_order:
-            lang_order.append(lang)
-
-    for lang in lang_order:
-        lang_script = translated_scripts.get(lang, clean_script)
-        logger.info("=" * 60)
-        logger.info("IDIOMA: %s", lang.upper())
-        if not dry_run:
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 3.5 — Perfil do narrador", profile_trace, reset=lang != "en")
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 5 — Traduzido", lang_script)
-
-        # ── ETAPA 5.5 — Validacao do script traduzido (por idioma) ───────────
-        if not dry_run:
-            logger.info("ETAPA 5.5 — Validacao da traducao (%s)", lang)
-            lang_script = validator.validate_and_fix_script(
-                lang_script, language=lang, narrator_gender=narrator_gender,
-                story_id=story_id, story_title=story_title,
-            )
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 5.5 — Validado (traducao)", lang_script)
-
-        # ── ETAPA 6 — Expansao de siglas no texto traduzido ──────────────────
-        logger.info("ETAPA 6 — Expansao de siglas Reddit (%s)", lang)
-        lang_script = expand_acronyms_translated(lang_script, lang)
-        if not dry_run:
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 6 — Siglas expandidas", lang_script)
-
-        # ── ETAPA 8 — Naturalizacao com genero correto desde o inicio ────────
-        logger.info(
-            "ETAPA 8 — Naturalizacao (%s, genero=%s)", lang, narrator_gender,
-        )
-        if not dry_run:
-            lang_script = naturalizer.naturalize(lang_script, lang, narrator_gender)
-            save_script_trace(scripts_dir, story_id, lang, f"ETAPA 8 — Naturalizado (genero={narrator_gender})", lang_script)
-
-        # ── ETAPA 9 — Validacao de genero pos-naturalizacao ──────────────────
-        if not dry_run:
-            logger.info(
-                "ETAPA 9 — Validacao de genero (%s, genero=%s)", lang, narrator_gender,
-            )
-            lang_script = gender_det.validate_and_fix(lang_script, narrator_gender, lang)
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 9 — Genero corrigido", lang_script)
-
-        # ── ETAPA 9.5 — Validacao final do script (adaptacao+traducao+genero) ─
-        if not dry_run:
-            logger.info("ETAPA 9.5 — Validacao final do script (%s)", lang)
-            lang_script = validator.validate_and_fix_script(
-                lang_script, language=lang, narrator_gender=narrator_gender,
-                story_id=story_id, story_title=story_title,
-            )
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 9.5 — Validado final", lang_script)
-
-        # ── ETAPA 10 — Titulo descritivo (para slug) + Hook de engajamento ───
-        if dry_run:
-            title_for_lang        = story_title
-            hook_for_lang          = story_title
-            closing_hook_for_lang  = ""
-        else:
-            logger.info("ETAPA 10 — Gerando titulo e hook (%s)", lang)
-            translated_title = translator.translate_title(story_title, "en", lang)
-
-            hook_type      = random.choice(["short", "narrative"])
-            title_for_lang = title_gen.generate(
-                story_text=lang_script,
-                language=lang,
-                original_title=translated_title,
-                hook_type=hook_type,
-                narrator_gender=narrator_gender,
-            )
-            logger.info("Titulo arquivo (%s): %s", lang, title_for_lang)
-
-            hook_for_lang = title_gen.generate_hook(
-                story_text=lang_script,
-                language=lang,
-                original_title=translated_title,
-                narrator_gender=narrator_gender,
-            )
-            logger.info("Hook engajamento (%s): %s", lang, hook_for_lang)
-
-            # ── ETAPA 10.5 — Validacao do titulo + hook ───────────────────────
-            logger.info("ETAPA 10.5 — Validacao do titulo/hook (%s)", lang)
-            title_for_lang, hook_for_lang = validator.validate_and_fix_title_hook(
-                title_for_lang, hook_for_lang, lang_script, lang, story_id,
-                story_title=story_title, narrator_gender=narrator_gender,
-            )
-            logger.info("Titulo/hook validados (%s): %s | %s", lang, title_for_lang, hook_for_lang)
-
-            # ── Hook de encerramento (CTA) — gerado uma vez, usado na ultima parte
-            closing_hook_for_lang = title_gen.generate_closing_hook(
-                story_text=lang_script,
-                language=lang,
-                original_title=translated_title,
-                narrator_gender=narrator_gender,
-            )
-            logger.info("Hook encerramento (%s): %s", lang, closing_hook_for_lang)
-
-        # ── ETAPA 11 — Injetar hook de engajamento no início do script ────────
-        if not dry_run:
-            logger.info("ETAPA 11 — Injetando hook de engajamento")
-            lang_script = inject_title_as_hook(lang_script, hook_for_lang)
-            save_script_trace(scripts_dir, story_id, lang, "ETAPA 11 — Script final com hook (narrado)", lang_script)
-
-        # ── ETAPA 11.5 — Salvar script final narrado ──────────────────────────
-        if not dry_run:
-            final_script_dir = BASE_DIR / "data" / "scripts" / lang
-            final_script_dir.mkdir(parents=True, exist_ok=True)
-            final_script_path = final_script_dir / f"{story_id}_final.txt"
-            final_script_path.write_text(lang_script, encoding="utf-8")
-            logger.info("Script final salvo: %s", final_script_path.name)
-
-        # ── ETAPA 12 — Split ─────────────────────────────────────────────────
-        adapted_for_split                = attach_narrator_profile(adapted, narrator_profile)
-        adapted_for_split["full_script"] = lang_script
-        adapted_for_split["language"]    = lang
-        parts = split_story(
-            adapted_for_split,
-            lang,
-            hook_text=hook_for_lang,
-            closing_hook_text=closing_hook_for_lang,
-        )
-        logger.info("%d parte(s) para %s", len(parts), lang.upper())
-
-        # Uma historia nunca pode ocupar mais de tres Shorts. O coordenador do
-        # lote inclui neste limite as vagas de hoje e, quando permitido, uma
-        # unica parte que sera agendada inteira para o dia seguinte.
-        limite_partes = min(3, max_parts) if max_parts is not None else 3
-        if len(parts) > limite_partes:
-            logger.warning(
-                "Historia ignorada em %s: %d partes para limite de %d",
-                lang.upper(), len(parts), limite_partes,
-            )
-            continue
-
-        for part_data in parts:
-            part_num = part_data["part_number"]
-            total    = part_data["total_parts"]
-            date_str = datetime.now().strftime("%Y%m%d")
-            slug     = FileOrganizer.slugify(title_for_lang)
-            part_sfx = f"_pt{part_num}of{total}" if total > 1 else ""
-            stem     = f"{slug}_{date_str}_{lang}{part_sfx}"
-
-            if dry_run:
-                logger.info("[dry-run] %s — %.1f min", stem, part_data["estimated_min"])
-                continue
-
-            parts_attempted += 1
-            part_script = part_data["full_script"]
-
-            # ── ETAPA 13 — Voz com genero correto ────────────────────────────
-            logger.info("ETAPA 13 — Voz: %s (genero=%s)", stem, narrator_gender)
-            audio_dir  = BASE_DIR / "data" / "audio" / lang
-            audio_path = audio_dir / (stem + ".mp3")
-            audio_ok   = voice_gen.generate(
-                part_script, lang, audio_path,
-                narrator_gender=narrator_gender,
-            )
-            if not audio_ok:
-                logger.error("Falha na voz — pulando %s", stem)
-                notify_pipeline_result("failure", {
-                    "story_title": title_for_lang or story_title,
-                    "language":    lang,
-                    "stage":       "Voz (ETAPA 13, edge-tts)",
-                    "reason":      f"geracao de audio falhou para {stem}",
-                }, config)
-                continue
-
-            # Duracao real do hook — usa os timestamps reais das primeiras
-            # hook_words palavras (boundaries do proprio audio_ok acima),
-            # nao mais uma estimativa por velocidade de fala media. Precisa
-            # ser exata porque tanto o card overlay (abaixo) quanto o corte
-            # de legenda (ETAPA 14) usam o MESMO valor — com estimativa,
-            # os dois podiam discordar e a legenda da historia comecava
-            # antes do card do hook terminar de sumir, sobrepondo os dois.
-            hook_words = len(hook_for_lang.split())
-            boundaries = load_word_boundaries(voice_gen.get_boundaries_path(audio_path))
-            if boundaries and len(boundaries) >= hook_words > 0:
-                ultima_palavra_hook = boundaries[hook_words - 1]
-                hook_duration = float(ultima_palavra_hook["start"]) + float(ultima_palavra_hook["duration"])
-            else:
-                # Fallback: estimativa por velocidade de fala media, usada
-                # so quando os boundaries nao vieram (ex: fallback gTTS)
-                hook_duration = hook_words / 2.8 + 1.5
-
-            # ── ETAPA 14 — Subtitulos ASS animados ──────────────────────────
-            logger.info("ETAPA 14 — Subtitulos ASS word-by-word")
-            sub_dir  = BASE_DIR / "data" / "subtitles" / lang
-            ass_path = sub_dir / (stem + ".ass")
-            # skip_before: o hook ja aparece por inteiro no card overlay —
-            # burnar legenda palavra-por-palavra dele tambem e redundante
-            # e foi reportado como bug visual (legenda do hook nao deveria
-            # existir).
-            sub_gen.generate(audio_path, lang, ass_path, script_text=part_script,
-                              skip_before=hook_duration)
-            if not ass_path.exists():
-                logger.warning("ASS nao gerado — video sem legenda")
-                ass_path = None
-
-            # ── ETAPA 16 — Thumbnail JPG + Card .mov animado ─────────────────
-            logger.info("ETAPA 16 — Thumbnail estatica + Card hook overlay animado")
-            thumb_dir  = BASE_DIR / "data" / "thumbnails" / lang
-            thumb_path = thumb_dir / (stem + "_thumb.jpg")
-
-            thumb_ok = thumb_gen.generate(hook_for_lang, lang, thumb_path)
-            if not thumb_ok:
-                logger.warning("Thumbnail nao gerada — continuando sem ela")
-                thumb_path = None
-
-            # hook_duration ja foi calculado antes da ETAPA 14 (usado tambem
-            # pro corte de legenda) — reaproveitado aqui pro card overlay.
-
-            # Lê duração real do áudio para evitar fantasma do card overlay
-            audio_duration = get_audio_duration(audio_path)
-            if audio_duration:
-                logger.info("Duracao do audio: %.2fs", audio_duration)
-            else:
-                logger.warning(
-                    "Duracao do audio nao disponivel — .mov sem extensao transparente"
-                )
-
-            # Gera card .mov com fade-in e fade-out via Pillow
-            card_mov_path = thumb_dir / (stem + "_card.mov")
-            card_mov_path = thumb_gen.render_hook_card_video(
-                hook_text      = hook_for_lang,
-                lang           = lang,
-                output_path    = card_mov_path,
-                hook_duration  = hook_duration,
-                fade_in        = 0.5,
-                fade_out       = 0.5,
-                fps            = 30,
-                audio_duration = audio_duration,
-            )
-            if not card_mov_path:
-                # Fallback: PNG estático sem fade
-                logger.warning("Card .mov falhou — tentando fallback PNG estatico")
-                card_png_path = thumb_dir / (stem + "_card.png")
-                card_mov_path = thumb_gen.render_hook_card(
-                    hook_for_lang, lang, card_png_path,
-                )
-                if not card_mov_path:
-                    logger.warning("Card PNG tambem falhou — video sem card overlay")
-
-            # ── ETAPA 15 — Video com background + card overlay ───────────────
-            logger.info("ETAPA 15 — Renderizando video (background: Shorts/ + card overlay)")
-
-            vid_dir    = BASE_DIR / "data" / "videos" / lang
-            video_path = vid_dir / (stem + ".mp4")
-            vid_ok     = vid_ren.render(
-                audio_path     = audio_path,
-                subtitle_path  = ass_path,
-                output_path    = video_path,
-                story_id       = story_id,
-                hook_card_path = card_mov_path,   # .mov com alpha (ou .png fallback)
-                hook_duration  = hook_duration,
-            )
-            if not vid_ok:
-                logger.error("Falha no video — verifique FFmpeg e pasta background/Shorts/")
-                notify_pipeline_result("failure", {
-                    "story_title": title_for_lang or story_title,
-                    "language":    lang,
-                    "stage":       "Video (ETAPA 15, FFmpeg)",
-                    "reason":      f"renderizacao falhou para {stem} — verifique FFmpeg/background",
-                }, config)
-                continue
-
-            # ── ETAPA 17 — Metadados ─────────────────────────────────────────
-            logger.info("ETAPA 17 — Metadados SEO")
-            meta_dir  = BASE_DIR / "data" / "scripts" / lang
-            meta_path = meta_dir / (stem + "_meta.json")
-            meta      = meta_gen.generate(
-                attach_narrator_profile(story, narrator_profile),
-                lang,
-                part_num,
-                total,
-                hook=hook_for_lang,
-                narrator_gender=narrator_gender,
-            )
-            meta["title"]           = title_for_lang
-            meta = attach_narrator_profile(meta, narrator_profile)
-            logger.info("Metadados (%s): %s", lang, profile_trace)
-
-            # ── ETAPA 17.5 — Validacao de metadados (descricao + tags) ───
-            logger.info("ETAPA 17.5 — Validacao de metadados (%s)", lang)
-            meta_description_orig = meta.get("description", "")
-            meta_tags_orig         = meta.get("hashtags", [])
-
-            new_description, new_tags = validator.validate_and_fix_metadata(
-                meta_description_orig, meta_tags_orig, part_script, lang, story_id,
-                story_title=story_title, narrator_gender=narrator_gender,
-            )
-
-            if new_description != meta_description_orig or new_tags != meta_tags_orig:
-                logger.info("Metadados corrigidos — reconstruindo blocos youtube/tiktok (%s)", lang)
-                meta = meta_gen.rebuild_after_validation(meta, new_description, new_tags)
-
-            meta_gen.save(meta, meta_path)
-
-            # ── ETAPA 18 — Organizacao ───────────────────────────────────────
-            logger.info("ETAPA 18 — Export: %s", stem)
-            organizer.organize_output(
-                story_id       = story_id,
-                language       = lang,
-                part           = part_num,
-                total          = total,
-                video_path     = video_path,
-                thumbnail_path = thumb_path,
-                metadata_path  = meta_path,
-                story_title    = title_for_lang,
-            )
-            parts_done += 1
-
-    logger.info("=" * 60)
-    logger.info("Pipeline concluido. Exports em: data/exports/")
-
-    # ── Consumo de LLM da execucao inteira (todos os estagios) ────────────────
-    duration_min = (datetime.now() - pipeline_started_at).total_seconds() / 60
-    logger.info("=" * 60)
-    logger.info("CONSUMO DE LLM NESTA EXECUCAO:\n%s", telemetry.format_summary())
-    tokens_totais = telemetry.total_tokens()
-    if tokens_totais and duration_min > 0:
-        logger.info(
-            "Media: %.0f tokens/min ao longo de %.1f min (teto do free tier: 8000 TPM)",
-            tokens_totais / duration_min, duration_min,
-        )
-
-    # ── Aviso final de alto nivel (Telegram) ──────────────────────────────────
-    # Ate aqui, sucesso/falha so existiam no log local — isso e o unico ponto
-    # que resume a execucao inteira pro operador, sem precisar abrir o log.
-    if not dry_run and parts_attempted > 0:
-        event = "success" if parts_done == parts_attempted and parts_done > 0 else (
-            "partial" if parts_done > 0 else "failure"
-        )
-        notify_pipeline_result(event, {
-            "story_title": story_title,
-            "language":    ", ".join(languages).upper(),
-            "parts_done":  f"{parts_done}/{parts_attempted}",
-            "duration":    f"{duration_min:.1f} min",
-            "token_usage": f"{tokens_totais} tokens / {telemetry.total_calls()} chamadas "
-                           f"(validador: {validator.get_token_usage_summary()})",
+        dependency = ""
+        if isinstance(error, QualityUnavailable):
+            origins = {issue.origin for issue in error.review.issues}
+            dependency = ("Tradução" if "translation" in origins else
+                          "LanguageTool" if any("LanguageTool" in issue.message for issue in error.review.issues)
+                          else "Revisão semântica / glossário")
+        notify_pipeline_result("failure" if dependency else "partial", {
+            "story_title": story_title, "language": context["language"], "stage": context["stage"],
+            "part": context["part_number"], "profile_method": profile.decision_method,
+            "profile_confidence": f"{profile.confidence:.2f}",
+            "issue_categories": ", ".join(sorted({issue.category for issue in error.review.issues})),
+            "quarantine_path": str(quarantine_path.relative_to(BASE_DIR.resolve())),
+            "dependency": dependency, "reason": "Indisponibilidade obrigatória" if dependency else "Conteúdo reprovado",
         }, config)
 
-        # ── Alerta separado: pipeline rodou sem LLM em algum estagio ──────────
-        # Este e o unico aviso de que a qualidade caiu — sem ele, o fallback
-        # para regras e invisivel (ja aconteceu de verdade quando a Groq
-        # descontinuou os modelos llama).
+    factual_context = ""
+    if not dry_run:
+        save_script_trace(scripts_dir, story_id, "en", "Perfil do narrador", profile_trace, reset=True)
+        try:
+            review = checkpoint(expanded_source, clean_script, "en", "adaptation")
+            clean_script, factual_context = review.approved_text, review.factual_context
+            adapted["full_script"] = clean_script
+        except QualityRejected as error:
+            failed_review(error)
+            return
+        except QualityUnavailable as error:
+            failed_review(error)
+            raise
+
+    lang_order = [lang for lang in ("pt", "es", "en") if lang in languages]
+    lang_order += [lang for lang in languages if lang not in lang_order]
+    for lang in lang_order:
+        try:
+            lang_script = clean_script
+            lang_facts = factual_context
+            if not dry_run:
+                context.update(source_text=clean_script, candidate_text="", language=lang,
+                               stage="translation", part_number=None)
+                try:
+                    translations = translator.translate_all(
+                        script_text=clean_script, story_id=story_id, scripts_dir=scripts_dir,
+                        languages=[lang], source_lang="en", force=test_story,
+                    )
+                except TranslationFailed as error:
+                    translation_text(error.result, clean_script, lang, "translation")
+                    raise
+                lang_script = translation_text(translations[lang], clean_script, lang, "translation")
+                review = checkpoint(clean_script, lang_script, lang, "translation")
+                approved_translation = review.approved_text
+                expanded_translation = expand_acronyms_translated(approved_translation, lang)
+                naturalized = naturalizer.naturalize(expanded_translation, lang, narrator_gender)
+                review = checkpoint(approved_translation, naturalized, lang, "naturalization")
+                lang_script, lang_facts = review.approved_text, review.factual_context
+
+            validated_story = lang_script
+            derived_source = validated_story + (f"\n\nFatos validados:\n{lang_facts}" if lang_facts else "")
+            if dry_run:
+                title_for_lang = hook_for_lang = story_title
+                closing_hook_for_lang = ""
+            else:
+                context.update(source_text=story_title, candidate_text="", language=lang,
+                               stage="title_translation", part_number=None)
+                try:
+                    translated_title = translator.translate_title(story_title, "en", lang)
+                except TranslationFailed as error:
+                    translation_text(error.result, story_title, lang, "title_translation")
+                    raise
+                title_args = dict(story_text=validated_story, language=lang, original_title=translated_title,
+                                  narrator_gender=narrator_gender, factual_context=lang_facts)
+                title_for_lang = checkpoint(
+                    derived_source, title_gen.generate(**title_args, hook_type=random.choice(["short", "narrative"])),
+                    lang, "title").approved_text
+                hook_for_lang = checkpoint(
+                    derived_source, title_gen.generate_hook(**title_args), lang, "opening_hook").approved_text
+                closing_hook_for_lang = checkpoint(
+                    derived_source, title_gen.generate_closing_hook(**title_args), lang, "closing_hook").approved_text
+                lang_script = checkpoint(
+                    derived_source, inject_title_as_hook(validated_story, hook_for_lang),
+                    lang, "injected_hook").approved_text
+
+            adapted_for_split = attach_narrator_profile(
+                {**adapted, "full_script": lang_script, "language": lang}, profile)
+            parts = split_story(adapted_for_split, lang, hook_text=hook_for_lang,
+                                closing_hook_text=closing_hook_for_lang)
+            limit = min(3, max_parts) if max_parts is not None else 3
+            if len(parts) > limit:
+                logger.warning("História ignorada em %s: %d partes para limite de %d", lang, len(parts), limit)
+                continue
+            prepared = []
+            for part_data in parts:
+                part_num, total = part_data["part_number"], part_data["total_parts"]
+                suffix = f"_pt{part_num}of{total}" if total > 1 else ""
+                stem = f"{FileOrganizer.slugify(title_for_lang)}_{datetime.now():%Y%m%d}_{lang}{suffix}"
+                if dry_run:
+                    logger.info("[dry-run] %s — %.1f min", stem, part_data["estimated_min"])
+                    continue
+                part_script = checkpoint(derived_source, part_data["full_script"], lang, "split_part", part_num).approved_text
+                meta = meta_gen.generate(
+                    attach_narrator_profile({**story, "title": title_for_lang}, profile), lang,
+                    part_number=part_num, total_parts=total, hook=hook_for_lang,
+                    narrator_gender=narrator_gender, localized_script=part_script, factual_context=lang_facts,
+                )
+                meta = attach_narrator_profile(meta, profile)
+                description = checkpoint(derived_source, meta["description"], lang, "metadata", part_num).approved_text
+                meta = meta_gen.rebuild_after_validation(meta, description, meta.get("hashtags", []))
+                prepared.append((part_num, total, stem, part_script, meta))
+            if dry_run:
+                continue
+
+            # Todas as partes/metadados são aprovados antes de qualquer trabalho caro.
+            completed = []
+            language_complete = True
+            for part_num, total, stem, part_script, meta in prepared:
+                parts_attempted += 1
+                audio_path = BASE_DIR / "data" / "audio" / lang / (stem + ".mp3")
+                context.update(source_text=derived_source, candidate_text=part_script, language=lang,
+                               stage="pre_tts", part_number=part_num)
+                part_script, audio_ok = review_and_generate_audio(
+                    guardian=guardian, voice_generator=voice_gen, source_text=derived_source,
+                    part_script=part_script, language=lang, story_id=story_id, profile=profile,
+                    part_number=part_num, audio_path=audio_path,
+                )
+                if not audio_ok:
+                    notify_pipeline_result("failure", {"story_title": story_title, "language": lang,
+                                           "stage": "Voz", "reason": "Geração de áudio falhou"}, config)
+                    language_complete = False
+                    break
+                # O hook narrado também pode receber uma correção no gate final.
+                narrated_hook = part_script.split("\n\n", 1)[0].strip()
+                meta["hook"] = narrated_hook
+                meta = meta_gen.rebuild_after_validation(meta, meta["description"], meta.get("hashtags", []))
+                meta_path = scripts_dir / lang / (stem + "_meta.json")
+                meta_gen.save(meta, meta_path)
+                final_path = scripts_dir / lang / f"{story_id}_part{part_num}_final.txt"
+                final_path.write_text(part_script, encoding="utf-8")
+                hook_words = len(narrated_hook.split())
+                boundaries = load_word_boundaries(voice_gen.get_boundaries_path(audio_path))
+                if boundaries and len(boundaries) >= hook_words > 0:
+                    last = boundaries[hook_words - 1]
+                    hook_duration = float(last["start"]) + float(last["duration"])
+                else:
+                    hook_duration = hook_words / 2.8 + 1.5
+                ass_path = BASE_DIR / "data" / "subtitles" / lang / (stem + ".ass")
+                subtitle_ok = sub_gen.generate(audio_path, lang, ass_path, script_text=part_script,
+                                               skip_before=hook_duration)
+                if not subtitle_ok:
+                    notify_pipeline_result("failure", {"story_title": story_title, "language": lang,
+                                           "stage": "Legendas", "reason": "Geração de legendas falhou"}, config)
+                    language_complete = False
+                    break
+                if not ass_path.exists():
+                    ass_path = None
+                thumb_dir = BASE_DIR / "data" / "thumbnails" / lang
+                thumb_path = thumb_dir / (stem + "_thumb.jpg")
+                if not thumb_gen.generate(narrated_hook, lang, thumb_path):
+                    thumb_path = None
+                card_path = thumb_gen.render_hook_card_video(
+                    hook_text=narrated_hook, lang=lang, output_path=thumb_dir / (stem + "_card.mov"),
+                    hook_duration=hook_duration, fade_in=0.5, fade_out=0.5, fps=30,
+                    audio_duration=get_audio_duration(audio_path),
+                )
+                if not card_path:
+                    card_path = thumb_gen.render_hook_card(narrated_hook, lang, thumb_dir / (stem + "_card.png"))
+                video_path = BASE_DIR / "data" / "videos" / lang / (stem + ".mp4")
+                if not vid_ren.render(audio_path=audio_path, subtitle_path=ass_path, output_path=video_path,
+                                      story_id=story_id, hook_card_path=card_path, hook_duration=hook_duration):
+                    notify_pipeline_result("failure", {"story_title": story_title, "language": lang,
+                                           "stage": "Vídeo", "reason": "Renderização falhou"}, config)
+                    language_complete = False
+                    break
+                completed.append(dict(story_id=story_id, language=lang, part=part_num, total=total,
+                                      video_path=video_path, thumbnail_path=thumb_path,
+                                      metadata_path=meta_path, story_title=title_for_lang))
+            # O organizer também enfileira: adiar a chamada impede publicar uma língua parcial.
+            # ponytail: commit por item; transação em lote se for necessário tolerar queda durante a escrita da fila.
+            if language_complete and len(completed) == len(prepared):
+                for output in completed:
+                    organizer.organize_output(**output)
+                    parts_done += 1
+        except QualityRejected as error:
+            failed_review(error)
+            continue
+        except QualityUnavailable as error:
+            failed_review(error)
+            raise
+
+    duration = (datetime.now() - pipeline_started_at).total_seconds() / 60
+    logger.info("Pipeline concluído. Consumo de LLM:\n%s", telemetry.format_summary())
+    if not dry_run and parts_attempted:
+        event = ("success" if parts_done == parts_attempted and not quality_skipped else
+                 "partial" if parts_done else "failure")
+        notify_pipeline_result(event, {
+            "story_title": story_title, "language": ", ".join(languages).upper(),
+            "parts_done": f"{parts_done}/{parts_attempted}", "duration": f"{duration:.1f} min",
+            "token_usage": f"{telemetry.total_tokens()} tokens / {telemetry.total_calls()} chamadas",
+        }, config)
         if telemetry.had_fallback():
             from scheduler.notifier import send_admin_alert
-            alerta = telemetry.format_fallback_alert()
-            alerta += f"\n\nHistoria: {story_title[:60]}"
-            try:
-                if send_admin_alert(alerta, config):
-                    logger.info("Alerta de fallback enviado no Telegram")
-                else:
-                    logger.warning("Alerta de fallback NAO enviado (Telegram indisponivel)")
-            except Exception as e:
-                logger.warning("Falha ao enviar alerta de fallback: %s", e)
+            send_admin_alert(telemetry.format_fallback_alert(), config)
 
 
 def silenciar_loggers_sensiveis() -> None:
@@ -1121,7 +985,7 @@ def setup_logging(log_dir: Path, level: str = "INFO") -> None:
     silenciar_loggers_sensiveis()
 
 
-if __name__ == "__main__":
+def cli(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Reddit Stories Pipeline v3")
     parser.add_argument("--lang",        nargs="+",      default=["pt"])
     parser.add_argument("--dry-run",     action="store_true")
@@ -1137,14 +1001,20 @@ if __name__ == "__main__":
         default=None,
         help="so renderiza a historia se ela couber inteira neste numero de partes",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     config = load_config()
     setup_logging(BASE_DIR / "data" / "logs")
-    run_pipeline(
-        config,
-        args.lang,
-        dry_run=args.dry_run,
-        test_story=args.test_story,
-        max_parts=args.max_parts,
-    )
+    try:
+        run_pipeline(
+            config, args.lang, dry_run=args.dry_run,
+            test_story=args.test_story, max_parts=args.max_parts,
+        )
+    except QualityUnavailable:
+        logging.getLogger("pipeline.main").error("Dependência obrigatória indisponível; lote interrompido")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())

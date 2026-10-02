@@ -95,39 +95,41 @@ mantenha as duas em sincronia sempre que a ordem mudar.
 
 | # | Etapa | Módulo/detalhe |
 |---|------|-----------------|
+| 0 | Preflight | `ScriptGuardian.assert_ready()` antes da extração; indisponibilidade obrigatória encerra o lote (exceto dry-run) |
 | 1 | Extração | `stages/extractor.py` — Reddit via sessão logada (pulado com `--test-story`) |
 | 2 | Filtragem | `stages/filter.py` — score 0-100 |
 | 3 | Siglas EN | Expande abreviações no texto original (`(28F)` → "28-year-old woman", `AITA`, `MIL` etc. — `expand_age_gender_en`/`REDDIT_ACRONYMS` em `main.py`) |
+| 3.5 | Perfil | `NarratorProfileResolver` resolve e trava uma identidade para os três idiomas antes de adaptar |
 | 4 | Adaptação | `stages/adapter.py` — limpeza narrativa via Groq (fallback: regras) |
 | 4.5 | Validação | Valida o script adaptado (EN) antes de traduzir |
-| 5 | Tradução | `stages/translator.py` — Google (deep-translator) → MyMemory (fallback) → texto original, com retry de até 3 tentativas se os dois falharem na mesma rodada |
+| 5 | Tradução | `stages/translator.py` — Google → MyMemory, com até 3 tentativas; resultado tipificado, sem usar inglês quando a tradução falha |
 | 5.5 | Validação | Valida o script traduzido (por idioma) |
 | 6 | Siglas PT/ES | Expande abreviações no texto já traduzido (`expand_acronyms_translated`) |
-| 7 | Detecção de gênero | `stages/gender_detector.py` — **antes** da naturalização (ordem deliberada) |
 | 8 | Naturalização | `stages/naturalizer.py` — LLM, já com o gênero correto |
-| 9 | Validação | Corrige erros de concordância de gênero que passaram da naturalização |
-| 9.5 | Validação | Valida o script final (adaptação+tradução+gênero+naturalização) |
+| 9.5 | Guardião | Revisa a naturalização contra a tradução aprovada, com o perfil imutável |
 | 10 | Título | `stages/titler.py` — gerador viral a partir do título original do Reddit |
-| 10.5 | Validação | Valida título + hook |
+| 10.5 | Guardião | Revisa título, hook inicial e encerramento contra história/fatos validados |
 | 11 | Hook | Título injetado como primeira fala narrada |
 | 12 | Divisão | `stages/splitter.py` — partes de até 2:45 (teto do YouTube Shorts com margem de segurança), cada uma repete o hook e tem seu próprio encerramento |
+| 12.5 | Guardião | Revisa todas as partes completas antes de qualquer geração de mídia |
+| 12.6 | Metadados | `stages/metadata.py` — SEO por parte com script localizado e fatos validados |
+| 12.7 | Guardião | Revisa descrições localizadas antes da voz/renderização |
+| 12.9 | Gate final | Revisa exatamente a parte narrada, incluindo hook e encerramento, imediatamente antes de TTS |
 | 13 | Voz | `stages/voice.py` — edge-tts, com a voz do gênero correto |
 | 14 | Legendas | `stages/subtitle.py` — ASS animado palavra-a-palavra |
 | 15 | Vídeo | `stages/video.py` — FFmpeg 1080x1920 + ASS + background automático |
 | 16 | Thumbnail | `stages/thumbnail.py` — Pillow (JPG estático + card .mov animado com fade) |
-| 17 | Metadados | `stages/metadata.py` — SEO por idioma |
-| 17.5 | Validação | Valida descrição + tags |
-| 18 | Organização | `stages/organizer.py` — move pra `data/exports/{lang}/{slug}_{data}_{lang}.mp4` |
+| 18 | Organização | `stages/organizer.py` — exporta e enfileira só depois de concluir todas as partes do idioma |
 
 No fim, `scheduler/notifier.py` manda um resumo no Telegram (sucesso/parcial/
 falha) e uma mensagem por vídeo pra postagem manual no TikTok.
 
-**Validação corre o tempo todo, não só no fim.** `stages/validator.py`
-(`ValidatorEngine`) roda depois da adaptação, de cada tradução, da
-naturalização, da geração de título/hook e da geração de metadados — cada
-chamada pode pedir uma reescrita cirúrgica via LLM (só do trecho sinalizado)
-em vez de regenerar tudo. É por isso que a numeração tem meio-passos (4.5,
-5.5, 9.5, 10.5, 17.5).
+**Validação corre o tempo todo, não só no fim.** `stages/script_guardian.py`
+(`ScriptGuardian`) revisa adaptação, tradução, naturalização, textos públicos,
+hook injetado, partes e descrições, e aplica só patches pontuais sustentados.
+Reprovação põe o conteúdo em `data/quarantine/` e pula a história/idioma;
+indisponibilidade obrigatória avisa no Telegram e retorna código 2 na CLI.
+O guardião não usa fallback local para aprovar conteúdo sem revisão.
 
 ### Cadeia de fallback de LLM
 

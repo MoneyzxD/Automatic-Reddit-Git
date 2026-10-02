@@ -1,4 +1,5 @@
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 import pytest
 
@@ -65,7 +66,7 @@ def test_expansao_nao_transforma_terceiros_ou_crencas_em_identidade(source):
 def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_path, dry_run):
     from stages import (adapter, translator, naturalizer, gender_detector, titler,
                         voice, subtitle, video, thumbnail, organizer, validator,
-                        narrator_profile, metadata, splitter, word_timing)
+                        narrator_profile, metadata, splitter, word_timing, script_guardian)
     from utils import db
     from scheduler import notifier
 
@@ -90,7 +91,9 @@ def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_
     adapt.adapt.side_effect = adapt_story
     monkeypatch.setattr(adapter, "StoryAdapter", Mock(return_value=adapt))
     trans = Mock()
-    trans.translate_all.return_value = {lang: "Estou sozinha." for lang in ("pt", "en", "es")}
+    trans.translate_all.return_value = {
+        lang: translator.TranslationResult("approved", "Estou sozinho.", "teste", "en", lang, ())
+        for lang in ("pt", "en", "es")}
     trans.translate_title.return_value = "Conflito em casa"
     monkeypatch.setattr(translator, "ScriptTranslator", Mock(return_value=trans))
     nat = Mock()
@@ -105,10 +108,10 @@ def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_
     titles.generate_closing_hook.return_value = "O que voce faria?"
     monkeypatch.setattr(titler, "TitleGenerator", Mock(return_value=titles))
     checks = Mock()
-    checks.validate_and_fix_script.side_effect = lambda text, **kwargs: text
-    checks.validate_and_fix_title_hook.side_effect = lambda title, hook, *args, **kwargs: (title, hook)
-    checks.validate_and_fix_metadata.side_effect = lambda desc, tags, *args, **kwargs: (desc, tags)
-    monkeypatch.setattr(validator, "ValidatorEngine", Mock(return_value=checks))
+    checks.assert_ready = Mock()
+    checks.review_and_fix.side_effect = lambda **kwargs: SimpleNamespace(
+        approved_text=kwargs["candidate_text"], status="approved", factual_context="")
+    monkeypatch.setattr(script_guardian, "ScriptGuardian", Mock(return_value=checks))
     audio = Mock()
     audio.generate.return_value = True
     monkeypatch.setattr(voice, "VoiceGenerator", Mock(return_value=audio))
@@ -139,13 +142,14 @@ def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_
     if dry_run:
         persisted.assert_not_called()
         audio.generate.assert_not_called()
-        assert not list(tmp_path.rglob("*_narrator.json"))
+        assert not list(tmp_path.rglob("*_narrator_profile.json"))
     else:
         persisted.assert_called_once_with(resolver.resolve.return_value, tmp_path)
-        correction.bind_profile.assert_called_once_with(resolver.resolve.return_value)
+        correction.bind_profile.assert_not_called()
         assert len(audio.generate.call_args_list) == 3
-        for method in (audio.generate, checks.validate_and_fix_script,
-                       checks.validate_and_fix_title_hook, checks.validate_and_fix_metadata,
+        assert all(c.kwargs["profile"] is resolver.resolve.return_value
+                   for c in checks.review_and_fix.call_args_list)
+        for method in (audio.generate,
                        titles.generate, titles.generate_hook, titles.generate_closing_hook):
             assert method.call_args_list
             assert all(c.kwargs["narrator_gender"] == "male" for c in method.call_args_list)

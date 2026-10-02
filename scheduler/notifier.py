@@ -185,6 +185,12 @@ _FIELD_LABELS = [
     ("parts_done",  "Partes concluidas"),
     ("duration",    "Duracao"),
     ("token_usage", "Tokens (validador)"),
+    ("part", "Parte"),
+    ("profile_method", "Método do narrador"),
+    ("profile_confidence", "Confiança do narrador"),
+    ("issue_categories", "Categorias"),
+    ("quarantine_path", "Quarentena"),
+    ("dependency", "Dependência"),
 ]
 
 
