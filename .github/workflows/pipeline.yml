@@ -61,6 +61,9 @@ jobs:
     # Teto de 6h do GitHub; 300 min deixa margem e evita job pendurado
     # queimando tempo se algo travar (ex: espera de rede infinita).
     timeout-minutes: 300
+    env:
+      LANGUAGETOOL_URL: http://127.0.0.1:8081/v2/check
+      LANGUAGETOOL_REQUIRED: "true"
 
     steps:
       - name: Checkout do codigo
@@ -96,6 +99,48 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Restaurar pacote do LanguageTool
+        uses: actions/cache@v4
+        with:
+          path: .cache/languagetool
+          key: languagetool-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/languagetool_runtime.env') }}
+
+      - name: Verificar e extrair LanguageTool
+        id: languagetool_package
+        run: |
+          source config/languagetool_runtime.env
+          mkdir -p .cache/languagetool
+          archive=".cache/languagetool/$LANGUAGETOOL_ARCHIVE"
+          if [[ ! -f "$archive" ]]; then
+            curl --fail --silent --show-error --location --retry 3 --output "$archive" "$LANGUAGETOOL_DOWNLOAD_URL"
+          fi
+          # Cache hit também exige SHA válido antes de qualquer extração.
+          printf '%s  %s\n' "$LANGUAGETOOL_SHA256" "$archive" | sha256sum --check --strict
+          unzip -o -q "$archive" -d "$RUNNER_TEMP"
+
+      - name: Iniciar LanguageTool local
+        id: languagetool_server
+        background: true
+        run: |
+          source config/languagetool_runtime.env
+          mkdir -p data/logs
+          exec java -Xms256m -Xmx1g -jar "$RUNNER_TEMP/$LANGUAGETOOL_DIRECTORY/languagetool-server.jar" --port 8081 > data/logs/languagetool.log 2>&1
+
+      - name: Verificar e aquecer LanguageTool
+        id: languagetool_health
+        run: |
+          source config/languagetool_runtime.env
+          if ! python scripts/check_languagetool.py --url "$LANGUAGETOOL_URL" --expected-version "$LANGUAGETOOL_VERSION" --required-locales pt-BR en-US es --timeout-seconds 120; then
+            cat data/logs/languagetool.log
+            exit 1
+          fi
 
       - name: Instalar dependencias
         run: |
@@ -210,6 +255,8 @@ jobs:
           name: logs-${{ github.run_id }}
           path: |
             data/logs/*.log
+            data/logs/*.jsonl
+            data/quarantine/**/*.json
             data/scripts/**/*_trace.txt
           retention-days: 14
           if-no-files-found: warn
@@ -264,3 +311,6 @@ jobs:
           except Exception as e:
               print(f"Falha ao avisar no Telegram: {type(e).__name__}")
           PY
+
+      - name: Encerrar LanguageTool local
+        cancel: languagetool_server

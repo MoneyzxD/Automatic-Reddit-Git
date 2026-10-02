@@ -1,0 +1,21 @@
+[Unit]
+Description=LanguageTool local para revisão dos roteiros
+After=network.target
+
+[Service]
+Type=simple
+User=languagetool
+Group=languagetool
+WorkingDirectory=/opt/languagetool/current
+ExecStart=@JAVA_BIN@ -Xms256m -Xmx1g -jar /opt/languagetool/current/languagetool-server.jar --port 8081
+Restart=on-failure
+RestartSec=5
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
