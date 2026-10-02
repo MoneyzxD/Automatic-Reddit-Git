@@ -15,7 +15,7 @@ stack gratuita — isso é uma restrição dura do operador, não uma preferênc
 nunca proponha um serviço pago, mesmo de custo irrisório, como solução.
 
 Stack: Reddit (sessão logada, ver seção "Autenticação do Reddit" abaixo),
-edge-tts/gTTS para voz, Whisper para legendas, FFmpeg para renderização,
+edge-tts para voz (gTTS só com permissão explícita), Whisper para legendas, FFmpeg para renderização,
 Groq (com fallback Ollama local/regras hardcoded) para as etapas de LLM, e
 SQLite para estado.
 
@@ -99,7 +99,7 @@ mantenha as duas em sincronia sempre que a ordem mudar.
 | 1 | Extração | `stages/extractor.py` — Reddit via sessão logada (pulado com `--test-story`) |
 | 2 | Filtragem | `stages/filter.py` — score 0-100 |
 | 3 | Siglas EN | Expande abreviações no texto original (`(28F)` → "28-year-old woman", `AITA`, `MIL` etc. — `expand_age_gender_en`/`REDDIT_ACRONYMS` em `main.py`) |
-| 3.5 | Perfil | `NarratorProfileResolver` resolve e trava uma identidade para os três idiomas antes de adaptar |
+| 3.5 | Perfil | `NarratorProfileResolver` resolve e trava uma identidade para os três idiomas antes de adaptar; não há redetecção por idioma |
 | 4 | Adaptação | `stages/adapter.py` — limpeza narrativa via Groq (fallback: regras) |
 | 4.5 | Validação | Valida o script adaptado (EN) antes de traduzir |
 | 5 | Tradução | `stages/translator.py` — Google → MyMemory, com até 3 tentativas; resultado tipificado, sem usar inglês quando a tradução falha |
@@ -131,14 +131,22 @@ Reprovação põe o conteúdo em `data/quarantine/` e pula a história/idioma;
 indisponibilidade obrigatória avisa no Telegram e retorna código 2 na CLI.
 O guardião não usa fallback local para aprovar conteúdo sem revisão.
 
+`source_gender` guarda a conclusão da fonte (`male`, `female` ou `unknown`);
+`narration_gender` escolhe `male` ou `female` uma vez, por evidência atribuída
+ao narrador ou hash estável de `story_id` quando não há decisão confiável.
+O perfil persiste em `data/scripts/profiles/` e alimenta naturalização,
+metadados, todas as partes e a voz sem inferir gênero por estereótipos.
+O glossário contextual versionado em `config/contextual_glossary.yaml` só recebe
+novas regras após teste e revisão humana. Veja `README.md` para operação dos
+gates e do LanguageTool local.
+
 ### Cadeia de fallback de LLM
 
-Toda etapa que usa LLM (`adapter.py`, `translator.py`, `naturalizer.py`,
-`gender_detector.py`, `titler.py`, `metadata.py`, `validator.py`) segue o
-mesmo padrão: Groq primeiro (precisa de `GROQ_API_KEY`) → Ollama local →
-regras/templates hardcoded. Modelos são escalonados em `config/settings.yaml`
-— modelos pequenos (8B) pra limpeza/detecção, um modelo maior (70B) só pra
-reescrita criativa da naturalização.
+Etapas legadas de geração podem usar Groq → Ollama local → regras/templates.
+O perfil usa evidência da fonte e hash estável como desempate; o
+`ScriptGuardian` exige revisão semântica Groq e LanguageTool local, sem
+aprovação por fallback Ollama/regras. Modelos e limites estão em
+`config/settings.yaml`.
 
 **Chaves Groq por idioma**: `GROQ_API_KEY_PT`/`_EN`/`_ES` dão a cada idioma
 seu próprio orçamento de tokens (por minuto e por dia) em vez de PT/EN/ES
@@ -174,6 +182,10 @@ relevante em desenvolvimento local com Ollama rodando de verdade.
   `${VAR}` resolvidos a partir do ambiente (ex: `${TELEGRAM_CHAT_ID_PTBR}`).
 - `config/voice_profiles.yaml` — detalhe de seleção de voz TTS além do que
   está em `settings.yaml`.
+- `config/languagetool_runtime.env` — versão 6.6, URL e SHA-256 do ZIP oficial;
+  CI e instalador Linux usam o mesmo manifesto com Eclipse Temurin 17.
+- `config/contextual_glossary.yaml` — termos dependentes de contexto;
+  promoção de regras exige teste e revisão humana.
 - `config/backgrounds_manifest.json` — lista de nomes de arquivo de vídeo
   de fundo hospedados fora do repo (GitHub Release) — regenerar com
   `python -m stages.backgrounds --gerar-manifesto-remoto` sempre que a
@@ -232,6 +244,10 @@ versionados).
 (de propósito: o runner é efêmero, o arquivo de vídeo só existe enquanto o
 job vive). Cache via `actions/cache` restaura/salva `db/pipeline.db` e
 `data/queue/` entre execuções (senão o dedupe nasceria vazio a cada run).
+O mesmo workflow instala Temurin 17, verifica SHA-256 do ZIP 6.6 inclusive
+após cache hit, aquece os três locales do LanguageTool em loopback antes de
+gerar e preserva logs/quarentena sanitizada por 14 dias. Oracle Linux tem
+instalador suportado, mas GitHub Actions segue como produção ativa.
 O gatilho diário das 09:00 UTC chama `scripts/generate_daily_batch.py`, que
 gera histórias adicionais até completar a meta de vídeos de cada idioma. Se
 uma história ultrapassar a meta em uma parte, o mesmo job envia essa parte ao
@@ -316,7 +332,12 @@ Dependências de sistema fora do gerenciador de pacotes Python:
   pacote no workflow — ver `KNOWN_ISSUES.md`).
 - **Ollama** (opcional, só dev local) — precisa estar rodando em
   `localhost:11434` se você quiser esse fallback funcionando; não é
-  necessário no runner de produção.
+  necessário no runner de produção nem nos gates novos.
+- **LanguageTool 6.6 / Eclipse Temurin 17** — serviço local obrigatório para
+  geração; cliente e health check só aceitam HTTP loopback, sem proxy ou
+  redirecionamento. `scripts/check_languagetool.py` usa Python 3.9+;
+  `scripts/install_languagetool.sh` suporta Ubuntu 22.04/24.04, Debian 12/13,
+  Oracle Linux/RHEL 8 (AppStream 8.8+ e Python 3.11) e 9 (Python 3.9+).
 
 ## Estado entre execuções e como reiniciar do zero
 

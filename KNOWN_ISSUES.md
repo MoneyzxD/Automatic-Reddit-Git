@@ -135,6 +135,25 @@ Para não retrabalhar o que já foi investigado e corrigido:
 
 ## Decisões deliberadas — não reverter sem entender o motivo
 
+### Gates de roteiro e implantação suportada
+
+O narrador é resolvido uma vez antes da adaptação: `source_gender` pode ficar
+`unknown`, mas `narration_gender` é binário e imutável entre idiomas, partes,
+metadados e voz. Sem evidência suficiente, o hash estável de `story_id` decide,
+sem recorrer a nomes, profissão, roupa ou outros estereótipos. gTTS sem controle
+de gênero permanece desabilitado por padrão. Reprovação do guardião gera
+quarentena sanitizada e pula história/idioma; indisponibilidade obrigatória
+interrompe o lote com código 2. `fail_closed: false` não libera o gate final.
+
+LanguageTool 6.6 com Temurin 17 roda localmente no GitHub Actions, ambiente de
+produção ativo. O instalador Oracle Linux é suportado, mas não foi executado
+em host Oracle nesta entrega. O ZIP tem SHA fixado no manifesto, conferido
+também em cache hit. Falha de saúde nos locales PT/EN/ES impede geração.
+O artifact de logs e quarentena retém evidências sanitizadas por 14 dias.
+Achados do glossário só viram regras após teste e revisão humana. A execução
+real no runner e no host Oracle é verificação operacional distinta dos testes
+locais.
+
 | Decisão | Por quê |
 |---|---|
 | Chave Groq por idioma (`GROQ_API_KEY_PT`/`_EN`/`_ES`) não é rotação | Rotação de múltiplas chaves pra burlar rate limit da mesma carga de trabalho viola a AUP da Groq e foi rejeitada. Isto é diferente: uma chave fixa por carga de trabalho consistente (cada idioma sempre faz o mesmo tipo de chamada) |
@@ -166,7 +185,7 @@ Coisas que o `CLAUDE.md` antigo dizia e que não batem mais com o código real:
   `secrets/youtube_credentials.json` localmente. Os três primeiros parecem
   órfãos de uma implementação anterior — confirmar antes de removê-los do
   `.env`, mas não documentá-los como se fossem o mecanismo ativo.
-- **"Roda em produção via Oracle Cloud"** — desatualizado. O projeto foi
-  migrado para GitHub Actions como ambiente de produção ao longo desta
-  sessão (ver `.github/workflows/pipeline.yml`). Oracle Cloud não é mais
-  usado.
+- **"Roda em produção via Oracle Cloud"** — desatualizado. GitHub Actions
+  é o ambiente de produção ativo (ver `.github/workflows/pipeline.yml`).
+  Oracle Linux tem instalador suportado, ainda sem implantação ativa
+  verificada nesta entrega.
