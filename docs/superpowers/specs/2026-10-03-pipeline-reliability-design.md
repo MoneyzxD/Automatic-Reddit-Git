@@ -1,9 +1,10 @@
 # Confiabilidade do pipeline antes dos agentes
 
-Data: 2026-10-03. Status: **desenho para revisão; código não implementado**.
-O operador aprovou avançar nas correções e, depois, nos observadores de
-manutenção/crescimento. A escolha de armazenamento privado abaixo precisa
-de aprovação antes de criar recursos ou configurar Secrets.
+Data: 2026-10-03. Status: **desenho aprovado; código não implementado**.
+O operador aprovou este desenho e a criação do repositório privado
+`MoneyzxD/Automatic-Reddit-State`. Próxima etapa: revisar o plano e escolher
+o método de execução. Uma credencial limitada a esse repositório será
+necessária para o Actions; não reutilizar silenciosamente o token amplo do gh.
 
 ## Objetivo e limite da entrega
 
@@ -151,9 +152,10 @@ Bootstrap é explícito: importar/reconciliar o estado existente, conferir IDs j
 enviados e fazer primeiro snapshot. A atualização não apaga caches existentes.
 Modo sem geração/publicação usa namespace de teste e não altera o head de produção.
 
-Criar o repositório e conceder permissão de conteúdo somente a ele são passos
-externos sujeitos à aprovação. O `GITHUB_TOKEN` do repositório público não deve
-ser presumido autorizado no privado. Nenhuma credencial será exibida no terminal.
+A criação do repositório privado está autorizada. Configurar a credencial
+limitada a ele é um passo explícito do rollout; o `GITHUB_TOKEN` do repositório
+público não deve ser presumido autorizado no privado. Nenhuma credencial será
+exibida no terminal. A limpeza externa continua sem autorização de ativação.
 
 ## Verificação e liberação
 
