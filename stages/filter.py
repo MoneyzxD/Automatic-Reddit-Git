@@ -31,9 +31,10 @@ class StoryFilter:
 
     WORDS_PER_MINUTE = 130
 
-    def __init__(self, config: dict, db=None):
+    def __init__(self, config: dict, db=None, *, languages: list[str] | None = None):
         self.config       = config
         self.db           = db          # PipelineDB — pode ser None
+        self.languages    = languages
         self.min_score    = config.get("min_score", 65)
         self.blacklist    = [w.lower() for w in config.get("monetization_blacklist", [])]
         self._sentiment   = None
@@ -114,6 +115,8 @@ class StoryFilter:
         """Verifica se história já foi processada (evitar reprocessamento)."""
         if self.db is None:
             return False
+        if self.languages is not None:
+            return not self.db.processing_languages(story_id, self.languages)
         return self.db.story_exists(story_id)
 
     def filter(self, story: dict) -> tuple:
