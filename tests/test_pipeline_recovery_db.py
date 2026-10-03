@@ -3,6 +3,31 @@ import sqlite3
 
 import pytest
 
+
+def test_conexoes_encerradas_apos_cada_operacao(tmp_path, monkeypatch):
+    import sqlite3
+    from utils import db as module
+    original = sqlite3.connect
+    opened = []
+    def connect(*args, **kwargs):
+        conn = original(*args, **kwargs)
+        opened.append(conn)
+        return conn
+    monkeypatch.setattr(module.sqlite3, "connect", connect)
+    database = module.PipelineDB(tmp_path / "pipeline.db")
+    database.register_story({"id": "close1"}, ["pt"], "a" * 64)
+    database.story_exists("close1")
+    database.processing_languages("close1", ["pt"])
+    database.recovery_record("close1")
+    database.set_language_status("close1", "pt", "processing", profile_id="p1")
+    database.update_status("close1", "pt", 1, "exported")
+    database.get_pending("pt")
+    database.retry_candidates(["pt"])
+    database.insert_story({"id": "legacy"})
+    for conn in opened:
+        with pytest.raises(sqlite3.ProgrammingError):
+            conn.execute("SELECT 1")
+
 from stages.filter import StoryFilter
 from utils.db import PipelineDB, SCHEMA
 

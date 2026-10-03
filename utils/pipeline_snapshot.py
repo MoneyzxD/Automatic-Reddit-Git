@@ -38,7 +38,7 @@ class Snapshot:
 
 
 def _limit(kind: str, default: int) -> int:
-    value = os.getenv(f"PIPELINE_STATE_{kind}_MAX_BYTES", str(default))
+    value = os.getenv(f"PIPELINE_STATE_{kind}_MAX_BYTES") or str(default)
     if not re.fullmatch(r"[1-9][0-9]{0,11}", value):
         raise SnapshotError("Limite de snapshot inválido")
     return int(value)
@@ -179,6 +179,7 @@ def _validate_control(directory: Path, manifest: dict) -> None:
             media_paths[name] = digest
     queue_mapping = {}
     referenced = set()
+    batches = {}
     for lang in LANGUAGES:
         name = f"data/queue/{lang}.json"
         data = json.loads((directory / name).read_text(encoding="utf-8"))
@@ -199,11 +200,22 @@ def _validate_control(directory: Path, manifest: dict) -> None:
             if item.get("generation_key"):
                 story_id = item.get("story_id")
                 if (story_id not in source_ids or story_id not in profile_ids
+                        or not re.fullmatch(_HASH, item["generation_key"])
+                        or type(item.get("part")) is not int or type(item.get("total")) is not int
+                        or not 1 <= item["part"] <= item["total"] <= 3
                         or item["metadata"].get("narrator_profile_id") != profile_ids[story_id]):
                     raise SnapshotError("Fila e perfil de geração incompatíveis")
+                batches.setdefault((story_id, "pt" if lang == "pt-br" else lang), []).append(item)
         queue_mapping[name] = mapping
     if queue_mapping != manifest["queue_paths"] or set(media_paths) != referenced:
         raise SnapshotError("Mappings da fila divergentes do manifesto")
+    for items in batches.values():
+        if (len({item["generation_key"] for item in items}) != 1
+                or len({item["total"] for item in items}) != 1
+                or sorted(item["part"] for item in items) != list(range(1, items[0]["total"] + 1))):
+            raise SnapshotError("Idioma enfileirado parcialmente")
+    if any(status == "exported" and (story_id, lang) not in batches for story_id, lang, status, _ in rows):
+        raise SnapshotError("Geração concluída sem batch recuperável")
 
 
 def build_snapshot(base_dir: Path, db_path: Path, *, snapshot_id: str, namespace: str,

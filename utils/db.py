@@ -7,6 +7,7 @@ Evita reprocessar histórias já concluídas.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 import logging
 import re
 from pathlib import Path
@@ -74,21 +75,21 @@ class PipelineDB:
         self._init_db()
 
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.executescript(SCHEMA)
             if not any(row[1] == "source_sha256" for row in conn.execute("PRAGMA table_info(stories)")):
                 conn.execute("ALTER TABLE stories ADD COLUMN source_sha256 TEXT")
         logger.info(f"DB inicializado: {self.db_path}")
 
     def story_exists(self, story_id: str) -> bool:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             row = conn.execute(
                 "SELECT id FROM stories WHERE id = ?", (story_id,)
             ).fetchone()
         return row is not None
 
     def insert_story(self, story: dict) -> None:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.execute(
                 "INSERT OR IGNORE INTO stories "
                 "(id, subreddit, title, score, status, extracted_at, word_count) "
@@ -105,7 +106,7 @@ class PipelineDB:
                 or not isinstance(story.get("id"), str) or not re.fullmatch(r"[A-Za-z0-9_-]+", story["id"])):
             raise ValueError("Fonte inválida para recuperação")
         now = datetime.now(timezone.utc).isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT source_sha256 FROM stories WHERE id=?", (story["id"],)).fetchone()
             if row is not None and row[0] != source_hash:
@@ -125,7 +126,7 @@ class PipelineDB:
     def processing_languages(self, story_id: str, languages: list[str]) -> list[str]:
         """Só retoma estados explícitos; existência antiga não prova conclusão."""
         languages = _languages(languages)
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             row = conn.execute("SELECT source_sha256 FROM stories WHERE id=?", (story_id,)).fetchone()
             if row is None:
                 return languages
@@ -136,7 +137,7 @@ class PipelineDB:
 
     def recovery_record(self, story_id: str) -> dict | None:
         """Retorna a identidade necessária à retomada; legado não é promovido."""
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             row = conn.execute("SELECT source_sha256 FROM stories WHERE id=?", (story_id,)).fetchone()
             if row is None or row[0] is None:
                 return None
@@ -157,7 +158,7 @@ class PipelineDB:
                 or (reason_code and not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", reason_code))
                 or (profile_id is not None and (not isinstance(profile_id, str) or not profile_id.strip()))):
             raise ValueError("Estado inválido para recuperação")
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT status,profile_id FROM story_languages WHERE story_id=? AND language=?",
                                (story_id, language)).fetchone()
@@ -176,7 +177,7 @@ class PipelineDB:
         """Fontes gerenciadas retomáveis, sem incluir processamento abandonado."""
         languages = _languages(languages)
         placeholders = ",".join("?" for _ in languages)
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             rows = conn.execute(
                 "SELECT s.id FROM stories s JOIN story_languages l ON l.story_id=s.id "
                 "WHERE s.source_sha256 IS NOT NULL AND l.status IN ('pending','unavailable') "
@@ -187,7 +188,7 @@ class PipelineDB:
     def update_status(self, story_id: str, language: str, part: int,
                        status: str, **kwargs) -> None:
         now = datetime.utcnow().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.execute(
                 "INSERT INTO pipeline_parts "
                 "(story_id, language, part_number, total_parts, status, created_at, updated_at) "
@@ -199,7 +200,7 @@ class PipelineDB:
             )
 
     def get_pending(self, language: str | None = None) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             q = "SELECT * FROM pipeline_parts WHERE status='exported'"
             params = []

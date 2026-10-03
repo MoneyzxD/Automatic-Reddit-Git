@@ -174,6 +174,14 @@ def test_source_gerenciada_ausente_bloqueia(snapshot_fixture):
         build(snapshot_fixture)
 
 
+def test_idioma_exportado_sem_fila_nao_vira_snapshot_vazio(snapshot_fixture):
+    from utils.pipeline_snapshot import SnapshotError
+    base, _ = snapshot_fixture
+    (base / "data/queue/pt.json").unlink()
+    with pytest.raises(SnapshotError):
+        build(snapshot_fixture)
+
+
 def test_fila_com_referencia_externa_bloqueia(snapshot_fixture, tmp_path):
     from utils.pipeline_snapshot import SnapshotError
     base, _ = snapshot_fixture
@@ -220,6 +228,12 @@ def test_limite_invalido_nao_libera_build(snapshot_fixture, monkeypatch, value):
     monkeypatch.setenv("PIPELINE_STATE_CONTROL_MAX_BYTES", value)
     with pytest.raises(SnapshotError):
         build(snapshot_fixture)
+
+
+def test_limites_opcionais_vazios_usam_defaults(snapshot_fixture, monkeypatch):
+    monkeypatch.setenv("PIPELINE_STATE_CONTROL_MAX_BYTES", "")
+    monkeypatch.setenv("PIPELINE_STATE_MEDIA_MAX_BYTES", "")
+    assert build(snapshot_fixture).media
 
 
 def test_falha_no_commit_de_restauracao_deixa_marker_e_preimagem(snapshot_fixture, tmp_path, monkeypatch):
