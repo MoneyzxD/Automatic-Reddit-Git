@@ -20,6 +20,7 @@ data/videos/
 data/exports/
 data/quarantine/
 data/recovery/
+data/state/
 
 # Banco
 db/*.db
