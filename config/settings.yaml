@@ -160,6 +160,10 @@ script_quality:
   enabled: true
   fail_closed: true
   max_repair_attempts: 2
+  semantic_max_attempts: 3
+  semantic_timeout_seconds: 60
+  semantic_retry_wait_seconds: 15
+  semantic_max_retry_wait_seconds: 120
   languagetool_enabled: true
   languagetool_required: true
   languagetool_url: http://127.0.0.1:8081/v2/check

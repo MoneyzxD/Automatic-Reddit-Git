@@ -65,7 +65,8 @@ def pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(queue, "_QUEUE_DIR_PATHS", [tmp_path / "data" / "queue"])
     state = SimpleNamespace(calls=[], audios=[], renders=[], notices=[], subtitles=[], thumbnails=[],
                             fail=None, outage=False, fail_language=None, fail_text="", final_patch=False,
-                            config={"base_dir": str(tmp_path), "translator": {"retry_waits": [0, 0], "delay": 0}}, root=tmp_path)
+                            config={"base_dir": str(tmp_path), "translator": {"retry_waits": [0, 0], "delay": 0},
+                                    "script_quality": {"semantic_retry_wait_seconds": 0}}, root=tmp_path)
 
     class LT:
         def __init__(self, config):

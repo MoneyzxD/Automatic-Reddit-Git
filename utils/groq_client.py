@@ -99,9 +99,10 @@ def _reparar_mojibake(texto: str) -> str:
 class _TrackedCompletions:
     """Proxy de client.chat.completions que contabiliza uso apos cada create()."""
 
-    def __init__(self, inner, stage: str):
+    def __init__(self, inner, stage: str, *, retry_rate_limit: bool = True):
         self._inner = inner
         self._stage = stage
+        self._retry_rate_limit = retry_rate_limit
 
     def create(self, *args, **kwargs):
         # Injeta reasoning_effort=low quando o modelo suporta e o chamador
@@ -117,7 +118,7 @@ class _TrackedCompletions:
                 resp = self._inner.create(*args, **kwargs)
                 break
             except Exception as e:
-                if _e_rate_limit(e) and tentativa < _RATE_LIMIT_MAX_TENTATIVAS:
+                if self._retry_rate_limit and _e_rate_limit(e) and tentativa < _RATE_LIMIT_MAX_TENTATIVAS:
                     tentativa += 1
                     espera = _espera_sugerida(e)
                     logger.warning(
@@ -158,9 +159,9 @@ class _TrackedCompletions:
 
 
 class _TrackedChat:
-    def __init__(self, inner, stage: str):
+    def __init__(self, inner, stage: str, *, retry_rate_limit: bool = True):
         self._inner = inner
-        self.completions = _TrackedCompletions(inner.completions, stage)
+        self.completions = _TrackedCompletions(inner.completions, stage, retry_rate_limit=retry_rate_limit)
 
     def __getattr__(self, name):
         return getattr(self._inner, name)
@@ -169,15 +170,23 @@ class _TrackedChat:
 class TrackedGroq:
     """Wrapper de Groq com contabilidade de tokens por estagio."""
 
-    def __init__(self, api_key: str, stage: str):
+    def __init__(self, api_key: str, stage: str, *, sdk_max_retries: int | None = None,
+                 retry_rate_limit: bool = True, timeout: float | None = None):
         from groq import Groq
-        self._client = Groq(api_key=api_key)
-        self.chat = _TrackedChat(self._client.chat, stage)
+        options = {"api_key": api_key}
+        if sdk_max_retries is not None:
+            options["max_retries"] = sdk_max_retries
+        if timeout is not None:
+            options["timeout"] = timeout
+        self._client = Groq(**options)
+        self.chat = _TrackedChat(self._client.chat, stage, retry_rate_limit=retry_rate_limit)
 
     def __getattr__(self, name):
         return getattr(self._client, name)
 
 
-def tracked_groq(api_key: str, stage: str) -> TrackedGroq:
+def tracked_groq(api_key: str, stage: str, *, sdk_max_retries: int | None = None,
+                 retry_rate_limit: bool = True, timeout: float | None = None) -> TrackedGroq:
     """Cria um cliente Groq instrumentado para o estagio informado."""
-    return TrackedGroq(api_key, stage)
+    return TrackedGroq(api_key, stage, sdk_max_retries=sdk_max_retries,
+                       retry_rate_limit=retry_rate_limit, timeout=timeout)

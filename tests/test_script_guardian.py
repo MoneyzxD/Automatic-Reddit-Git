@@ -200,7 +200,7 @@ class FakeSemanticReviewer:
 
 def guardian_fake(tmp_path, semantic=None, lt=None, **config):
     return ScriptGuardian(
-        {"fail_closed": True, "max_repair_attempts": 2, **config}, base_dir=tmp_path,
+        {"fail_closed": True, "max_repair_attempts": 2, "semantic_retry_wait_seconds": 0, **config}, base_dir=tmp_path,
         languagetool=lt or FakeLanguageTool(),
         semantic_reviewer=semantic or FakeSemanticReviewer(),
     )
@@ -453,8 +453,9 @@ def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfi
         raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw))])
 
-    def tracked(key, stage):
+    def tracked(key, stage, **kwargs):
         clients.append((key, stage))
+        assert kwargs == {"sdk_max_retries": 0, "retry_rate_limit": False, "timeout": 60.0}
         return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
 
     monkeypatch.setattr(module.env, "groq_api_key", get_key)
@@ -475,6 +476,137 @@ def test_excecoes_do_provider_nao_vazam_no_relatorio(tmp_path, perfil_feminino):
     with pytest.raises(QualityUnavailable):
         revisar(guardian, perfil_feminino)
     assert "SEGREDO_PESSOAL" not in guardian.report_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("status,expected,attempts", [
+    (400, "provider_error", 1), (401, "authentication", 1),
+    (403, "authorization", 1), (413, "context_limit", 1),
+    (429, "rate_limit", 3), (408, "provider_error", 3),
+    (409, "provider_error", 3), (503, "provider_error", 3),
+])
+def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, status, expected, attempts):
+    calls = []
+    class Reviewer:
+        def review(self, **kwargs):
+            calls.append(kwargs)
+            exc = RuntimeError("Authorization=SEGREDO_TESTE")
+            exc.status_code = status
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(QualityUnavailable) as error:
+        revisar(guardian, perfil_feminino)
+    event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert event["semantic_failure"] == {
+        "code": expected, "http_status": status, "mode": "facts",
+        "attempts": attempts, "context_chars": 17, "provider_code": None,
+    }
+    assert error.value.review.semantic_failure.code == expected
+    assert len(calls) == attempts
+    assert "SEGREDO_TESTE" not in json.dumps(event)
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("{truncated", "invalid_json"), ('{"approved":"true","issues":[]}', "invalid_schema"),
+    (json.dumps({"approved": False, "issues": [achado(source_quote="inventada")]}), "nonliteral_evidence"),
+])
+def test_resposta_invalida_distinta_do_provider(tmp_path, perfil_feminino, raw, expected):
+    guardian = guardian_fake(tmp_path, FakeSemanticReviewer([raw] * 3))
+    with pytest.raises(QualityUnavailable) as error:
+        revisar(guardian, perfil_feminino)
+    failure = error.value.review.semantic_failure
+    assert (failure.code, failure.mode, failure.attempts) == (expected, "chunk", 3)
+    assert failure.http_status is None
+
+
+@pytest.mark.parametrize("exception,expected", [(TimeoutError, "timeout"), (ConnectionError, "connection")])
+def test_falha_de_transporte_tipificada(tmp_path, perfil_feminino, exception, expected):
+    class Reviewer:
+        def review(self, **kwargs):
+            raise exception("SEGREDO_TESTE")
+    with pytest.raises(QualityUnavailable) as error:
+        revisar(guardian_fake(tmp_path, Reviewer()), perfil_feminino)
+    assert error.value.review.semantic_failure.code == expected
+
+
+@pytest.mark.parametrize("header", ["86400", "inf"])
+def test_espera_excessiva_nao_provoca_retry(tmp_path, perfil_feminino, header, monkeypatch):
+    import stages.script_guardian as module
+    calls, waits = [], []
+    monkeypatch.setattr(module.time, "sleep", waits.append)
+    class Reviewer:
+        def review(self, **kwargs):
+            calls.append(kwargs)
+            exc = RuntimeError("SEGREDO_TESTE")
+            exc.status_code = 429
+            exc.response = SimpleNamespace(headers={"Retry-After": header})
+            raise exc
+    with pytest.raises(QualityUnavailable):
+        revisar(guardian_fake(tmp_path, Reviewer()), perfil_feminino)
+    assert len(calls) == 1
+    assert waits == []
+
+
+@pytest.mark.parametrize("headers,expected", [
+    ({"Retry-After": "-10"}, [15, 15]), ({"Retry-After": "NaN"}, [15, 15]),
+    ({"Retry-After": "invalid"}, [15, 15]), ({"Retry-After": "2.5"}, [2.5, 2.5]),
+    ({"retry-after-ms": "750"}, [0.75, 0.75]),
+    ({"Retry-After": "Thu, 01 Jan 1970 00:00:05 GMT"}, [5, 5]),
+])
+def test_retry_after_respeitado_sem_ler_mensagem(tmp_path, perfil_feminino, headers, expected, monkeypatch):
+    import stages.script_guardian as module
+    waits = []
+    monkeypatch.setattr(module.time, "sleep", waits.append)
+    monkeypatch.setattr(module.time, "time", lambda: 0)
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("try again in 9999s SEGREDO_TESTE")
+            exc.status_code = 429
+            exc.response = SimpleNamespace(headers=headers)
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer(), semantic_retry_wait_seconds=15)
+    with pytest.raises(QualityUnavailable):
+        revisar(guardian, perfil_feminino)
+    assert waits == expected
+
+
+def test_orcamento_customizado_limita_chamadas(tmp_path, perfil_feminino):
+    reviewer = FakeSemanticReviewer([None] * 10)
+    with pytest.raises(QualityUnavailable) as error:
+        revisar(guardian_fake(tmp_path, reviewer, semantic_max_attempts=2), perfil_feminino)
+    assert len(reviewer.calls) == 3  # fatos aprovados, duas respostas inválidas
+    assert error.value.review.semantic_failure.attempts == 2
+
+
+@pytest.mark.parametrize("key,value", [
+    ("semantic_max_attempts", 0), ("semantic_max_attempts", True),
+    ("semantic_max_attempts", 1.5), ("semantic_timeout_seconds", 0),
+    ("semantic_timeout_seconds", float("nan")), ("semantic_retry_wait_seconds", -1),
+    ("semantic_max_retry_wait_seconds", float("inf")),
+    ("semantic_retry_wait_seconds", 121),
+])
+def test_configuracao_de_retry_invalida_rejeitada(tmp_path, key, value):
+    with pytest.raises(ValueError):
+        guardian_fake(tmp_path, **{key: value})
+
+
+@pytest.mark.parametrize("provider_code,expected,safe_code", [
+    ("context_length_exceeded", "context_limit", "context_length_exceeded"),
+    ("json_validate_failed", "invalid_json", "json_validate_failed"),
+    ("SEGREDO_TESTE", "provider_error", "other"),
+])
+def test_codigo_api_e_allowlist_sem_body(tmp_path, perfil_feminino, provider_code, expected, safe_code):
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SEGREDO_TESTE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": provider_code, "message": "SEGREDO_TESTE"}}
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(QualityUnavailable) as error:
+        revisar(guardian, perfil_feminino)
+    assert error.value.review.semantic_failure.code == expected
+    assert error.value.review.semantic_failure.provider_code == safe_code
+    assert "SEGREDO_TESTE" not in guardian.report_path.read_text(encoding="utf-8")
 
 
 def test_fonte_curta_integral_chega_ao_global_mesmo_sem_fatos(tmp_path, perfil_feminino):

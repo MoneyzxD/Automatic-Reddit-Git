@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict, dataclass, replace
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -73,6 +76,17 @@ class ReviewOutcome:
 
 
 @dataclass(frozen=True)
+class SemanticFailure:
+    """Diagnóstico permitido; nunca armazena mensagens ou respostas do provedor."""
+    code: str
+    http_status: int | None
+    mode: str
+    attempts: int
+    context_chars: int
+    provider_code: str | None = None
+
+
+@dataclass(frozen=True)
 class ScriptReview:
     status: Status
     approved_text: str
@@ -82,6 +96,7 @@ class ScriptReview:
     changed: bool
     factual_context: str
     report_path: Path | None = None
+    semantic_failure: SemanticFailure | None = None
 
 
 class QualityGateError(RuntimeError):
@@ -184,6 +199,57 @@ def validate_and_apply_patches(
 
 class _ReviewUnavailable(RuntimeError):
     """Falha sanitizada de uma dependência ou do limite de contexto."""
+    def __init__(self, message: str, failure: SemanticFailure | None = None):
+        super().__init__(message)
+        self.failure = failure
+
+
+def _provider_failure(exc, mode, attempts, context_chars):
+    status = getattr(exc, "status_code", None)
+    status = status if type(status) is int and 100 <= status <= 599 else None
+    code = {401: "authentication", 403: "authorization", 413: "context_limit",
+            429: "rate_limit"}.get(status, "provider_error")
+    if status is None:
+        if isinstance(exc, TimeoutError) or type(exc).__name__ == "APITimeoutError":
+            code = "timeout"
+        elif isinstance(exc, ConnectionError) or type(exc).__name__ == "APIConnectionError":
+            code = "connection"
+    body = getattr(exc, "body", None)
+    provider_code = None
+    if isinstance(body, dict):
+        error = body.get("error", body)
+        if isinstance(error, dict) and "code" in error:
+            known = {"json_validate_failed": "invalid_json", "context_length_exceeded": "context_limit",
+                     "model_not_found": "provider_error", "invalid_api_key": "authentication"}
+            raw_code = error["code"]
+            provider_code = raw_code if isinstance(raw_code, str) and raw_code in known else "other"
+            code = known.get(provider_code, code)
+    return SemanticFailure(code, status, mode, attempts, context_chars, provider_code)
+
+
+def _retry_wait(exc, default):
+    """Só lê os cabeçalhos de espera; mensagens livres não definem retries."""
+    headers = getattr(getattr(exc, "response", None), "headers", {})
+    waits = []
+    for key, scale in (("retry-after", 1), ("retry-after-ms", 0.001)):
+        value = next((v for k, v in headers.items() if k.lower() == key), None)
+        if value is None:
+            continue
+        try:
+            wait = float(value) * scale
+        except (ValueError, TypeError, OverflowError):
+            if key != "retry-after" or not isinstance(value, str):
+                continue
+            try:
+                date = parsedate_to_datetime(value)
+                if date.tzinfo is None:
+                    date = date.replace(tzinfo=timezone.utc)
+                wait = date.timestamp() - time.time()
+            except (ValueError, TypeError, OverflowError):
+                continue
+        if wait >= 0:  # NaN/negativos inválidos; infinito positivo bloqueia o retry.
+            waits.append(wait)
+    return max(waits) if waits else default
 
 
 class _GroqReviewer:
@@ -194,7 +260,8 @@ class _GroqReviewer:
         from utils.groq_client import tracked_groq
         key = env.groq_api_key(context["language"])
         if not key:
-            raise _ReviewUnavailable("Chave Groq não configurada para o idioma")
+            raise _ReviewUnavailable("Chave Groq não configurada para o idioma",
+                                     SemanticFailure("authentication", None, context["mode"], 1, 0))
         if context["mode"] == "facts":
             instruction = (
                 'Extraia fatos compactos da fonte em JSON estrito: {"facts":[{"kind":'
@@ -228,7 +295,8 @@ class _GroqReviewer:
                 "Achados de fidelidade/gênero precisam de citação literal; estilo é warning. "
                 "Sem achados, issues vazio. Falha crítica impede approved=true."
             )
-        response = tracked_groq(key, "script_guardian").chat.completions.create(
+        response = tracked_groq(key, "script_guardian", sdk_max_retries=0, retry_rate_limit=False,
+                                timeout=self.config["semantic_timeout_seconds"]).chat.completions.create(
             model=self.config.get("groq_model", "openai/gpt-oss-20b"), temperature=0,
             response_format={"type": "json_object"},
             messages=[
@@ -243,6 +311,16 @@ class ScriptGuardian:
     def __init__(self, config: dict, *, base_dir: Path, languagetool=None,
                  glossary=None, semantic_reviewer=None):
         self.config = dict(config)
+        defaults = {"semantic_max_attempts": 3, "semantic_timeout_seconds": 60.0,
+                    "semantic_retry_wait_seconds": 15.0, "semantic_max_retry_wait_seconds": 120.0}
+        for key, default in defaults.items():
+            value = self.config.setdefault(key, default)
+            if (type(value) not in {int, float} or not math.isfinite(value)
+                    or value < 0 or (key != "semantic_retry_wait_seconds" and value == 0)):
+                raise ValueError("Limites de retry semântico inválidos")
+        if (type(self.config["semantic_max_attempts"]) is not int
+                or self.config["semantic_retry_wait_seconds"] > self.config["semantic_max_retry_wait_seconds"]):
+            raise ValueError("Orçamento de retry semântico inválido")
         self.base_dir = Path(base_dir)
         self.required_lt = (
             os.getenv("PIPELINE_ENV", "").lower() in {"runner", "oracle"}
@@ -292,39 +370,62 @@ class ScriptGuardian:
 
     def _request(self, *, mode, source_text, **context):
         # Um orçamento fixo evita retries ilimitados e nunca troca a carga de idioma.
-        if sum(len(str(value)) for value in context.values()) > self.max_context_chars:
-            raise _ReviewUnavailable("Contexto excede o limite configurado; nenhum trecho foi truncado")
-        for _ in range(3):
+        context_chars = sum(len(str(value)) for value in context.values())
+        if context_chars > self.max_context_chars:
+            raise _ReviewUnavailable("Contexto excede o limite configurado; nenhum trecho foi truncado",
+                                     SemanticFailure("context_limit", None, mode, 0, context_chars))
+        max_attempts = self.config["semantic_max_attempts"]
+        for attempt in range(1, max_attempts + 1):
             self._semantic_calls += 1
+            wait = self.config["semantic_retry_wait_seconds"]
             try:
                 raw = self.semantic.review(mode=mode, **context)
-                if mode == "facts":
+            except _ReviewUnavailable as exc:
+                if exc.failure:
+                    exc.failure = replace(exc.failure, attempts=attempt, context_chars=context_chars)
+                raise
+            except Exception as exc:
+                failure = _provider_failure(exc, mode, attempt, context_chars)
+                if failure.http_status is not None and failure.http_status not in {408, 409, 429} and failure.http_status < 500:
+                    break
+                wait = _retry_wait(exc, wait)
+                if wait > self.config["semantic_max_retry_wait_seconds"]:
+                    break
+            else:
+                failure = SemanticFailure("invalid_schema", None, mode, attempt, context_chars)
+                try:
                     data = json.loads(raw)
-                    if not isinstance(data, dict) or not isinstance(data.get("facts"), list):
-                        continue
-                    facts = data["facts"]
-                    if not facts and len(source_text) > self.chunk_chars:
-                        # Fonte longa depende do ledger global: um bloco sem fatos não é cobertura.
-                        continue
-                    if any(not isinstance(fact, dict)
+                except (ValueError, TypeError):
+                    failure = replace(failure, code="invalid_json")
+                    data = None
+                if mode == "facts":
+                    facts = data.get("facts") if isinstance(data, dict) else None
+                    if isinstance(facts, list) and (facts or len(source_text) <= self.chunk_chars) and not any(
+                           not isinstance(fact, dict)
                            or fact.get("kind") not in {"relationship", "amount", "event", "outcome", "identity"}
                            or not isinstance(fact.get("value"), str) or not fact["value"].strip()
                            or not isinstance(fact.get("source_quote"), str) or not fact["source_quote"].strip()
-                           or fact["source_quote"] not in context["source_chunk"] for fact in facts):
-                        continue
-                    return [{key: fact[key] for key in ("kind", "value", "source_quote")} for fact in facts]
-                outcome = parse_semantic_review(raw)
-                if outcome.status == "unavailable":
-                    continue
-                if any((issue.source_quote and issue.source_quote not in source_text)
+                           for fact in facts):
+                        if all(fact["source_quote"] in context["source_chunk"] for fact in facts):
+                            return [{key: fact[key] for key in ("kind", "value", "source_quote")} for fact in facts]
+                        failure = replace(failure, code="nonliteral_evidence")
+                elif data is not None:
+                    outcome = parse_semantic_review(raw)
+                    if outcome.status != "unavailable":
+                        if any((issue.source_quote and issue.source_quote not in source_text)
                        or (issue.category not in {"grammar", "style", "language"} and not issue.source_quote)
-                       for issue in outcome.issues):
-                    continue
-                return outcome
-            except Exception:
-                # Provider, corpo da resposta e mensagens de exceção nunca entram no relatório.
-                continue
-        raise _ReviewUnavailable("Revisão semântica indisponível ou resposta inválida após 3 tentativas")
+                               for issue in outcome.issues):
+                            failure = replace(failure, code="nonliteral_evidence")
+                        else:
+                            return outcome
+            if attempt < max_attempts:
+                # Esperas longas ficam limitadas em blocos; o orçamento não aumenta.
+                remaining = wait
+                while remaining > 0:
+                    block = min(remaining, 60.0)
+                    time.sleep(block)
+                    remaining -= block
+        raise _ReviewUnavailable(f"Revisão semântica indisponível: {failure.code} após {failure.attempts} tentativa(s)", failure)
 
     def _collect_facts(self, source_text, language):
         key = (source_text, language)
@@ -337,7 +438,8 @@ class ScriptGuardian:
                         facts.append(fact)
             context = json.dumps(facts, ensure_ascii=False)
             if len(context) > self.max_context_chars:
-                raise _ReviewUnavailable("Ledger factual excede o limite; nenhum fato foi truncado")
+                raise _ReviewUnavailable("Ledger factual excede o limite; nenhum fato foi truncado",
+                                         SemanticFailure("context_limit", None, "facts", 0, len(context)))
             # ponytail: cache de uma fonte/idioma por instância; ampliar só se houver alternância medida.
             self._facts_key, self._facts = key, tuple(facts)
         return json.dumps(self._facts, ensure_ascii=False)
@@ -405,6 +507,7 @@ class ScriptGuardian:
         for attempt in range(self.max_repairs + 1):
             issues, accepted, rejected = [], (), ()
             unavailable_reason = None
+            semantic_failure = None
             try:
                 if attempt == 0:
                     self._health()
@@ -442,10 +545,11 @@ class ScriptGuardian:
             except _ReviewUnavailable as exc:
                 issues.append(ReviewIssue("factual", "critical", str(exc)))
                 unavailable_reason = str(exc)
+                semantic_failure = exc.failure
                 status = "unavailable"
             review = ScriptReview(status if status != "repairing" else "rejected", text,
                                   tuple(issues), tuple(applied), attempt + 1,
-                                  text != candidate_text, factual_context, self.report_path)
+                                  text != candidate_text, factual_context, self.report_path, semantic_failure)
             telemetry.append_quality_report(self.report_path, {
                 "story_id": story_id, "profile_id": profile.profile_id, "language": language,
                 "stage": stage, "part": part,
@@ -456,6 +560,7 @@ class ScriptGuardian:
                 "latency_ms": round((time.monotonic() - started) * 1000),
                 "attempt": attempt + 1, "semantic_calls": self._semantic_calls, "status": status,
                 "unavailable_reason": unavailable_reason,
+                "semantic_failure": asdict(semantic_failure) if semantic_failure else None,
                 "issue_counts": dict(Counter(f"{i.category}:{i.severity}" for i in issues)),
                 "accepted_patches": [self._patch_summary(p) for p in accepted],
                 "rejected_patches": [self._patch_summary(p) for p in rejected],
