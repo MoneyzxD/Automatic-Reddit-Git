@@ -16,6 +16,9 @@ from __future__ import annotations
 import re
 import shutil
 import logging
+import json
+import os
+import tempfile
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -121,12 +124,6 @@ class FileOrganizer:
             paths[ext] = str(dest)
             logger.info("Exportado: %s", dest_name)
 
-        if self.db:
-            self.db.update_status(
-                story_id, language, part, "exported",
-                export_dir=str(export_dir),
-            )
-
         # ── ENFILEIRAR PARA UPLOAD AUTOMÁTICO ────────────────────────────────
         # Carrega metadata do JSON exportado para passar para a fila
         self._enqueue_for_upload(
@@ -140,6 +137,65 @@ class FileOrganizer:
             total=total,
         )
 
+        if self.db:
+            self.db.update_status(story_id, language, part, "exported", total_parts=total)
+
+        return paths
+
+    def organize_batch(self, outputs: list[dict], *, generation_key: str) -> list[dict]:
+        """Copia um conjunto completo e só conclui DB após a fila durável."""
+        from scheduler.queue import enqueue_many, QueueStateError
+        from utils.pipeline_recovery import file_sha256, json_sha256
+        if not outputs or not re.fullmatch(r"[a-f0-9]{64}", generation_key):
+            raise QueueStateError("Exportação de batch inválida")
+        language, story_id, count = outputs[0]["language"], outputs[0]["story_id"], len(outputs)
+        if language not in {"pt", "en", "es"} or not re.fullmatch(r"[A-Za-z0-9_-]+", story_id):
+            raise QueueStateError("Identidade do batch inválida")
+        metadata, fingerprint = [], []
+        for part, output in enumerate(outputs, 1):
+            if (output["language"] != language or output["story_id"] != story_id
+                    or output["part"] != part or output["total"] != count):
+                raise QueueStateError("Exportação do idioma incompleta")
+            hashes = {}
+            for field in ("video_path", "thumbnail_path", "metadata_path"):
+                path = output.get(field)
+                if not path and field == "thumbnail_path":
+                    continue
+                if not path or not Path(path).is_file():
+                    raise QueueStateError("Mídia ou metadados de exportação ausentes")
+                hashes[field] = file_sha256(Path(path))
+            metadata.append(json.loads(Path(output["metadata_path"]).read_text(encoding="utf-8")))
+            fingerprint.append(hashes)
+        # Conteúdo distingue tentativas sem sobrescrever mídia já enfileirada.
+        content_id = json_sha256(fingerprint)[:12]
+        directory = self.base_dir / "data/exports" / language / f"{story_id}_{generation_key[:12]}_{content_id}"
+        directory.mkdir(parents=True, exist_ok=True)
+        paths, items = [], []
+        date_str = datetime.now().strftime("%Y%m%d")
+        for output, meta in zip(outputs, metadata):
+            exported = {}
+            for field, ext in (("video_path", "mp4"), ("thumbnail_path", "jpg"), ("metadata_path", "json")):
+                if not output.get(field):
+                    continue
+                destination = directory / self.build_filename(output["story_title"], language, date_str,
+                                                                 output["part"], count, ext)
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=directory, delete=False) as handle:
+                        temporary = Path(handle.name)
+                    shutil.copy2(output[field], temporary)
+                    os.replace(temporary, destination)
+                finally:
+                    if temporary is not None:
+                        temporary.unlink(missing_ok=True)
+                exported[ext] = str(destination)
+            paths.append(exported)
+            items.append(dict(video_path=exported["mp4"], thumbnail_path=exported.get("jpg"), metadata=meta,
+                              title=output["story_title"], story_id=story_id, part=output["part"], total=count))
+        enqueue_many(language, items, generation_key=generation_key)
+        if self.db:
+            for output in outputs:
+                self.db.update_status(story_id, language, output["part"], "exported", total_parts=count)
         return paths
 
     def _enqueue_for_upload(
@@ -155,11 +211,11 @@ class FileOrganizer:
     ) -> None:
         """
         Enfileira vídeo exportado para upload automático.
-        Falha silenciosa — problema na fila não deve quebrar o pipeline.
+        Falha da fila interrompe a exportação; não pode parecer sucesso.
         """
         if not video_path:
-            logger.warning("Sem video_path para enfileirar (%s)", language)
-            return
+            from scheduler.queue import QueueStateError
+            raise QueueStateError("Vídeo ausente para enfileiramento")
 
         try:
             # Carrega metadata do JSON para passar completo para a fila
@@ -183,9 +239,5 @@ class FileOrganizer:
             )
             logger.info("Enfileirado para upload: %s (%s)", item_id, language)
 
-        except ImportError:
-            # scheduler ainda não instalado — ignora silenciosamente
-            logger.debug("scheduler/queue.py não encontrado — enqueue ignorado")
-        except Exception as e:
-            # Nunca quebra o pipeline por falha na fila
-            logger.warning("Falha ao enfileirar %s (%s): %s", title, language, e)
+        except Exception:
+            raise

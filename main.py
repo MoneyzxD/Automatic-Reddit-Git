@@ -6,8 +6,8 @@ Orquestrador principal do Reddit Stories Pipeline — v3.
 
 Fluxo por historia (1 historia por execucao):
     0.  Preflight      -> LanguageTool obrigatorio, antes da extracao (exceto dry-run)
-    1.  Extracao       -> Reddit com sessao logada
-    2.  Filtragem      -> score 0-100
+    1.  Extracao       -> retoma fonte privada incompleta ou busca Reddit com sessao logada
+    2.  Filtragem      -> score 0-100 e conclusao por idioma
     3.  Siglas EN      -> expansao de siglas no texto original (28F -> 28-year-old woman)
     3.5 Perfil        -> resolve e trava o narrador uma vez, antes de adaptar
     4.  Adaptacao      -> limpeza narrativa via Groq (fallback: regras)
@@ -40,6 +40,7 @@ Execucao de teste rapido (pula etapas 1 e 2):
     python main.py --test-story --lang pt
 """
 import argparse
+import hashlib
 import logging
 import random
 import re
@@ -638,7 +639,7 @@ def run_pipeline(
     from stages.adapter import StoryAdapter
     from stages.translator import ScriptTranslator, TranslationFailed
     from stages.naturalizer import ScriptNaturalizer
-    from stages.narrator_profile import NarratorProfileResolver, save_profile
+    from stages.narrator_profile import NarratorProfileResolver, save_profile, load_profile, source_sha256
     from stages.titler import TitleGenerator
     from stages.splitter import split_story
     from stages.voice import VoiceGenerator
@@ -650,6 +651,7 @@ def run_pipeline(
     from stages.organizer import FileOrganizer
     from stages.script_guardian import ScriptGuardian
     from utils.db import PipelineDB
+    from utils.pipeline_recovery import save_source, load_source, save_approved_step, load_approved_step, json_sha256
     from utils import environment as env, telemetry
     from scheduler.notifier import notify_pipeline_result
 
@@ -688,13 +690,20 @@ def run_pipeline(
     parts_attempted = parts_done = 0
     quality_skipped = False
 
+    recovery = None
+    retry_ids = db.retry_candidates(languages) if not dry_run and not test_story else []
     if test_story:
         story = TEST_STORY
+    elif retry_ids:
+        recovery = db.recovery_record(retry_ids[0])
+        restored = load_source(BASE_DIR, retry_ids[0], recovery["source_sha256"])
+        story = restored["story"]
+        logger.info("Retomando fonte gerenciada: %s", story["id"])
     else:
         from stages.extractor import RedditExtractor
         from stages.filter import StoryFilter
         extractor = RedditExtractor(config.get("extraction", {}))
-        f_filter = StoryFilter(config.get("filtering", {}), db)
+        f_filter = StoryFilter(config.get("filtering", {}), db, languages=languages)
         if not dry_run:
             extractor.run(get_subreddits(config))
         else:
@@ -704,14 +713,28 @@ def run_pipeline(
             logger.warning("Nenhuma história aprovada. Verifique data/raw/")
             return
         story = approved[0]
-    if not dry_run:
-        db.insert_story(story)
-
     story_id = story["id"]
     story_title = story.get("title", story_id)
     expanded_source = expand_acronyms_translated(expand_age_gender_en(story.get("text", "")), "en")
+    source_hash = source_sha256(story_title, expanded_source)
+    if not dry_run:
+        languages = db.processing_languages(story_id, languages)
+        if not languages:
+            logger.info("Fonte já concluída ou bloqueada nos idiomas solicitados: %s", story_id)
+            return
+        recovery = db.recovery_record(story_id)
+        if recovery:
+            restored = load_source(BASE_DIR, story_id, source_hash)
+            story, expanded_source = restored["story"], restored["expanded_source"]
+        else:
+            save_source(BASE_DIR, story, source_hash, expanded_source=expanded_source)
+        db.register_story(story, languages, source_hash)
     resolver = NarratorProfileResolver(config.get("narrator_profile", {}), semantic_enabled=not dry_run)
-    profile = resolve_story_narrator(resolver, story_id, story_title, expanded_source)
+    profile = None if dry_run else load_profile(story_id, BASE_DIR, source_hash, resolver.resolver_version)
+    if recovery and recovery["profile_id"] and (profile is None or profile.profile_id != recovery["profile_id"]):
+        raise ValueError("Perfil persistido ausente ou incompatível; reconciliação necessária")
+    if profile is None:
+        profile = resolve_story_narrator(resolver, story_id, story_title, expanded_source)
     narrator_gender = profile.narration_gender
     story_for_adapter = attach_narrator_profile({**story, "text": expanded_source}, profile)
     profile_trace = (f"profile_id={profile.profile_id}; genero={narrator_gender}; "
@@ -719,11 +742,31 @@ def run_pipeline(
     logger.info("Perfil do narrador: %s", profile_trace)
     if not dry_run:
         save_profile(profile, BASE_DIR)
-    adapted = attach_narrator_profile(adapter.adapt(story_for_adapter), profile)
+        for language in languages:
+            db.set_language_status(story_id, language, "processing", profile_id=profile.profile_id)
+    active_languages = set(languages) if not dry_run else set()
+    adapted = attach_narrator_profile(adapter.adapt(story_for_adapter), profile) if dry_run else {
+        **story_for_adapter, "full_script": expanded_source}
     clean_script = adapted["full_script"]
     context = {}
 
+    def finish_language(language, status, reason_code=""):
+        if language in active_languages:
+            db.set_language_status(story_id, language, status, profile_id=profile.profile_id, reason_code=reason_code)
+            active_languages.discard(language)
+
+    def finish_active(status, reason_code):
+        for language in list(active_languages):
+            finish_language(language, status, reason_code)
+
     def checkpoint(source, candidate, language, stage, part=None):
+        key = f"{stage}_part{part}" if part is not None else stage
+        cached = load_approved_step(BASE_DIR, story_id, language, key, source_hash, profile.profile_id)
+        input_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
+        if cached and cached.get("input_sha256") == input_hash:
+            return ScriptReview("approved", cached["text"], (), (), 0, False,
+                                cached.get("factual_context", ""))
+        candidate = candidate() if callable(candidate) else candidate
         context.update(source_text=source, candidate_text=candidate, language=language,
                        stage=stage, part_number=part)
         review = guardian.review_and_fix(
@@ -733,6 +776,10 @@ def run_pipeline(
         if review.status != "approved":
             raise (QualityUnavailable if review.status == "unavailable" else QualityRejected)(review)
         save_script_trace(scripts_dir, story_id, language, stage, review.approved_text)
+        save_approved_step(BASE_DIR, story_id, language, key, {
+            "source_sha256": source_hash, "profile_id": profile.profile_id, "input_sha256": input_hash,
+            "text": review.approved_text, "factual_context": review.factual_context,
+        })
         return review
 
     def translation_text(result, source, language, stage):
@@ -774,14 +821,19 @@ def run_pipeline(
     if not dry_run:
         save_script_trace(scripts_dir, story_id, "en", "Perfil do narrador", profile_trace, reset=True)
         try:
-            review = checkpoint(expanded_source, clean_script, "en", "adaptation")
+            review = checkpoint(expanded_source, lambda: adapter.adapt(story_for_adapter)["full_script"], "en", "adaptation")
             clean_script, factual_context = review.approved_text, review.factual_context
             adapted["full_script"] = clean_script
         except QualityRejected as error:
+            finish_active("rejected", "content_rejected")
             failed_review(error)
             return
         except QualityUnavailable as error:
+            finish_active("unavailable", error.review.semantic_failure.code if error.review.semantic_failure else "dependency_unavailable")
             failed_review(error)
+            raise
+        except Exception:
+            finish_active("unavailable", "processing_error")
             raise
 
     lang_order = [lang for lang in ("pt", "es", "en") if lang in languages]
@@ -791,22 +843,23 @@ def run_pipeline(
             lang_script = clean_script
             lang_facts = factual_context
             if not dry_run:
-                context.update(source_text=clean_script, candidate_text="", language=lang,
-                               stage="translation", part_number=None)
-                try:
-                    translations = translator.translate_all(
-                        script_text=clean_script, story_id=story_id, scripts_dir=scripts_dir,
-                        languages=[lang], source_lang="en", force=test_story,
-                    )
-                except TranslationFailed as error:
-                    translation_text(error.result, clean_script, lang, "translation")
-                    raise
-                lang_script = translation_text(translations[lang], clean_script, lang, "translation")
-                review = checkpoint(clean_script, lang_script, lang, "translation")
+                def translate_candidate():
+                    context.update(source_text=clean_script, candidate_text="", language=lang,
+                                   stage="translation", part_number=None)
+                    try:
+                        translations = translator.translate_all(
+                            script_text=clean_script, story_id=story_id, scripts_dir=scripts_dir,
+                            languages=[lang], source_lang="en", force=test_story,
+                        )
+                    except TranslationFailed as error:
+                        translation_text(error.result, clean_script, lang, "translation")
+                        raise
+                    return translation_text(translations[lang], clean_script, lang, "translation")
+                review = checkpoint(clean_script, translate_candidate, lang, "translation")
                 approved_translation = review.approved_text
                 expanded_translation = expand_acronyms_translated(approved_translation, lang)
-                naturalized = naturalizer.naturalize(expanded_translation, lang, narrator_gender)
-                review = checkpoint(approved_translation, naturalized, lang, "naturalization")
+                review = checkpoint(approved_translation,
+                                    lambda: naturalizer.naturalize(expanded_translation, lang, narrator_gender), lang, "naturalization")
                 lang_script, lang_facts = review.approved_text, review.factual_context
 
             validated_story = lang_script
@@ -825,12 +878,12 @@ def run_pipeline(
                 title_args = dict(story_text=validated_story, language=lang, original_title=translated_title,
                                   narrator_gender=narrator_gender, factual_context=lang_facts)
                 title_for_lang = checkpoint(
-                    derived_source, title_gen.generate(**title_args, hook_type=random.choice(["short", "narrative"])),
+                    derived_source, lambda: title_gen.generate(**title_args, hook_type=random.choice(["short", "narrative"])),
                     lang, "title").approved_text
                 hook_for_lang = checkpoint(
-                    derived_source, title_gen.generate_hook(**title_args), lang, "opening_hook").approved_text
+                    derived_source, lambda: title_gen.generate_hook(**title_args), lang, "opening_hook").approved_text
                 closing_hook_for_lang = checkpoint(
-                    derived_source, title_gen.generate_closing_hook(**title_args), lang, "closing_hook").approved_text
+                    derived_source, lambda: title_gen.generate_closing_hook(**title_args), lang, "closing_hook").approved_text
                 lang_script = checkpoint(
                     derived_source, inject_title_as_hook(validated_story, hook_for_lang),
                     lang, "injected_hook").approved_text
@@ -842,10 +895,21 @@ def run_pipeline(
             limit = min(3, max_parts) if max_parts is not None else 3
             if len(parts) > limit:
                 logger.warning("História ignorada em %s: %d partes para limite de %d", lang, len(parts), limit)
+                if not dry_run:
+                    finish_language(lang, "rejected", "part_limit")
                 continue
             prepared = []
+            prepared_cache = None if dry_run else load_approved_step(
+                BASE_DIR, story_id, lang, "prepared", source_hash, profile.profile_id)
+            prepared_hash = hashlib.sha256(derived_source.encode("utf-8")).hexdigest()
+            if prepared_cache and (prepared_cache.get("input_sha256") != prepared_hash
+                                   or len(prepared_cache["parts"]) != len(parts)):
+                raise ValueError("Partes persistidas incompatíveis; reconciliação necessária")
             for part_data in parts:
                 part_num, total = part_data["part_number"], part_data["total_parts"]
+                if prepared_cache:
+                    prepared.append(tuple(prepared_cache["parts"][part_num - 1]))
+                    continue
                 suffix = f"_pt{part_num}of{total}" if total > 1 else ""
                 stem = f"{FileOrganizer.slugify(title_for_lang)}_{datetime.now():%Y%m%d}_{lang}{suffix}"
                 if dry_run:
@@ -863,6 +927,10 @@ def run_pipeline(
                 prepared.append((part_num, total, stem, part_script, meta))
             if dry_run:
                 continue
+            save_approved_step(BASE_DIR, story_id, lang, "prepared", {
+                "source_sha256": source_hash, "profile_id": profile.profile_id,
+                "input_sha256": prepared_hash, "parts": prepared,
+            })
 
             # Todas as partes/metadados são aprovados antes de qualquer trabalho caro.
             completed = []
@@ -928,17 +996,24 @@ def run_pipeline(
                 completed.append(dict(story_id=story_id, language=lang, part=part_num, total=total,
                                       video_path=video_path, thumbnail_path=thumb_path,
                                       metadata_path=meta_path, story_title=title_for_lang))
-            # O organizer também enfileira: adiar a chamada impede publicar uma língua parcial.
-            # ponytail: commit por item; transação em lote se for necessário tolerar queda durante a escrita da fila.
+            # Conclusão só depois de exportar/enfileirar atomicamente o idioma inteiro.
             if language_complete and len(completed) == len(prepared):
-                for output in completed:
-                    organizer.organize_output(**output)
-                    parts_done += 1
+                generation_key = json_sha256([story_id, lang, source_hash, profile.profile_id])
+                organizer.organize_batch(completed, generation_key=generation_key)
+                finish_language(lang, "exported")
+                parts_done += len(completed)
+            else:
+                finish_language(lang, "unavailable", "media_failed")
         except QualityRejected as error:
+            finish_language(lang, "rejected", "content_rejected")
             failed_review(error)
             continue
         except QualityUnavailable as error:
+            finish_active("unavailable", error.review.semantic_failure.code if error.review.semantic_failure else "dependency_unavailable")
             failed_review(error)
+            raise
+        except Exception:
+            finish_active("unavailable", "processing_error")
             raise
 
     duration = (datetime.now() - pipeline_started_at).total_seconds() / 60

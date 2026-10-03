@@ -9,6 +9,54 @@ def use_temp_queue(tmp_path, monkeypatch):
 
 import scheduler.queue as queue_module
 
+
+def test_fila_corrompida_nao_vira_fila_vazia(tmp_path):
+    path = tmp_path / "pt.json"
+    path.write_text("{broken", encoding="utf-8")
+    with pytest.raises(queue_module.QueueStateError):
+        queue_module.get_pending("pt")
+    assert path.read_text(encoding="utf-8") == "{broken"
+
+
+def batch_items(fake_video, fake_video_2):
+    return [dict(video_path=path, thumbnail_path=None, metadata={"narrator_profile_id": "p1"},
+                 title="Título", story_id="s1", part=part, total=2)
+            for part, path in enumerate([fake_video, fake_video_2], 1)]
+
+
+def test_batch_repetido_retorna_mesmos_ids(fake_video, fake_video_2):
+    items = batch_items(fake_video, fake_video_2)
+    first = queue_module.enqueue_many("pt", items, generation_key="a" * 64)
+    assert queue_module.enqueue_many("pt", items, generation_key="a" * 64) == first
+    assert len(queue_module.get_pending("pt")) == 2
+
+
+def test_batch_conflitante_nao_substitui_item_existente(fake_video, fake_video_2, tmp_path):
+    items = batch_items(fake_video, fake_video_2)
+    queue_module.enqueue_many("pt", items, generation_key="a" * 64)
+    before = (tmp_path / "pt.json").read_bytes()
+    with pytest.raises(queue_module.QueueStateError):
+        queue_module.enqueue_many("pt", [{**item, "title": "Alterado"} for item in items], generation_key="a" * 64)
+    assert (tmp_path / "pt.json").read_bytes() == before
+
+
+def test_batch_arquivo_ausente_nao_enfileira_primeira_parte(fake_video, fake_video_2, tmp_path):
+    fake_video_2.unlink()
+    with pytest.raises(queue_module.QueueStateError):
+        queue_module.enqueue_many("pt", batch_items(fake_video, fake_video_2), generation_key="a" * 64)
+    assert not (tmp_path / "pt.json").exists()
+
+
+def test_erro_replace_preserva_fila_anterior(fake_video, fake_video_2, tmp_path, monkeypatch):
+    queue_module.enqueue("pt", fake_video, None, {}, "Anterior")
+    before = (tmp_path / "pt.json").read_bytes()
+    def disk_full(*args):
+        raise OSError("disco cheio")
+    monkeypatch.setattr(queue_module.os, "replace", disk_full)
+    with pytest.raises(queue_module.QueueStateError):
+        queue_module.enqueue_many("pt", batch_items(fake_video, fake_video_2), generation_key="a" * 64)
+    assert (tmp_path / "pt.json").read_bytes() == before
+
 @pytest.fixture
 def fake_video(tmp_path):
     """Cria um arquivo de video fake que realmente existe no disco."""

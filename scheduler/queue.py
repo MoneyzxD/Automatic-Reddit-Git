@@ -22,6 +22,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -29,6 +31,10 @@ from typing import Literal
 logger = logging.getLogger(__name__)
 
 STATUS = Literal["pending", "uploading", "uploaded", "partial", "failed", "cancelled"]
+
+
+class QueueStateError(RuntimeError):
+    """Falha visível na fila; não autoriza reiniciar estado vazio."""
 
 # Caminhos possiveis para a pasta de filas
 _QUEUE_DIR_PATHS = [
@@ -49,6 +55,8 @@ def _find_queue_dir() -> Path:
 
 
 def _queue_path(language: str) -> Path:
+    if language not in {"pt", "pt-br", "en", "es"}:
+        raise QueueStateError("Idioma de fila inválido")
     return _find_queue_dir() / f"{language}.json"
 
 
@@ -65,24 +73,41 @@ def _today_str() -> str:
 def _load_queue(language: str) -> dict:
     path = _queue_path(language)
     if not path.exists():
+        if os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true":
+            raise QueueStateError("Fila obrigatória ausente; restauração necessária")
         return _empty_queue(language)
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error("Erro ao carregar fila %s: %s", language, e)
-        return _empty_queue(language)
+            data = json.load(f)
+        if (not isinstance(data, dict) or data.get("language") != language
+                or not isinstance(data.get("items"), list)
+                or any(not isinstance(item, dict) or not isinstance(item.get("id"), str)
+                       or not isinstance(item.get("schedule"), dict) or not isinstance(item.get("platforms"), dict)
+                       for item in data["items"])
+                or len({item["id"] for item in data["items"]}) != len(data["items"])):
+            raise ValueError
+        return data
+    except (OSError, ValueError, TypeError, KeyError):
+        raise QueueStateError("Fila ausente, corrompida ou ilegível") from None
 
 
 def _save_queue(language: str, data: dict) -> None:
     path = _queue_path(language)
     path.parent.mkdir(parents=True, exist_ok=True)
     data["last_updated"] = _now_iso()
+    temporary = None
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error("Erro ao salvar fila %s: %s", language, e)
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            json.dump(data, handle, ensure_ascii=False, indent=2, allow_nan=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except (OSError, ValueError, TypeError):
+        raise QueueStateError("Falha ao persistir fila; estado anterior preservado") from None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _empty_queue(language: str) -> dict:
@@ -140,8 +165,20 @@ def enqueue(
         logger.warning("ID '%s' ja existia na fila — criando entrada nova como '%s'",
                         base_id, item_id)
 
-    item = {
+    item = _new_item(item_id, video_path, thumbnail_path, metadata, title, planned_at, story_id, part, total)
+    queue["items"].append(item)
+    _save_queue(language, queue)
+    logger.info("Item enfileirado: %s (%s)", item_id, language)
+    return item_id
+
+
+def _new_item(item_id, video_path, thumbnail_path, metadata, title, planned_at, story_id, part, total):
+    return {
         "id":             item_id,
+        "story_id":       story_id,
+        "part":           part,
+        "total":          total,
+        "title":          title,
         "status":         "pending",
         "video_path":     str(video_path),
         "thumbnail_path": str(thumbnail_path) if thumbnail_path else None,
@@ -161,10 +198,55 @@ def enqueue(
         "created_at": _now_iso(),
     }
 
-    queue["items"].append(item)
+
+
+def enqueue_many(language: str, items: list[dict], *, generation_key: str) -> list[str]:
+    """Grava um idioma inteiro uma vez; replay não cria versões adicionais."""
+    from utils.pipeline_recovery import file_sha256, json_sha256
+    if (not isinstance(generation_key, str) or not re.fullmatch(r"[a-f0-9]{64}", generation_key)
+            or not isinstance(items, list) or not 1 <= len(items) <= 3):
+        raise QueueStateError("Batch de geração inválido")
+    try:
+        count = len(items)
+        story_id = items[0]["story_id"]
+        if not isinstance(story_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", story_id):
+            raise ValueError
+        fingerprints = []
+        for part, item in enumerate(items, 1):
+            if (item["story_id"] != story_id or type(item["part"]) is not int or item["part"] != part
+                    or type(item["total"]) is not int or item["total"] != count
+                    or not isinstance(item["metadata"], dict) or not isinstance(item["title"], str)):
+                raise ValueError
+            video = Path(item["video_path"])
+            thumbnail = Path(item["thumbnail_path"]) if item.get("thumbnail_path") else None
+            if not video.is_file() or (thumbnail and not thumbnail.is_file()):
+                raise ValueError
+            fingerprints.append({"story_id": story_id, "part": part, "total": count,
+                                 "video": file_sha256(video), "thumbnail": file_sha256(thumbnail) if thumbnail else None,
+                                 "metadata": item["metadata"], "title": item["title"], "planned_at": item.get("planned_at")})
+        fingerprint = json_sha256(fingerprints)
+    except (OSError, ValueError, TypeError, KeyError):
+        raise QueueStateError("Batch incompleto, mídia ausente ou metadados inválidos") from None
+    queue = _load_queue(language)
+    existing = [item for item in queue["items"] if item.get("generation_key") == generation_key]
+    if existing:
+        if len(existing) != count or any(item.get("generation_fingerprint") != fingerprint for item in existing):
+            raise QueueStateError("Replay de geração conflitante exige reconciliação")
+        return [item["id"] for item in sorted(existing, key=lambda item: item["part"])]
+    existing_ids = {item["id"] for item in queue["items"]}
+    ids = []
+    for item in items:
+        suffix = f"_pt{item['part']}of{count}" if count > 1 else ""
+        item_id = f"{story_id}_{language}{suffix}"
+        if item_id in existing_ids:
+            raise QueueStateError("Colisão com geração anterior exige reconciliação")
+        output = _new_item(item_id, item["video_path"], item.get("thumbnail_path"), item["metadata"],
+                           item["title"], item.get("planned_at"), story_id, item["part"], count)
+        output.update(generation_key=generation_key, generation_fingerprint=fingerprint)
+        queue["items"].append(output)
+        ids.append(item_id)
     _save_queue(language, queue)
-    logger.info("Item enfileirado: %s (%s)", item_id, language)
-    return item_id
+    return ids
 
 
 def get_pending(language: str) -> list[dict]:

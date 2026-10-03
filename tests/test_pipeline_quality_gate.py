@@ -167,6 +167,60 @@ def test_metadados_reprovados_impedem_audio_render_export_e_fila(pipeline):
     assert report["source_sha256"]
 
 
+def test_retomada_nao_gera_pt_duas_vezes(pipeline):
+    from scheduler.queue import get_pending
+    pipeline.fail, pipeline.fail_language, pipeline.outage = "translation", "es", True
+    with pytest.raises(QualityUnavailable):
+        main.run_pipeline(pipeline.config, ["pt", "es"], test_story=True)
+    assert len(get_pending("pt")) == 1
+    prior_audios = len(pipeline.audios)
+    prior_profile = get_pending("pt")[0]["metadata"]["narrator_profile_id"]
+    pipeline.fail = None
+    main.run_pipeline(pipeline.config, ["pt", "es"], test_story=True)
+    assert len(get_pending("pt")) == len(get_pending("es")) == 1
+    assert get_pending("es")[0]["metadata"]["narrator_profile_id"] == prior_profile
+    assert all(language == "es" for _, language, _ in pipeline.audios[prior_audios:])
+
+
+def test_adaptacao_indisponivel_torna_todos_idiomas_retomaveis(pipeline):
+    from utils.db import PipelineDB
+    pipeline.fail, pipeline.outage = "adaptation", True
+    with pytest.raises(QualityUnavailable):
+        main.run_pipeline(pipeline.config, ["pt", "en", "es"], test_story=True)
+    db = PipelineDB(pipeline.root / "db/pipeline.db")
+    assert db.processing_languages("s1", ["pt", "en", "es"]) == ["pt", "en", "es"]
+    assert pipeline.audios == []
+
+
+def test_retomada_reusa_roteiro_aprovado_mas_repete_gate_pre_tts(pipeline, monkeypatch):
+    from stages import adapter, voice, narrator_profile
+    original = voice.VoiceGenerator.generate
+    monkeypatch.setattr(voice.VoiceGenerator, "generate", lambda *args, **kwargs: False)
+    main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    initial_pre_tts = len([c for c in pipeline.calls if c["stage"] == "pre_tts"])
+    monkeypatch.setattr(voice.VoiceGenerator, "generate", original)
+    def no_regenerate(*args, **kwargs):
+        raise AssertionError("Fonte/perfil/roteiro aprovados não devem ser gerados novamente")
+    monkeypatch.setattr(adapter.StoryAdapter, "adapt", no_regenerate)
+    monkeypatch.setattr(narrator_profile.NarratorProfileResolver, "resolve", no_regenerate)
+    main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    assert len(pipeline.audios) == 1
+    assert len([c for c in pipeline.calls if c["stage"] == "pre_tts"]) > initial_pre_tts
+
+
+def test_perfil_persistido_ausente_bloqueia_sem_redetectar(pipeline, monkeypatch):
+    from stages import voice, narrator_profile
+    monkeypatch.setattr(voice.VoiceGenerator, "generate", lambda *args, **kwargs: False)
+    main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    for path in (pipeline.root / "data/scripts/profiles").glob("*.json"):
+        path.unlink()
+    called = []
+    monkeypatch.setattr(narrator_profile.NarratorProfileResolver, "resolve", lambda *args, **kwargs: called.append(1))
+    with pytest.raises(ValueError):
+        main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    assert called == []
+
+
 @pytest.mark.parametrize("stage", ["audio", "subtitle", "render"])
 def test_falha_de_midia_na_segunda_parte_nao_enfileira_primeira(pipeline, monkeypatch, stage):
     from stages import voice, subtitle, video

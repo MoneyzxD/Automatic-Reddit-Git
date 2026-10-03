@@ -17,6 +17,7 @@ def male_profile(story_id="test_001"):
 
 def test_resolve_historia_uma_vez_e_propaga_mesmo_perfil():
     resolver = Mock()
+    resolver.resolver_version = "1"
     resolver.resolve.return_value = male_profile()
     profile = main.resolve_story_narrator(
         resolver, "test_001", "Title", "I (28M) live with my husband."
@@ -79,7 +80,11 @@ def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_
     monkeypatch.setattr(narrator_profile, "NarratorProfileResolver", factory)
     persisted = Mock()
     monkeypatch.setattr(narrator_profile, "save_profile", persisted)
-    monkeypatch.setattr(db, "PipelineDB", Mock())
+    database = Mock()
+    database.processing_languages.side_effect = lambda story_id, languages: languages.copy()
+    database.recovery_record.return_value = None
+    database.retry_candidates.return_value = []
+    monkeypatch.setattr(db, "PipelineDB", Mock(return_value=database))
     monkeypatch.setattr(notifier, "notify_pipeline_result", Mock())
     adapt = Mock()
 
@@ -120,7 +125,7 @@ def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_
     for module, name in ((subtitle, "SubtitleGenerator"), (video, "VideoRenderer"),
                          (thumbnail, "ThumbnailGenerator")):
         monkeypatch.setattr(module, name, Mock())
-    monkeypatch.setattr(organizer.FileOrganizer, "organize_output", Mock())
+    monkeypatch.setattr(organizer.FileOrganizer, "organize_batch", Mock())
     monkeypatch.setattr(metadata.MetadataGenerator, "_description_via_groq", lambda *args: None)
     split_real = splitter.split_story
     parts = []
