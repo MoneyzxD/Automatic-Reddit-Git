@@ -369,6 +369,25 @@ def test_preflight_falha_antes_da_extracao_e_do_dedupe(pipeline, monkeypatch):
     assert "SECRET" not in json.dumps(pipeline.notices)
 
 
+@pytest.mark.parametrize("existing", [False, True])
+def test_dry_run_nao_abre_banco_persistente(pipeline, monkeypatch, existing):
+    import sqlite3
+    from utils import db
+    database = pipeline.root / "db/pipeline.db"
+    if existing:
+        database.parent.mkdir(parents=True)
+        with sqlite3.connect(database) as conn:
+            conn.execute("CREATE TABLE sentinela (id INTEGER PRIMARY KEY)")
+        before = database.read_bytes()
+    constructor = Mock(wraps=db.PipelineDB)
+    monkeypatch.setattr(db, "PipelineDB", constructor)
+    main.run_pipeline(pipeline.config, ["pt"], dry_run=True, test_story=True)
+    constructor.assert_not_called()
+    assert database.exists() is existing
+    if existing:
+        assert database.read_bytes() == before
+
+
 def test_dry_run_com_historia_real_nao_marca_dedupe_nem_chama_provedores(pipeline):
     from utils.db import PipelineDB
     raw = pipeline.root / "data" / "raw"

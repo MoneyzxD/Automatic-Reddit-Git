@@ -683,7 +683,8 @@ def run_pipeline(
             raise
 
     video_config = {**config.get("video", {}), "background_dir": str(env.background_dir(BASE_DIR))}
-    db = PipelineDB(env.db_path(BASE_DIR))
+    # Simulação não cria/migra o DB; testes não podem contaminar o bootstrap.
+    db = None if dry_run else PipelineDB(env.db_path(BASE_DIR))
     adapter_config = {**config.get("adapter", {})}
     if dry_run:
         adapter_config["llm_enabled"] = False

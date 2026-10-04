@@ -75,6 +75,8 @@ O segundo run usa `state_action=verify` e o mesmo namespace. Restaura em outro
 runner sem gerar/publicar e verifica controle/mídia. Inspecione MP4, ASS/card,
 perfil/source IDs e duração/resolução, além do diagnóstico semântico real.
 `dry_run=true` simula em namespace isolado e não cria snapshot production.
+O dry-run também não abre/cria/migra o banco persistente: a suíte de testes
+anterior ao restore deve deixar a raiz de bootstrap sem DB/fila de simulação.
 Bootstrap/verify também não geram/publicam. Publicação normal exige main,
 namespace production, restore íntegro e serviços obrigatórios disponíveis.
 

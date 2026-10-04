@@ -107,3 +107,11 @@ branch e iniciar validação isolada no Actions. A permissão efetiva da credenc
 e a persistência remota serão verificadas nessa execução. A investigação das
 falhas atuais de produção foi priorizada para depois destes ajustes em
 [BACKLOG](docs/BACKLOG.md), com os runs de referência e critério de aceite.
+
+O primeiro run isolado, [37216781914](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37216781914),
+aqueceu LanguageTool e passou 745 testes, mas o bootstrap bloqueou por DB
+presente. O teste de CLI em subprocesso executava dry-run e criava/migrava o
+SQLite da raiz de código. Dois testes reproduziram esse efeito; o dry-run
+agora usa filtro/organizer sem DB, sem apagar estado para contornar o bloqueio.
+Geração e publicação não chegaram a executar nesse run. A validação seguinte
+precisa comprovar também escrita/restauração privada e geração real.
