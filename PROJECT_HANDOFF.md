@@ -100,3 +100,10 @@ O registro local para continuar sem repetir tarefas fica em
 acima; revisão e prova da suíte ficam no mesmo diretório. Tarefas 1–6 estão
 completas; a tarefa 7 continua pendente dos gates operacionais. Esse diretório
 de retomada permanece preservado enquanto a implantação não terminar.
+
+O operador cadastrou `PIPELINE_STATE_TOKEN`; consulta de nomes confirmou sua
+existência em 2026-10-04 às 16:20:22 UTC, sem ler o valor. Autorizou enviar a
+branch e iniciar validação isolada no Actions. A permissão efetiva da credencial
+e a persistência remota serão verificadas nessa execução. A investigação das
+falhas atuais de produção foi priorizada para depois destes ajustes em
+[BACKLOG](docs/BACKLOG.md), com os runs de referência e critério de aceite.
