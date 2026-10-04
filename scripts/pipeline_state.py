@@ -130,6 +130,9 @@ def _clone(base: Path, db: Path, inventory: dict) -> Path:
             for field in ("video_path", "thumbnail_path"):
                 if item.get(field):
                     item[field] = str(staged / _relative(base, item[field]))
+            if item.get("deleted_local_paths"):
+                item["deleted_local_paths"] = {field: str(staged / _relative(base, value)) if value else None
+                                               for field, value in item["deleted_local_paths"].items()}
         _write_json(path, data)
     with closing(sqlite3.connect(database)) as conn, conn:
         for row in conn.execute("SELECT id," + ",".join(_DB_PATH_FIELDS) + " FROM pipeline_parts").fetchall():

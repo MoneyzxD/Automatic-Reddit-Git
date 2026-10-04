@@ -1,4 +1,5 @@
 import pytest
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,23 @@ def test_fila_corrompida_nao_vira_fila_vazia(tmp_path):
     with pytest.raises(queue_module.QueueStateError):
         queue_module.get_pending("pt")
     assert path.read_text(encoding="utf-8") == "{broken"
+
+
+@pytest.mark.parametrize("corrupt", ["platform", "status", "metadata"])
+def test_fila_schema_incompleto_nao_esconde_pendentes(tmp_path, fake_video, corrupt):
+    queue_module.enqueue("pt", fake_video, None, {}, "Teste")
+    path = tmp_path / "pt.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    item = data["items"][0]
+    if corrupt == "platform":
+        item["platforms"]["youtube"] = {}
+    elif corrupt == "status":
+        item["platforms"]["youtube"]["status"] = "unknown"
+    else:
+        item["metadata"] = "invalid"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(queue_module.QueueStateError):
+        queue_module.get_pending("pt")
 
 
 def batch_items(fake_video, fake_video_2):
@@ -135,12 +153,15 @@ def test_agendamento_conta_na_data_local_do_canal(tmp_path):
         "en", "America/New_York",
     ) == {"2030-01-01": 1}
 
-def test_reset_daily_counter(tmp_path):
+def test_reset_daily_counter_preserva_evidencia_e_reconta_novo_dia(tmp_path, monkeypatch):
     video = tmp_path / "video_004.mp4"
     video.write_bytes(b"fake")
     queue_module.enqueue("es", video, None, {}, "Test4")
     item_id = queue_module.get_pending("es")[0]["id"]
     queue_module.update_status("es", item_id, "youtube", "uploaded")
     queue_module.update_status("es", item_id, "tiktok", "uploaded")
+    queue_module.reset_daily_counter("es")
+    assert queue_module.count_uploads_today("es") == 1
+    monkeypatch.setattr(queue_module, "_today_str", lambda: "2099-01-01")
     queue_module.reset_daily_counter("es")
     assert queue_module.count_uploads_today("es") == 0

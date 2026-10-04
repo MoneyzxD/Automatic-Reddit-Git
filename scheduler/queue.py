@@ -83,6 +83,12 @@ def _load_queue(language: str) -> dict:
                 or not isinstance(data.get("items"), list)
                 or any(not isinstance(item, dict) or not isinstance(item.get("id"), str)
                        or not isinstance(item.get("schedule"), dict) or not isinstance(item.get("platforms"), dict)
+                       or item.get("status") not in {"pending", "uploading", "uploaded", "partial", "failed", "cancelled"}
+                       or not isinstance(item.get("metadata"), dict)
+                       or not isinstance(item["platforms"].get("youtube"), dict)
+                       or any(not isinstance(state, dict)
+                              or state.get("status") not in {"pending", "uploading", "uploaded", "failed", "cancelled"}
+                              for state in item["platforms"].values())
                        for item in data["items"])
                 or len({item["id"] for item in data["items"]}) != len(data["items"])):
             raise ValueError
@@ -256,13 +262,29 @@ def get_pending(language: str) -> list[dict]:
     Ordenados por planned_at (mais antigos primeiro).
     """
     queue   = _load_queue(language)
-    pending = [
-        item for item in queue["items"]
-        if item["status"] == "pending"
-        and Path(item.get("video_path", "")).exists()
-    ]
+    pending = []
+    for item in queue["items"]:
+        youtube = item.get("platforms", {}).get("youtube", {})
+        if youtube.get("status") != "pending" or youtube.get("video_id"):
+            continue
+        if not item.get("video_path") or not Path(item["video_path"]).is_file():
+            raise QueueStateError("Mídia pendente ausente; restauração necessária")
+        pending.append(item)
     pending.sort(key=lambda x: x["schedule"].get("planned_at", ""))
     return pending
+
+
+def get_item(language: str, item_id: str) -> dict | None:
+    """Relê a fila; uma cópia antiga não autoriza novo envio."""
+    return next((item for item in _load_queue(language)["items"] if item["id"] == item_id), None)
+
+
+def get_uncertain(language: str) -> list[dict]:
+    """Transporte iniciado sem confirmação, ou ID com status contraditório."""
+    return [item for item in _load_queue(language)["items"]
+            if item.get("platforms", {}).get("youtube", {}).get("status") == "uploading"
+            or (item.get("platforms", {}).get("youtube", {}).get("video_id")
+                and item["platforms"]["youtube"].get("status") != "uploaded")]
 
 
 def get_pending_tiktok(language: str) -> list[dict]:
@@ -303,6 +325,7 @@ def update_status(
     url: str | None = None,
     thumbnail: dict | None = None,
     publish_at: str | None = None,
+    *, safe_preflight_failure: bool = False,
 ) -> None:
     """
     Atualiza o status de um item em uma plataforma especifica.
@@ -314,12 +337,31 @@ def update_status(
         if item["id"] != item_id:
             continue
 
+        if platform not in item["platforms"] or status not in {"pending", "uploading", "uploaded", "failed", "cancelled"}:
+            raise QueueStateError("Plataforma/status de fila inválido")
+        state = item["platforms"][platform]
+        prior = state["status"]
+        if platform == "youtube":
+            if (prior == "uploaded" and status != "uploaded") or (
+                    prior == "uploading" and status not in {"uploading", "uploaded"}
+                    and not (safe_preflight_failure and status == "pending" and not state.get("video_id"))):
+                raise QueueStateError("Upload confirmado/incerto não pode ser reiniciado implicitamente")
+            if state.get("video_id") and video_id is not None and state["video_id"] != video_id:
+                raise QueueStateError("ID confirmado não pode ser substituído")
+            if status == "uploaded" and os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true" and not (video_id or state.get("video_id")):
+                raise QueueStateError("Confirmação de upload exige ID")
+        state["status"] = status
+        if video_id is not None:
+            state["video_id"] = video_id
+        if url is not None:
+            state["url"] = url
+        if status == "uploaded":
+            if not state.get("uploaded_at"):
+                state["uploaded_at"] = item["schedule"].get("uploaded_at") or _now_iso()
+            if platform == "youtube":
+                item["schedule"]["uploaded_at"] = item["schedule"].get("uploaded_at") or state["uploaded_at"]
+                queue["last_upload_at"] = max(queue.get("last_upload_at") or "", state["uploaded_at"])
         if platform in item["platforms"]:
-            item["platforms"][platform]["status"]   = status
-            item["platforms"][platform]["video_id"] = video_id
-            item["platforms"][platform]["url"]      = url
-            if status == "uploaded":
-                item["platforms"][platform]["uploaded_at"] = _now_iso()
             if publish_at is not None:
                 item["platforms"][platform]["publish_at"] = publish_at
             if thumbnail is not None:
@@ -328,9 +370,6 @@ def update_status(
         statuses = [p["status"] for p in item["platforms"].values()]
         if all(s == "uploaded" for s in statuses):
             item["status"]                   = "uploaded"
-            item["schedule"]["uploaded_at"]  = _now_iso()
-            queue["last_upload_at"]          = _now_iso()
-            queue["uploads_today"] = count_uploads_today(language) + 1
             logger.info("Upload completo: %s", item_id)
         elif any(s == "uploaded" for s in statuses):
             item["status"] = "partial"
@@ -341,10 +380,15 @@ def update_status(
             logger.error("Upload falhou: %s (tentativa %d)", item_id, item["attempts"])
         elif any(s == "uploading" for s in statuses):
             item["status"] = "uploading"
+        elif status == "pending":
+            item["status"] = "pending"
+        elif status == "cancelled":
+            item["status"] = "cancelled"
 
-        break
-
-    _save_queue(language, queue)
+        queue["uploads_today"] = _count_today(queue)
+        _save_queue(language, queue)
+        return
+    raise QueueStateError("Item de fila ausente para atualização")
 
 
 def increment_attempts(language: str, item_id: str) -> int:
@@ -364,9 +408,11 @@ def count_uploads_today(language: str) -> int:
     manual do TikTok. Aceita schedule.uploaded_at como compatibilidade com
     filas gravadas antes do timestamp por plataforma.
     """
-    queue = _load_queue(language)
-    today = _today_str()
+    return _count_today(_load_queue(language))
 
+
+def _count_today(queue: dict) -> int:
+    today = _today_str()
     count = 0
     for item in queue["items"]:
         uploaded_at = (
@@ -376,8 +422,6 @@ def count_uploads_today(language: str) -> int:
         if uploaded_at and uploaded_at.startswith(today):
             count += 1
 
-    queue["uploads_today"] = count
-    _save_queue(language, queue)
     return count
 
 
@@ -442,6 +486,10 @@ def mark_for_deletion(language: str, item_id: str) -> None:
     queue = _load_queue(language)
     for item in queue["items"]:
         if item["id"] == item_id:
+            youtube = item.get("platforms", {}).get("youtube", {})
+            if youtube.get("status") != "uploaded" or not youtube.get("video_id"):
+                raise QueueStateError("Limpeza exige upload confirmado")
+            item["deleted_local_paths"] = {field: item.get(field) for field in ("video_path", "thumbnail_path")}
             item["video_path"]     = None
             item["thumbnail_path"] = None
             break
@@ -450,22 +498,10 @@ def mark_for_deletion(language: str, item_id: str) -> None:
 
 def reset_daily_counter(language: str) -> None:
     """
-    Reseta o contador diario de uploads.
-    Limpa uploaded_at dos itens de hoje para que a recontagem funcione corretamente.
+    Reconta o dia atual sem apagar a evidência de uploads confirmados.
     """
     queue = _load_queue(language)
-    today = _today_str()
-
-    for item in queue["items"]:
-        uploaded_at = item["schedule"].get("uploaded_at")
-        if uploaded_at and uploaded_at.startswith(today):
-            item["schedule"]["uploaded_at"] = None
-        youtube = item.get("platforms", {}).get("youtube", {})
-        youtube_uploaded_at = youtube.get("uploaded_at")
-        if youtube_uploaded_at and youtube_uploaded_at.startswith(today):
-            youtube["uploaded_at"] = None
-
-    queue["uploads_today"] = 0
+    queue["uploads_today"] = _count_today(queue)
     _save_queue(language, queue)
     logger.info("Contador diario resetado: %s", language)
 

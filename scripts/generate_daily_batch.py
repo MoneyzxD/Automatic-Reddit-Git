@@ -19,6 +19,10 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 
+class BatchUnavailable(RuntimeError):
+    """Dependência/estado indisponível não pode ser escondido por nova história."""
+
+
 def _carregar_publicacao() -> dict:
     config_path = BASE_DIR / "config" / "publishing.yaml"
     with open(config_path, encoding="utf-8") as arquivo:
@@ -116,6 +120,8 @@ def preencher_lote(
             limite_historia,
         )
         codigo = _executar_historia(grupo, limite_historia)
+        if codigo == 2:
+                raise BatchUnavailable("Dependência ou estado obrigatório indisponível (codigo 2); lote interrompido")
         if codigo != 0:
             raise RuntimeError(f"main.py falhou com codigo {codigo}")
 
@@ -164,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
         meta, max_tentativas = _meta_diaria(args.target)
         max_excedente = int(_carregar_plano().get("max_carryover_parts_next_day", 1))
         preencher_lote(idiomas, meta, max_tentativas, max_excedente)
+    except BatchUnavailable as erro:
+        logging.getLogger("daily_batch").error("Lote indisponível: %s", erro)
+        return 2
     except (OSError, ValueError, RuntimeError) as erro:
         logging.getLogger("daily_batch").error("Lote diario falhou: %s", erro)
         return 1

@@ -1,9 +1,22 @@
 import os
 import subprocess
 import sys
+import pytest
 from pathlib import Path
 
 from scripts import generate_daily_batch
+
+
+def test_indisponibilidade_codigo_2_para_lote_sem_tentar_historia_nova(monkeypatch):
+    calls = []
+    monkeypatch.setattr(generate_daily_batch, "setup_logging", lambda *args: None, raising=False)
+    monkeypatch.setattr(generate_daily_batch, "_contar_lote_do_dia", lambda langs: {lang: 0 for lang in langs})
+    def outage(*args, **kwargs):
+        calls.append(args)
+        return 2
+    monkeypatch.setattr(generate_daily_batch, "_executar_historia", outage)
+    assert generate_daily_batch.main(["--lang", "pt"]) == 2
+    assert len(calls) == 1
 
 
 def test_script_encontra_main_quando_executado_fora_da_raiz(tmp_path):

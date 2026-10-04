@@ -32,9 +32,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from utils.pipeline_state import StateError, checkpoint_from_environment, require_ready
+from scheduler.queue import QueueStateError
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -95,7 +99,7 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
                      dry_run: bool = False) -> dict:
     """Publica ate `maximo` itens pendentes do idioma. Retorna resumo."""
     logger = logging.getLogger("publish")
-    from scheduler.queue import get_pending, update_status
+    from scheduler.queue import get_pending, update_status, get_item, get_uncertain, QueueStateError
 
     resumo = {"idioma": language, "enviados": 0, "falhas": 0, "kits_tiktok": 0,
               "agendamentos": []}
@@ -109,6 +113,13 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
         logger.info("Canal %s desabilitado — pulando", language)
         return resumo
 
+    if not dry_run and os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true":
+        require_ready(BASE_DIR, os.getenv("PIPELINE_STATE_NAMESPACE", ""))
+    if get_uncertain(language):
+        from scheduler.notifier import send_admin_alert
+        if not dry_run:
+            send_admin_alert(f"Publicação bloqueada em {language}: envio incerto exige conferir o Studio.", pub_cfg)
+        raise StateError("Idioma tem upload incerto; reenvio bloqueado")
     pendentes = get_pending(language)
     if not pendentes:
         logger.info("Fila vazia: %s", language)
@@ -181,6 +192,14 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
             logger.info("[dry-run] %s -> publicaria em %s", item_id, quando)
             continue
 
+        item = get_item(language, item_id)
+        if item is None:
+            raise StateError("Item de publicação ausente após planejamento")
+        youtube = item["platforms"]["youtube"]
+        if youtube.get("status") != "pending" or youtube.get("video_id"):
+            resumo["agendamentos"].pop()
+            continue
+
         # 1. Kit do TikTok primeiro — depende do arquivo local existir
         try:
             quando_local = datetime.fromisoformat(
@@ -194,12 +213,17 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
             ):
                 resumo["kits_tiktok"] += 1
                 logger.info("Kit TikTok enviado: %s", item_id)
-        except Exception as e:
-            logger.warning("Falha ao enviar kit TikTok (%s): %s", item_id, e)
+        except (StateError, QueueStateError):
+            raise
+        except Exception:
+            logger.warning("Falha ao enviar kit TikTok (%s)", item_id)
 
         # 2. Upload para o YouTube com publicacao agendada
         try:
             from scheduler.uploader import Uploader
+            item = get_item(language, item_id)
+            if item is None:
+                raise StateError("Item de publicação ausente antes do transporte")
             uploader = Uploader(language, canal)
             resultado = uploader.upload_item(item, publish_at=quando)
             yt = resultado.get("youtube", {})
@@ -210,13 +234,19 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
             else:
                 resumo["falhas"] += 1
                 logger.error("Falha no upload de %s: %s", item_id, yt.get("error"))
-        except Exception as e:
+                if yt.get("safe_to_retry"):
+                    # A credencial vale para o idioma inteiro; não repetir OAuth em cada parte.
+                    break
+        except (StateError, QueueStateError):
+            raise
+        except Exception:
             resumo["falhas"] += 1
-            logger.error("Erro inesperado publicando %s: %s", item_id, e)
-            try:
+            logger.error("Erro inesperado publicando %s; status confirmado será preservado", item_id)
+            current = get_item(language, item_id)
+            if current is None or current["platforms"]["youtube"]["status"] == "uploading":
+                raise StateError("Resultado externo incerto; interromper publicação") from None
+            if current["platforms"]["youtube"]["status"] != "uploaded":
                 update_status(language, item_id, "youtube", "failed")
-            except Exception:
-                pass
 
     return resumo
 
@@ -259,7 +289,11 @@ def main() -> int:
     idiomas = ["pt" if l == "pt-br" else l for l in args.lang]
 
     inicio = datetime.now()
-    resumos = [publicar_idioma(l, pub_cfg, args.max, args.dry_run) for l in idiomas]
+    try:
+        resumos = [publicar_idioma(l, pub_cfg, args.max, args.dry_run) for l in idiomas]
+    except (StateError, QueueStateError):
+        logger.error("Publicação interrompida: estado obrigatório não confirmado")
+        return 2
 
     total_env = sum(r["enviados"] for r in resumos)
     total_fal = sum(r["falhas"] for r in resumos)

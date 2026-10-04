@@ -18,8 +18,11 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from pathlib import Path
+
+from utils.pipeline_state import StateError, checkpoint_from_environment
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +152,7 @@ class YouTubeUploader:
             f.write(creds.to_json())
         logger.debug("Token salvo: %s", self.token_file.name)
 
-    def upload(self, item: dict, publish_at: str | None = None) -> dict:
+    def upload(self, item: dict, publish_at: str | None = None, *, on_video_uploaded=None) -> dict:
         """
         Faz upload de um video para YouTube.
 
@@ -176,6 +179,9 @@ class YouTubeUploader:
         kids      = yt_meta.get("made_for_kids", False)
         visibility = yt_meta.get("visibility", "public")
 
+        transport_started = False
+        confirmed = None
+        thumbnail_result = {"status": "not_requested"}
         try:
             from googleapiclient.http import MediaFileUpload
 
@@ -221,20 +227,31 @@ class YouTubeUploader:
 
             response = None
             while response is None:
+                transport_started = True
                 status, response = request.next_chunk()
                 if status:
                     progress = int(status.progress() * 100)
                     logger.info("Upload YouTube: %d%%", progress)
 
-            video_id = response.get("id")
+            video_id = response.get("id") if isinstance(response, dict) else None
+            if not isinstance(video_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", video_id):
+                return {"status": "uncertain", "transport_started": True,
+                        "error": "YouTube não confirmou um ID válido; conferir no Studio"}
             url      = f"https://youtu.be/{video_id}"
+            confirmed = {"status": "uploaded", "video_id": video_id, "url": url, "publish_at": publish_at}
+            if on_video_uploaded is not None:
+                try:
+                    on_video_uploaded(confirmed.copy())
+                except StateError:
+                    raise
+                except Exception:
+                    raise StateError("Confirmação durável do vídeo falhou") from None
             if publish_at:
                 logger.info("Upload concluido: %s — publica automaticamente em %s",
                             url, publish_at)
             else:
                 logger.info("Upload YouTube concluido: %s", url)
 
-            thumbnail_result = {"status": "not_requested"}
             studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
             thumb_path = item.get("thumbnail_path")
             if thumb_path and Path(thumb_path).exists():
@@ -248,14 +265,17 @@ class YouTubeUploader:
                 except Exception as e:
                     # Permissao da capa e separada do upload do video. Um 403
                     # pode depender da verificacao/elegibilidade do canal.
+                    http_status = getattr(getattr(e, "resp", None), "status", None)
+                    http_status = http_status if type(http_status) is int else None
                     thumbnail_result = {
-                        "status": "failed", "error": str(e),
+                        "status": "failed", "error": "YouTube recusou a thumbnail",
+                        "http_status": http_status,
                         "studio_url": studio_url,
                     }
                     logger.warning(
-                        "Video enviado, mas a thumbnail falhou (%s): %s. "
+                        "Video enviado, mas a thumbnail falhou (%s), HTTP=%s. "
                         "Editar a capa sem reenviar o video: %s",
-                        video_id, e, studio_url,
+                        video_id, http_status, studio_url,
                     )
                     if getattr(getattr(e, "resp", None), "status", None) == 403:
                         logger.warning(
@@ -283,9 +303,19 @@ class YouTubeUploader:
                 "thumbnail":  thumbnail_result,
             }
 
-        except Exception as e:
-            logger.error("Erro no upload YouTube: %s", e)
-            return {"status": "failed", "error": str(e)}
+        except StateError:
+            raise
+        except Exception:
+            if confirmed is not None:
+                logger.warning("Falha posterior ao ID confirmado; vídeo não será reenviado")
+                return {**confirmed, "thumbnail": thumbnail_result}
+            if transport_started:
+                logger.error("Resultado do upload YouTube incerto; reconciliação obrigatória")
+                return {"status": "uncertain", "transport_started": True,
+                        "error": "Envio iniciado sem confirmação; conferir no Studio"}
+            logger.error("Preflight YouTube indisponível; nenhuma transferência iniciada")
+            return {"status": "failed", "safe_to_retry": True,
+                    "error": "Preflight/OAuth indisponível antes do envio"}
 
     def edit_hashtag(self, video_id: str, new_hashtags_str: str) -> bool:
         """
@@ -494,6 +524,7 @@ class Uploader:
         # runner efemero vem de variavel de ambiente (GitHub Secret).
         from utils import environment as env
         base_dir = Path(__file__).parent.parent
+        self.base_dir = base_dir
 
         # YouTube
         yt_cfg = channel_config.get("youtube", {})
@@ -525,12 +556,27 @@ class Uploader:
 
         Retorna dict com resultado por plataforma.
         """
-        from scheduler.queue import update_status, mark_for_deletion
+        from scheduler.queue import update_status, mark_for_deletion, get_item
 
         item_id  = item["id"]
         results  = {}
         all_ok   = True
         thumbnail_pending = False
+        state_required = os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true"
+        base_dir = getattr(self, "base_dir", Path(__file__).parent.parent)
+        def checkpoint(reason):
+            if state_required:
+                checkpoint_from_environment(base_dir, reason=reason)
+        fresh = get_item(self.language, item_id)
+        if fresh is None:
+            raise StateError("Item de upload não encontrado; restauração necessária")
+        youtube_state = fresh.get("platforms", {}).get("youtube", {})
+        if youtube_state.get("status") == "uploading" or (youtube_state.get("video_id") and youtube_state.get("status") != "uploaded"):
+            raise StateError("Upload incerto; reenvio bloqueado até reconciliação")
+        if youtube_state.get("status") == "uploaded":
+            # Repetir a chamada não autoriza thumbnail, edição ou limpeza novamente.
+            return {"youtube": dict(youtube_state)}
+        item = fresh
 
         # ── YouTube ──────────────────────────────────────────────────────────
         if self.youtube:
@@ -543,9 +589,34 @@ class Uploader:
                                           ja_agendados=ja_agendados)
                     )
                 logger.info("Uploading YouTube: %s (%s)", item_id, self.language)
+                try:
+                    self.youtube._get_service()
+                except Exception:
+                    logger.error("OAuth/preflight indisponível; mídia pronta preservada")
+                    return {"youtube": {"status": "failed", "safe_to_retry": True,
+                                        "error": "OAuth/preflight indisponível antes do envio"}}
                 update_status(self.language, item_id, "youtube", "uploading")
-                result = self.youtube.upload(item, publish_at=publish_at)
+                checkpoint("before_youtube_upload")
+                def confirm_video(result):
+                    try:
+                        update_status(self.language, item_id, "youtube", "uploaded", video_id=result["video_id"],
+                                      url=result["url"], publish_at=result.get("publish_at"))
+                        checkpoint("youtube_video_confirmed")
+                    except StateError:
+                        raise
+                    except Exception:
+                        raise StateError("Confirmação do ID não persistida; interromper upload") from None
+                result = self.youtube.upload(item, publish_at=publish_at, on_video_uploaded=confirm_video)
                 results["youtube"] = result
+                if result["status"] == "uncertain":
+                    checkpoint("youtube_result_uncertain")
+                    from scheduler.notifier import send_admin_alert
+                    send_admin_alert(f"Upload incerto ({self.language}/{item_id}); conferir no Studio antes de reenviar.", self.pub_config)
+                    return results
+                if result.get("safe_to_retry"):
+                    update_status(self.language, item_id, "youtube", "pending", safe_preflight_failure=True)
+                    checkpoint("youtube_preflight_unavailable")
+                    return results
                 update_status(
                     self.language, item_id, "youtube",
                     result["status"],
@@ -554,6 +625,7 @@ class Uploader:
                     thumbnail=result.get("thumbnail"),
                     publish_at=result.get("publish_at"),
                 )
+                checkpoint("youtube_thumbnail")
                 thumbnail_pending = result.get("thumbnail", {}).get("status") in (
                     "failed", "missing",
                 )
@@ -587,11 +659,17 @@ class Uploader:
                 "Capa pendente: arquivos locais preservados para corrigir a "
                 "thumbnail do video ja enviado (%s)", item_id,
             )
-        if all_ok and not thumbnail_pending:
+        if all_ok and not thumbnail_pending and results.get("youtube", {}).get("status") == "uploaded":
             delete = self.pub_config.get("global", {}).get("delete_after_upload", True)
+            if state_required:
+                current = get_item(self.language, item_id)
+                if current["platforms"].get("tiktok", {}).get("status") in {"pending", "notified"}:
+                    # Sem kit entregue, o MP4 precisa sobreviver à troca de runner.
+                    delete = False
             if delete:
                 self._delete_local_files(item)
                 mark_for_deletion(self.language, item_id)
+                checkpoint("youtube_cleanup")
                 logger.info("Arquivos locais deletados: %s", item_id)
 
         return results

@@ -365,8 +365,9 @@ def upload_job(pub_cfg: dict) -> None:
     Verifica filas YouTube e dispara uploads quando condicoes OK.
     Chamado a cada queue_check_interval_minutes.
     """
-    from scheduler.queue import get_pending, get_failed, increment_attempts
+    from scheduler.queue import get_pending, get_failed, increment_attempts, QueueStateError
     from scheduler.uploader import Uploader
+    from utils.pipeline_state import StateError
 
     channels  = pub_cfg.get("channels", {})
     platforms = pub_cfg.get("global", {}).get("platforms", [])
@@ -410,6 +411,8 @@ def upload_job(pub_cfg: dict) -> None:
             uploader = Uploader(language, channel_cfg)
             results  = uploader.upload_item(item)
             logger.info("Resultado upload YouTube %s: %s", language, results)
+        except (StateError, QueueStateError):
+            raise
         except Exception as e:
             logger.error("Erro no uploader YouTube (%s): %s", language, e)
             increment_attempts(language, item["id"])
@@ -422,6 +425,8 @@ def upload_job(pub_cfg: dict) -> None:
             try:
                 uploader = Uploader(language, channel_cfg)
                 uploader.upload_item(failed_item)
+            except (StateError, QueueStateError):
+                raise
             except Exception as e:
                 logger.error("Retry falhou (%s): %s", language, e)
                 increment_attempts(language, failed_item["id"])

@@ -99,6 +99,34 @@ def test_snapshot_restaura_fila_e_midia_em_outra_raiz(snapshot_fixture, tmp_path
         assert conn.execute("SELECT status FROM story_languages").fetchone() == ("exported",)
 
 
+def test_snapshot_apos_limpeza_preserva_id_sem_midia(snapshot_fixture, tmp_path):
+    from utils.pipeline_snapshot import restore_snapshot
+    base, _ = snapshot_fixture
+    item = queue.get_pending("pt")[0]
+    queue.update_status("pt", item["id"], "youtube", "uploaded", video_id="vid1")
+    queue.update_status("pt", item["id"], "tiktok", "uploaded", video_id="tt1")
+    Path(item["video_path"]).unlink()
+    Path(item["thumbnail_path"]).unlink()
+    queue.mark_for_deletion("pt", item["id"])
+    snapshot = build(snapshot_fixture)
+    assert snapshot.media == {}
+    destination = tmp_path / "restored"
+    restore_snapshot(snapshot, destination)
+    data = json.loads((destination / "data/queue/pt.json").read_text(encoding="utf-8"))
+    assert data["items"][0]["platforms"]["youtube"]["video_id"] == "vid1"
+    assert data["items"][0]["video_path"] is None
+
+
+def test_thumbnail_falha_exige_midia_preservada(snapshot_fixture):
+    from utils.pipeline_snapshot import SnapshotError
+    item = queue.get_pending("pt")[0]
+    queue.update_status("pt", item["id"], "youtube", "uploaded", video_id="vid1", thumbnail={"status": "failed"})
+    queue.update_status("pt", item["id"], "tiktok", "uploading")
+    Path(item["video_path"]).unlink()
+    with pytest.raises(SnapshotError):
+        build(snapshot_fixture)
+
+
 @pytest.mark.parametrize("corrupt", ["payload", "media"])
 def test_hash_errado_nao_sobrescreve_destino(snapshot_fixture, tmp_path, corrupt):
     from utils.pipeline_snapshot import restore_snapshot, SnapshotError

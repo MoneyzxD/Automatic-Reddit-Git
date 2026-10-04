@@ -99,7 +99,8 @@ def _needs_media(item: dict) -> bool:
     yt = platforms["youtube"]
     return (yt["status"] not in {"uploaded", "cancelled"}
             or platforms.get("tiktok", {}).get("status") in {"pending", "notified"}
-            or yt.get("thumbnail_status") == "failed")
+            or yt.get("thumbnail_status") == "failed"
+            or yt.get("thumbnail", {}).get("status") in {"failed", "missing"})
 
 
 def _validate_queue(data: dict, language: str) -> None:
@@ -113,9 +114,15 @@ def _validate_queue(data: dict, language: str) -> None:
                 or item.get("status") not in {"pending", "uploading", "uploaded", "partial", "failed", "cancelled"}
                 or not isinstance(item.get("metadata"), dict) or not isinstance(item.get("platforms"), dict)
                 or not isinstance(item["platforms"].get("youtube"), dict)
-                or item["platforms"]["youtube"].get("status") not in {"pending", "uploading", "uploaded", "failed", "cancelled"}
-                or not isinstance(item.get("video_path"), str) or not item["video_path"]):
+                or any(not isinstance(state, dict) or state.get("status") not in {"pending", "uploading", "uploaded", "failed", "cancelled"}
+                       or (state.get("thumbnail") is not None and not isinstance(state["thumbnail"], dict))
+                       for state in item["platforms"].values())
+                or item["platforms"]["youtube"].get("status") not in {"pending", "uploading", "uploaded", "failed", "cancelled"}):
             raise SnapshotError("Item de fila inválido")
+        if (_needs_media(item) and (not isinstance(item.get("video_path"), str) or not item["video_path"])):
+            raise SnapshotError("Mídia necessária sem referência")
+        if item.get("video_path") is not None and not isinstance(item["video_path"], str):
+            raise SnapshotError("Referência de vídeo inválida")
         if item["platforms"]["youtube"]["status"] == "uploaded" and not item["platforms"]["youtube"].get("video_id"):
             raise SnapshotError("Upload confirmado sem ID")
         ids.add(item["id"])
@@ -274,6 +281,9 @@ def build_snapshot(base_dir: Path, db_path: Path, *, snapshot_id: str, namespace
             mapping = {}
             for item in data["items"]:
                 mapping[item["id"]] = {}
+                if item.get("deleted_local_paths"):
+                    item["deleted_local_paths"] = {field: _relative(base, value) if value else None
+                                                   for field, value in item["deleted_local_paths"].items()}
                 for field in ("video_path", "thumbnail_path"):
                     value = item.get(field)
                     if value:
@@ -404,6 +414,9 @@ def restore_snapshot(snapshot: Snapshot, target_dir: Path) -> None:
                 for field in ("video_path", "thumbnail_path"):
                     if item.get(field):
                         item[field] = str(_under(target, target / item[field]))
+                if item.get("deleted_local_paths"):
+                    item["deleted_local_paths"] = {field: str(_under(target, target / str(safe_member_name(value)))) if value else None
+                                                   for field, value in item["deleted_local_paths"].items()}
             _write_json(path, data)
         with closing(sqlite3.connect(staged / "db/pipeline.db")) as conn, conn:
             fields = ",".join(_DB_PATH_FIELDS)

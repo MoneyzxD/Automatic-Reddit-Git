@@ -65,7 +65,8 @@ def test_thumbnail_403_nao_transforma_video_enviado_em_falha(upload_context, cap
     assert result["status"] == "uploaded"
     assert result["video_id"] == "video-ja-enviado"
     assert result["thumbnail"]["status"] == "failed"
-    assert "permissions" in result["thumbnail"]["error"]
+    assert result["thumbnail"]["http_status"] == 403
+    assert "authenticated user" not in result["thumbnail"]["error"]
     assert "studio.youtube.com/video/video-ja-enviado/edit" in caplog.text
     assert "verificacao" in caplog.text
 
