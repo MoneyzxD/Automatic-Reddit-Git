@@ -43,6 +43,15 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Última validação, commit dc87c02/run37241728126: coleta factual avançou,
+adaptação entrou em repairing e a revisão global parou por HTTP429/cota.
+Nenhum vídeo/upload; checkpoint salvo. Verify37242044138 passou em outro runner,
+786 testes/17.33s, sete arquivos de controle e mídia zero, sem Groq.
+Suíte local786 passou; não repetir geração para burlar cota nem trocar chave.
+Rascunho de reconciliação privado preserva84IDs,91itens/7incertos e originais;
+nenhuma decisão aplicada ou bootstrap production. Autorizações específicas
+de mídias/efeitos externos continuam pendentes; agentes ainda posteriores.
+
 Plano: `superpowers/plans/2026-10-03-pipeline-reliability.md`. Código revisado
 com 763 testes locais passando. Secret `PIPELINE_STATE_TOKEN` cadastrado e
 acesso real ao armazenamento privado comprovado. A revisão de roteiro real

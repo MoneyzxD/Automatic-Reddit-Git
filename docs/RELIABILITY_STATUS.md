@@ -15,6 +15,22 @@ Probe da fonte preservada depende de autorização específica após bloqueio
 da verificação de segurança, sem contorno. Decisões sobre sete uploads sem ID
 e encerramento de kits/capas legados foram solicitadas ao operador.
 
+Commit de código `dc87c02`, suíte local 786 passed/30 warnings/53.57s,
+compileall e diff check passaram. Run37241728126 passou testes, LanguageTool
+e restore; coleta factual avançou, adaptação entrou em repairing. Revisão
+global interrompida por rate_limit/HTTP429, uma tentativa, contexto14265.
+Checkpoint final foi salvo; nenhum MP4 ou upload. LT background aparece
+cancelled no encerramento, mas seu health/warmup passaram; não atribuir a ele
+a falha de geração. Verify37242044138 passou em outro runner, sem Groq/geração/
+publicação: 786 testes/17.33s, sete arquivos de controle restaurados, mídia zero.
+Confirma recuperação de fonte/perfil/controle, não renderização nem upload.
+
+Rascunho privado de reconciliação preparado em cópia local separada:
+84 IDs/91 itens legados/7 incertos, 14 arquivos de mídia copiados com hash,
+112 referências ainda sem bytes. Originais conferidos antes/depois, preservados.
+Paths rebased só na cópia; nenhuma decisão aprovada, head ou importação.
+Snapshot candidato continua inválido por necessidade de reconciliação.
+
 ## Investigação e validação
 
 - Runs antigos 37128480329/37209564422: revisão de adaptação EN indisponível;
