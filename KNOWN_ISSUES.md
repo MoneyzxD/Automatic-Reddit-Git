@@ -35,6 +35,10 @@ enum e citação com capitalização alterada. Prompt e feedback de retry foram
 ajustados, sem relaxar schema/parser/citação literal ou aumentar orçamento.
 Último probe local recebeu 429 com espera acima do permitido; não contornar
 cota com troca de chaves nem tratar testes falsos como prova da correção real.
+O Actions 37221057489 também encontrou HTTP429 no facts; restore/save e 763
+testes passaram, sem gerar/publicar. Aceite real do ajuste continua bloqueado
+pela cota; não liberar main por teste unitário verde. Isso não diagnostica
+retroativamente os runs antigos de produção, ainda listados no backlog.
 Outros modelos configurados conservam JSON object e podem ter a mesma limitação;
 não há troca automática de modelo, chave ou aprovação por fallback.
 

@@ -5,9 +5,17 @@ Ordem definida pelo operador em 2026-10-04.
 ## 1. Concluir a implantação da confiabilidade — em andamento
 
 Plano: `superpowers/plans/2026-10-03-pipeline-reliability.md`. Código revisado
-com 745 testes locais passando. Secret `PIPELINE_STATE_TOKEN` cadastrado;
-avançar com geração isolada no Actions, restauração em outro runner e bootstrap
+com 763 testes locais passando. Secret `PIPELINE_STATE_TOKEN` cadastrado e
+acesso real ao armazenamento privado comprovado. A revisão de roteiro real
+ainda está em validação: JSON recusado, categorias/citações e cota Groq são
+registrados separadamente, sem inferir a causa das falhas antigas. Próximos gates:
+geração isolada no Actions, restauração em outro runner e bootstrap
 reconciliado de produção antes de liberar main.
+Run 37221057489 terminou por HTTP429 da Groq; escrita/restauração e testes
+passaram, mas nenhuma mídia foi gerada. Revalidar geração somente quando
+a cota permitir; não usar outra chave para contornar esse bloqueio.
+Verify 37221464481 passou em outro runner, sem geração/publicação. Confirma
+estado de controle/fonte/perfil restaurado, não mídias que não foram geradas.
 
 ## 2. Investigar por que o pipeline de produção está falhando — pendente
 

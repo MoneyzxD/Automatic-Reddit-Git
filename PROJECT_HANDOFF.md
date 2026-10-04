@@ -141,3 +141,19 @@ continua rejeitando esse caso. O último probe encontrou 429 com espera acima
 do orçamento, portanto a correção completa ainda precisa de prova no Actions.
 Fixture de integração foi isolada do Groq real; ela não pode consumir a chave
 presente no ambiente. Suíte interrompida durante essa investigação não é prova.
+
+Run [37221057489](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37221057489),
+commit c36554a: 763 testes, LanguageTool real, restore e save privados passaram;
+geração encontrou `rate_limit`, HTTP429, modo facts, uma tentativa (espera
+do serviço acima do orçamento). Sem mídia/publicação. Não repetir geração
+enquanto a cota não renovar nem trocar chave para contorná-la. A correção de
+prompt/feedback ainda NÃO tem aceite real; falta geração PT/EN/ES, inspeção
+de mídia e bootstrap reconciliado antes de liberar main. Verify separado pode
+comprovar o estado de controle/fonte/perfil, mas não mídia que não foi gerada.
+
+Verify [37221464481](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37221464481)
+concluído com sucesso em outro runner, commit c36554a, mesmo namespace:
+restore e verificação passaram; geração/publicação/checkpoint final foram
+pulados conforme o modo. Isso comprova a recuperação do estado salvo de
+controle/fonte/perfil, NÃO geração de mídia ou upload. Retomar quando a cota
+permitir a prova semântica real; não reiniciar tarefas 1–6 nem descartar heads.
