@@ -22,6 +22,15 @@ em estado obrigatório bloqueia snapshot em vez de virar vazia. Upload incerto
 interrompe a rodada e bloqueia novos envios do mesmo idioma até reconciliação.
 Essas proteções ainda não foram liberadas em produção.
 
+A validação isolada 37217438115 confirmou armazenamento/restauração privados,
+mas a geração parou no Groq: HTTP 400, `json_validate_failed`, modo facts,
+contexto de 4002 caracteres, uma tentativa. É falha real do formato de saída
+JSON, sem evidência de 429 nesse teste. O guardião agora usa schema estrito
+nos modelos GPT-OSS 20B/120B, mantendo as verificações locais de citação literal,
+gênero e fatos. A resposta real após esse ajuste ainda precisa ser validada.
+Outros modelos configurados conservam JSON object e podem ter a mesma limitação;
+não há troca automática de modelo, chave ou aprovação por fallback.
+
 O run 37128480329 não preservou a classe da indisponibilidade semântica de
 `1wfduc8`; retries não comprovam 429. Novas chamadas classificam HTTP/timeout,
 JSON/schema e evidência literal sem body bruto. Sem fonte original íntegra,

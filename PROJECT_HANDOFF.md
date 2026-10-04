@@ -115,3 +115,12 @@ SQLite da raiz de código. Dois testes reproduziram esse efeito; o dry-run
 agora usa filtro/organizer sem DB, sem apagar estado para contornar o bloqueio.
 Geração e publicação não chegaram a executar nesse run. A validação seguinte
 precisa comprovar também escrita/restauração privada e geração real.
+
+A segunda validação, [37217438115](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37217438115),
+passou 747 testes, bootstrap/restauração privada e checkpoint final, comprovando
+o acesso real do Secret ao armazenamento. A geração parou antes de mídia:
+`invalid_json`, HTTP 400, `json_validate_failed`, modo facts, 4002 caracteres,
+uma tentativa, revisão da adaptação EN de `test_male_001`. Publicação foi pulada.
+O adaptador do guardião foi ajustado para JSON schema estrito nos modelos
+GPT-OSS já usados; parser e gates de fidelidade/gênero continuam obrigatórios.
+Regressões locais não substituem a próxima chamada real do Groq no Actions.

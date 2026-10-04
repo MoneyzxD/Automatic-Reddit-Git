@@ -464,8 +464,76 @@ def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfi
     assert revisar(guardian, perfil_feminino).status == "approved"
     assert keys == ["pt"] * 3
     assert clients == [("chave-opaca", "script_guardian")] * 3
-    assert all(c["temperature"] == 0 and c["response_format"] == {"type": "json_object"} for c in calls)
+    assert all(c["temperature"] == 0 and c["response_format"]["type"] == "json_schema"
+               and c["response_format"]["json_schema"]["strict"] is True for c in calls)
     assert "recortes deliberados" in calls[-1]["messages"][0]["content"]
+
+
+def test_rejeicao_json_validate_failed_prevenida_pelo_schema(tmp_path, perfil_feminino, monkeypatch):
+    import stages.script_guardian as module
+    import utils.groq_client as groq_client
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        if kwargs["response_format"]["type"] == "json_object":
+            exc = RuntimeError("SYNTHETIC_PRIVATE_RESPONSE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed"}}
+            raise exc
+        context = json.loads(kwargs["messages"][1]["content"])
+        raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw))])
+
+    monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
+    monkeypatch.setattr(groq_client, "tracked_groq", lambda *args, **kwargs:
+                        SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    guardian = ScriptGuardian({}, base_dir=tmp_path, languagetool=FakeLanguageTool())
+    assert revisar(guardian, perfil_feminino).status == "approved"
+    assert len(calls) == 3
+    assert all(call["response_format"]["json_schema"]["strict"] is True for call in calls)
+
+
+@pytest.mark.parametrize("model", ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "legacy-model"])
+@pytest.mark.parametrize("mode", ["facts", "global"])
+def test_contrato_estrito_do_provider_preserva_fatos_e_patches(monkeypatch, model, mode):
+    import stages.script_guardian as module
+    import utils.groq_client as groq_client
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+
+    monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
+    monkeypatch.setattr(groq_client, "tracked_groq", lambda *args, **kwargs:
+                        SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    module._GroqReviewer({"groq_model": model, "semantic_timeout_seconds": 60}).review(
+        language="pt", mode=mode, source_chunk="I am a cleaner.")
+    request = calls[0]
+    assert request["model"] == model
+    if model == "legacy-model":
+        assert request["response_format"] == {"type": "json_object"}
+        return
+    contract = request["response_format"]
+    assert contract["type"] == "json_schema"
+    assert contract["json_schema"]["strict"] is True
+    schema = contract["json_schema"]["schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"])
+    collection = "facts" if mode == "facts" else "issues"
+    item = schema["properties"][collection]["items"]
+    assert item["additionalProperties"] is False
+    assert set(item["required"]) == set(item["properties"])
+    assert item["properties"]["source_quote"] == {"type": "string"}
+    if mode == "facts":
+        assert item["properties"]["kind"]["enum"] == ["relationship", "amount", "event", "outcome", "identity"]
+        assert item["properties"]["value"] == {"type": "string"}
+    else:
+        assert schema["properties"]["approved"] == {"type": "boolean"}
+        assert item["properties"]["category"]["enum"] == list(module.REVIEW_CATEGORIES)
+        assert item["properties"]["severity"]["enum"] == ["info", "warning", "critical"]
+        assert item["properties"]["start"]["type"] == ["integer", "null"]
 
 
 def test_excecoes_do_provider_nao_vazam_no_relatorio(tmp_path, perfil_feminino):
