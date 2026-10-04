@@ -1,5 +1,15 @@
 # PROJECT_HANDOFF.md
 
+## Retomada prioritária — 2026-10-04 à noite
+
+Leia [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md) antes de continuar T7.
+Investigação revelou perda do histórico DB por cache salvo após teste falho
+antes de restore; candidatos antigo/atual preservados privados, sem bootstrap.
+Há84IDs conservados, sete itens sem ID e mídia legada recuperada. Coleta factual
+real continua instável: nonliteral_evidence também no modelo maior. Ajuste
+limitado do contrato de evidência aguarda aprovação; não repetir remendos de
+prompt/modelo nem liberar main. Suíte fresh773pass não é vídeo real aprovado.
+
 ## Estado integrado
 
 Esta atualização substitui o handoff reconstruído de memória do Claude Code.

@@ -11,8 +11,10 @@ retries SDK. O HTTP/body original não foi preservado: não é possível atribui
 a mesma causa, nem afirmar cota/OAuth retroativamente. No segundo houve também
 timeout do alerta Telegram, posterior ao gate, não causa da falha de geração.
 403 de alguns subreddits não impediu selecionar história nos dois runs.
-Fontes completas desses incidentes não estão no artifact sanitizado; não
-reconstruir texto por substituição de [REDACTED] nem resetar dedupe.
+Fontes completas desses incidentes não estavam no artifact sanitizado. Elas
+foram recuperadas do Reddit e seus hashes coincidiram com os perfis dos
+incidentes; cópias privadas estão no workspace de investigação. Isso não
+recupera o HTTP antigo nem autoriza reset de dedupe/replay de produção.
 
 Validação nova 37237857551, branch 12dd591: LanguageTool/testes/restore passaram;
 geração falhou por HTTP400 json_validate_failed, facts, tentativa 2. Separada
@@ -20,6 +22,20 @@ do HTTP429 do run anterior. Probe único posterior com chave fixa EN retornou
 JSON válido, 23 fatos e uma citação não literal. A coleta/revisão semântica
 ainda não é operacionalmente confiável: discutir o contrato/modelo antes de
 novo remendo de prompt ou enfraquecimento do gate. Main não liberado.
+
+Reprodução factual com fontes verificadas: 1wf0he0 passou em três chamadas;
+1wfduc8 falhou por nonliteral_evidence após três. Comparação com GPT-OSS120B
+na mesma chave EN também rejeitou evidência não literal na primeira chamada.
+Trocar apenas o modelo não resolveu. Proposta de ajuste do contrato interno
+de evidência por referências de trechos aguarda aprovação; nenhuma alteração
+desse contrato foi implementada.
+
+Falha de estado demonstrada separadamente: run37063586921 falhou nos testes
+antes do restore e salvou DB cache mesmo assim. Run37064703594 restaurou esse
+DB e fila de outro run. Capturas privadas comprovaram a perda de 28 histórias
+e 91 partes no DB recente. A cópia anterior conserva 30 histórias/91 partes,
+com filas byte-identical às atuais. Veja [status](RELIABILITY_STATUS.md) para
+pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
