@@ -78,3 +78,25 @@ liberar main e confirmar uma rodada dentro da meta normal. Agentes de
 manutenção/crescimento ficam fora desta entrega. O incidente semântico anterior
 continua sem causa operacional comprovada; a classificação nova não é prova
 retroativa de cota.
+
+### Revisão e retomada — 2026-10-04
+
+A revisão independente da porção de código foi concluída. Seus quatro
+achados importantes foram reproduzidos antes de corrigir: WAL residual no
+restore, fila legada ausente tratada como vazia, paths equivalentes no Windows
+e continuação de upload após resultado incerto. Regressões e suíte completa
+passaram: **745 testes**, 29 avisos de depreciação, 90.80s; `compileall` e
+`git diff --check` passaram. Isso é evidência local, não execução de serviços.
+
+A variable `PIPELINE_STATE_REPO` já aponta ao repositório privado; consulta
+apenas de nomes dos Secrets em 2026-10-04 confirmou `PIPELINE_STATE_TOKEN`
+ausente. O operador precisa criar a credencial limitada e cadastrá-la no
+repositório de produção, sem enviar o valor no chat. Depois vêm importação
+reconciliada, geração real isolada e restore no segundo runner; só então
+liberação. Main, cron, tokens YouTube e meta diária não foram alterados.
+
+O registro local para continuar sem repetir tarefas fica em
+`.superpowers/sdd/2026-10-03-pipeline-reliability/progress.md`, na worktree
+acima; revisão e prova da suíte ficam no mesmo diretório. Tarefas 1–6 estão
+completas; a tarefa 7 continua pendente dos gates operacionais. Esse diretório
+de retomada permanece preservado enquanto a implantação não terminar.

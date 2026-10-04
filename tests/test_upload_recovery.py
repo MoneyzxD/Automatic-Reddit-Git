@@ -109,8 +109,8 @@ def test_checkpoint_previo_falho_nao_chama_youtube(youtube_fake, monkeypatch):
 def test_resultado_incertro_bloqueia_segunda_tentativa(youtube_fake):
     ctx = youtube_fake
     ctx.service.videos.return_value.insert.return_value.next_chunk.side_effect = ConnectionError("SYNTHETIC_TOKEN")
-    result = ctx.wrapper.upload_item(ctx.item, publish_at="2030-01-01T12:00:00Z")
-    assert result["youtube"]["status"] == "uncertain"
+    with pytest.raises(StateError):
+        ctx.wrapper.upload_item(ctx.item, publish_at="2030-01-01T12:00:00Z")
     assert queue.get_uncertain("pt")[0]["id"] == ctx.item_id
     with pytest.raises(StateError):
         ctx.wrapper.upload_item(ctx.item, publish_at="2030-01-01T12:00:00Z")
@@ -287,4 +287,27 @@ def test_namespace_validacao_nao_publica(youtube_fake, monkeypatch, caller):
             ctx.wrapper.upload_item(ctx.item)
         else:
             publish.publicar_idioma("pt", publishing_config(), maximo=3)
+    ctx.service.videos.assert_not_called()
+
+
+def test_envio_incertro_interrompe_publicador_antes_do_proximo_item(youtube_fake, monkeypatch):
+    import publish
+    ctx = youtube_fake
+    queue.enqueue("pt", ctx.video, ctx.thumbnail, {}, "Other", story_id="s2")
+    ctx.service.videos.return_value.insert.return_value.next_chunk.side_effect = ConnectionError("synthetic")
+    monkeypatch.setattr(module, "Uploader", lambda *args: ctx.wrapper)
+    monkeypatch.setattr(publish, "_enviar_kit_tiktok", lambda *args, **kwargs: False)
+    with pytest.raises(StateError):
+        publish.publicar_idioma("pt", publishing_config(), maximo=3)
+    assert ctx.service.videos.return_value.insert.call_count == 1
+    assert len(queue.get_uncertain("pt")) == 1
+    assert len(queue.get_pending("pt")) == 1
+
+
+def test_wrapper_nao_envia_outro_item_do_idioma_incertro(youtube_fake):
+    ctx = youtube_fake
+    queue.update_status("pt", ctx.item_id, "youtube", "uploading")
+    second_id = queue.enqueue("pt", ctx.video, ctx.thumbnail, {}, "Other", story_id="s2")
+    with pytest.raises(StateError):
+        ctx.wrapper.upload_item(queue.get_item("pt", second_id))
     ctx.service.videos.assert_not_called()

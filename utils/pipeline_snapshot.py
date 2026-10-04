@@ -275,6 +275,9 @@ def build_snapshot(base_dir: Path, db_path: Path, *, snapshot_id: str, namespace
             if path.exists():
                 data = json.loads(path.read_text(encoding="utf-8"))
             else:
+                if (os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true"
+                        or (base / "data/state/ready.json").exists()):
+                    raise SnapshotError("Fila restaurada obrigatória ausente; checkpoint bloqueado")
                 # Bundle inicial explicita todas as filas; restore nunca as presume vazias.
                 data = {"language": language, "items": [], "uploads_today": 0, "last_upload_at": None}
             _validate_queue(data, language)
@@ -351,6 +354,16 @@ def _extract_verified(snapshot: Snapshot, destination: Path) -> None:
         raise SnapshotError("Manifesto ou payload inválido")
     if set(snapshot.media) != set(manifest["media"]):
         raise SnapshotError("Conjunto de mídia incompleto")
+    # Linux diferencia caixa; Windows também normaliza ponto/espaço final.
+    # Rejeitar aliases portáteis antes de extrair evita colisão no commit.
+    portable_names = set()
+    paths = list(manifest["files"])
+    paths.extend(name for info in manifest["media"].values() for name in info["paths"])
+    for name in paths:
+        alias = "/".join(part.rstrip(" .").casefold() for part in safe_member_name(name).parts)
+        if alias in portable_names:
+            raise SnapshotError("Caminhos colidem entre sistemas de arquivos")
+        portable_names.add(alias)
     for digest, file in snapshot.media.items():
         if (file.is_symlink() or any(parent.is_symlink() for parent in file.parents)
                 or file.stat().st_nlink > 1 or file.stat().st_size > media_limit
@@ -397,6 +410,11 @@ def restore_snapshot(snapshot: Snapshot, target_dir: Path) -> None:
     try:
         target = Path(target_dir).resolve()
         _under(target, Path(target_dir))
+        # WAL/SHM/journal antigos podem aplicar páginas sobre o DB substituído.
+        # Preservar para recuperação assistida, sem remoção automática.
+        for suffix in ("-wal", "-shm", "-journal"):
+            if _under(target, target / ("db/pipeline.db" + suffix)).exists():
+                raise SnapshotError("Sidecar SQLite presente; reconciliação necessária antes do restore")
         state = _under(target, target / "data/state")
         state.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="restore-", dir=state))

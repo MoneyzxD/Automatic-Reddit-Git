@@ -143,6 +143,73 @@ def test_hash_errado_nao_sobrescreve_destino(snapshot_fixture, tmp_path, corrupt
     assert not (target / "data/state/ready.json").exists()
 
 
+@pytest.mark.parametrize("operation", ["verify", "restore"])
+def test_alias_de_midia_windows_rejeitado_antes_de_mutar(snapshot_fixture, tmp_path, operation):
+    from utils.pipeline_snapshot import verify_snapshot, restore_snapshot, SnapshotError
+    snapshot = build(snapshot_fixture)
+    with tarfile.open(snapshot.payload_path, "r:gz") as archive:
+        data = json.loads(archive.extractfile("data/queue/pt.json").read())
+    item = json.loads(json.dumps(data["items"][0]))
+    item.update(id="alias_pt", video_path="data/exports/pt/A.mp4", thumbnail_path=None)
+    item.pop("generation_key")
+    data["items"].append(item)
+    snapshot = repack(snapshot, replacements={"data/queue/pt.json": json.dumps(data).encode("utf-8")})
+    digest = hashlib.sha256(b"video").hexdigest()
+    snapshot.manifest["media"][digest]["paths"].append(item["video_path"])
+    snapshot.manifest["queue_paths"]["data/queue/pt.json"][item["id"]] = {
+        "video_path": item["video_path"], "thumbnail_path": None}
+    target = tmp_path / "target"
+    (target / "db").mkdir(parents=True)
+    prior = target / "db/pipeline.db"
+    prior.write_bytes(b"prior")
+    with pytest.raises(SnapshotError):
+        if operation == "verify":
+            verify_snapshot(snapshot)
+        else:
+            restore_snapshot(snapshot, target)
+    assert prior.read_bytes() == b"prior"
+    assert not (target / "data/state/ready.json").exists()
+    assert not (target / "data/state/restoring.json").exists()
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_sidecar_sqlite_residual_bloqueia_restore_antes_de_commit(snapshot_fixture, tmp_path, suffix):
+    from utils.pipeline_snapshot import restore_snapshot, SnapshotError
+    snapshot = build(snapshot_fixture)
+    target = tmp_path / "target"
+    (target / "db").mkdir(parents=True)
+    prior = target / "db/pipeline.db"
+    prior.write_bytes(b"prior")
+    sidecar = target / ("db/pipeline.db" + suffix)
+    sidecar.write_bytes(b"residuo")
+    with pytest.raises(SnapshotError):
+        restore_snapshot(snapshot, target)
+    assert prior.read_bytes() == b"prior"
+    assert sidecar.read_bytes() == b"residuo"
+    assert not (target / "data/state/ready.json").exists()
+
+
+@pytest.mark.parametrize("language", ["pt", "pt-br", "en", "es"])
+def test_fila_restaurada_ausente_nunca_vira_vazia(tmp_path, monkeypatch, language):
+    from utils.pipeline_snapshot import build_snapshot, restore_snapshot, SnapshotError
+    base = tmp_path / "legacy"
+    database = PipelineDB(base / "db/pipeline.db")
+    database.insert_story({"id": "legacy_story"})
+    monkeypatch.setattr(queue, "_QUEUE_DIR_PATHS", [base / "data/queue"])
+    video = base / "data/exports/pt/legacy.mp4"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"video")
+    queue.enqueue("pt", video, None, {}, "Title", story_id="legacy_story")
+    snapshot = build_snapshot(base, database.db_path, snapshot_id="initial", namespace="production", run_id="1", commit="abc")
+    target = tmp_path / "restored"
+    restore_snapshot(snapshot, target)
+    (target / f"data/queue/{language}.json").unlink()
+    monkeypatch.setenv("PIPELINE_STATE_REQUIRED", "true")
+    with pytest.raises(SnapshotError):
+        build_snapshot(target, target / "db/pipeline.db", snapshot_id="next", namespace="production", run_id="2", commit="abc")
+    assert PipelineDB(target / "db/pipeline.db").story_exists("legacy_story")
+
+
 @pytest.mark.parametrize("name,kind", [
     ("../escape", "file"), ("/absolute", "file"), ("C:/outside", "file"),
     ("data\\..\\escape", "file"), ("data//x", "file"), ("data/./x", "file"),

@@ -82,13 +82,22 @@ namespace production, restore íntegro e serviços obrigatórios disponíveis.
 
 - Falha HTTP, snapshot ausente/corrompido, mídia pendente ausente ou recibo
   incompatível bloqueiam a operação; não iniciam estado vazio.
+- Fila ausente após restauração ou em modo obrigatório bloqueia checkpoint,
+  inclusive para itens legados. O bootstrap vazio de validação cria as quatro
+  filas explicitamente; ausência de arquivo nunca significa descarte aprovado.
+- Restore bloqueia se houver `pipeline.db-wal`, `pipeline.db-shm` ou
+  `pipeline.db-journal` no destino. Preserve DB/sidecars e interrompa qualquer
+  gravador antes da recuperação assistida; o código não os apaga. Paths que
+  colidem por caixa ou ponto/espaço final também são rejeitados antes do commit.
 - A fonte, perfil, roteiro aprovado, partes preparadas e batch exportado têm
   checkpoints intermediários. O save final em erro só roda após restore
   bem-sucedido e exige recibo válido, sem marker de restauração incompleta.
 - Antes de enviar ao YouTube, o head registra `uploading`. O ID retornado é
   confirmado duravelmente antes de thumbnail/limpeza. Capa 403 não reenvia o
   vídeo. Se o resultado ou checkpoint for incerto, confira o Studio antes de
-  reconciliar; não existe garantia de exactly-once após efeitos externos.
+  reconciliar; a rodada é interrompida e novos envios desse idioma ficam
+  bloqueados, inclusive por chamada direta ao uploader. Não existe garantia
+  de exactly-once após efeitos externos.
 - Processing abandonado permanece bloqueado até reconciliação assistida por
   fonte/perfil/batch. Bootstrap inicial não é um comando de edição de um head
   existente; recuperação de head já criado exige procedimento revisado e

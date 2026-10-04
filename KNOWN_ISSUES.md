@@ -15,6 +15,13 @@ O repositório `MoneyzxD/Automatic-Reddit-State` foi criado e verificado privado
 Faltam credencial limitada, bootstrap reconciliado e validação real do Actions.
 Leia [PIPELINE_STATE](docs/PIPELINE_STATE.md) para recuperar sem apagar histórico.
 
+Revisão de código e correções locais verificadas em 2026-10-04: 745 testes
+passando. Restore conserva e bloqueia sidecars SQLite residuais; aliases de
+paths entre Linux/Windows são rejeitados antes de mutar o destino. Fila ausente
+em estado obrigatório bloqueia snapshot em vez de virar vazia. Upload incerto
+interrompe a rodada e bloqueia novos envios do mesmo idioma até reconciliação.
+Essas proteções ainda não foram liberadas em produção.
+
 O run 37128480329 não preservou a classe da indisponibilidade semântica de
 `1wfduc8`; retries não comprovam 429. Novas chamadas classificam HTTP/timeout,
 JSON/schema e evidência literal sem body bruto. Sem fonte original íntegra,

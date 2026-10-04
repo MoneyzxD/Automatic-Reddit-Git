@@ -556,9 +556,11 @@ class Uploader:
 
         Retorna dict com resultado por plataforma.
         """
-        from scheduler.queue import update_status, mark_for_deletion, get_item
+        from scheduler.queue import update_status, mark_for_deletion, get_item, get_uncertain
         from utils.pipeline_execution import assert_upload_namespace
         assert_upload_namespace()
+        if get_uncertain(self.language):
+            raise StateError("Idioma tem upload incerto; novos envios bloqueados")
 
         item_id  = item["id"]
         results  = {}
@@ -614,7 +616,7 @@ class Uploader:
                     checkpoint("youtube_result_uncertain")
                     from scheduler.notifier import send_admin_alert
                     send_admin_alert(f"Upload incerto ({self.language}/{item_id}); conferir no Studio antes de reenviar.", self.pub_config)
-                    return results
+                    raise StateError("Resultado externo incerto; interromper rodada e conferir o Studio")
                 if result.get("safe_to_retry"):
                     update_status(self.language, item_id, "youtube", "pending", safe_preflight_failure=True)
                     checkpoint("youtube_preflight_unavailable")

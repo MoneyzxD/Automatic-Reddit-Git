@@ -237,6 +237,9 @@ def _bootstrap(base: Path, db: Path, namespace: str, args, store: PrivateStateSt
             raise StateError("Raiz de validação não está vazia")
         staged = Path(tempfile.mkdtemp(prefix="pipeline-empty-"))
         PipelineDB(staged / "db/pipeline.db")
+        for language in LANGUAGES:
+            _write_json(staged / f"data/queue/{language}.json", {
+                "language": language, "items": [], "uploads_today": 0, "last_upload_at": None})
         snapshot = _snapshot(staged, namespace, name="bootstrap-empty")
     else:
         if not args.reconciliation_file or not args.confirm_digest:

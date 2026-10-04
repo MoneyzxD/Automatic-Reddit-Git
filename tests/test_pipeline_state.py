@@ -277,6 +277,18 @@ def test_snapshot_error_vira_state_error_seguro(snapshot_fixture, monkeypatch):
     assert "SYNTHETIC" not in str(caught.value)
 
 
+def test_bootstrap_vazio_obrigatorio_cria_filas_explicitas(tmp_path, monkeypatch):
+    from scripts.pipeline_state import main
+    from utils.pipeline_state import PrivateStateStore
+    client = store(namespace="validation-new")
+    monkeypatch.setenv("PIPELINE_STATE_REQUIRED", "true")
+    monkeypatch.setattr(PrivateStateStore, "from_environment", lambda root: client)
+    assert main(["bootstrap", "--base-dir", str(tmp_path), "--namespace", "validation-new", "--allow-empty-validation"]) == 0
+    for language in ("pt", "pt-br", "en", "es"):
+        data = json.loads((tmp_path / f"data/queue/{language}.json").read_text(encoding="utf-8"))
+        assert data["items"] == []
+
+
 def test_cli_bootstrap_vazio_so_validacao(tmp_path, monkeypatch):
     from scripts.pipeline_state import main
     from utils.pipeline_state import PrivateStateStore
