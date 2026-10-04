@@ -297,7 +297,8 @@ def _semantic_response_format(model: str, mode: str) -> dict:
     if mode == "facts":
         fields = {
             "kind": {"type": "string", "enum": ["relationship", "amount", "event", "outcome", "identity"]},
-            "value": {"type": "string"}, "source_quote": {"type": "string"},
+            "value": {"type": "string"},
+            "source_unit_ids": {"type": "array", "items": {"type": "string"}},
         }
         collection = "facts"
     else:
@@ -334,16 +335,17 @@ class _GroqReviewer:
             instruction = (
                 'Extraia fatos compactos da fonte em JSON estrito: {"facts":[{"kind":'
                 '"event","value":"fato compacto",'
-                '"source_quote":"citação literal exata"}]}. Preserve todos os eventos, '
+                '"source_unit_ids":["u0"]}]}. Preserve todos os eventos, '
                 "valores, relações, negações e desfechos; nenhuma citação inventada. "
                 "kind deve ser exatamente um destes rótulos: relationship, amount, event, "
                 "outcome, identity. Use event para ações, decisões, tempo e negações; "
                 "não crie categorias novas. Deduplicate fatos repetidos. "
-                "Copie source_quote de um trecho contíguo de source_chunk, caractere por caractere, "
-                "preservando maiúsculas, minúsculas, pontuação e espaços. Não altere a primeira "
-                "letra para iniciar uma frase. Não traduza nem parafraseie as citações. "
-                "Se houver retry_feedback, corrija o defeito indicado: as citações recusadas "
-                "são exemplos inválidos, nunca evidência. Copie novamente da fonte original."
+                "A fonte completa está em source_units, em ordem. Cada unidade tem id e text. "
+                "Selecione os IDs das unidades que sustentam o fato. Use apenas IDs existentes, "
+                "sem repetição, em ordem e contíguos; nunca pule uma unidade entre duas selecionadas. "
+                "Não retorne source_quote: o código copia a evidência original das unidades. "
+                "value deve respeitar o contexto, atribuição e negações da fonte, sem inferir fatos. "
+                "Se houver retry_feedback, corrija o defeito indicado sem mudar a fonte."
             )
         else:
             instruction = (
@@ -446,7 +448,13 @@ class ScriptGuardian:
 
     def _request(self, *, mode, source_text, **context):
         # Um orçamento fixo evita retries ilimitados e nunca troca a carga de idioma.
-        context_chars = sum(len(str(value)) for value in context.values())
+        units = ()
+        if mode == "facts":
+            source_chunk = context.pop("source_chunk")
+            units = tuple((f"u{unit.index}", unit.text) for unit in split_lossless(source_chunk, 200))
+            context["source_units"] = [{"id": uid, "text": text} for uid, text in units]
+        context_chars = (len(json.dumps(dict(context, mode=mode), ensure_ascii=False)) if mode == "facts"
+                         else sum(len(str(value)) for value in context.values()))
         if context_chars > self.max_context_chars:
             raise _ReviewUnavailable("Contexto excede o limite configurado; nenhum trecho foi truncado",
                                      SemanticFailure("context_limit", None, mode, 0, context_chars))
@@ -454,7 +462,12 @@ class ScriptGuardian:
         feedback = None
         for attempt in range(1, max_attempts + 1):
             request_context = dict(context, retry_feedback=feedback) if feedback else context
-            context_chars = sum(len(str(value)) for value in request_context.values())
+            if mode == "facts":
+                # Cada tentativa recebe cópia; resolver usa a fonte imutável, não a resposta.
+                request_context = dict(request_context, source_units=[
+                    {"id": uid, "text": text} for uid, text in units])
+            context_chars = (len(json.dumps(dict(request_context, mode=mode), ensure_ascii=False)) if mode == "facts"
+                             else sum(len(str(value)) for value in request_context.values()))
             if context_chars > self.max_context_chars:
                 raise _ReviewUnavailable("Feedback excede o limite; nenhum trecho foi truncado",
                                          SemanticFailure("context_limit", None, mode, attempt - 1, context_chars))
@@ -482,15 +495,31 @@ class ScriptGuardian:
                     data = None
                 if mode == "facts":
                     facts = data.get("facts") if isinstance(data, dict) else None
-                    if isinstance(facts, list) and (facts or len(source_text) <= self.chunk_chars) and not any(
+                    if (isinstance(data, dict) and set(data) == {"facts"}
+                        and isinstance(facts, list) and (facts or len(source_text) <= self.chunk_chars) and not any(
                            not isinstance(fact, dict)
+                           or set(fact) != {"kind", "value", "source_unit_ids"}
+                           or not isinstance(fact.get("kind"), str)
                            or fact.get("kind") not in {"relationship", "amount", "event", "outcome", "identity"}
                            or not isinstance(fact.get("value"), str) or not fact["value"].strip()
-                           or not isinstance(fact.get("source_quote"), str) or not fact["source_quote"].strip()
-                           for fact in facts):
-                        if all(fact["source_quote"] in context["source_chunk"] for fact in facts):
-                            return [{key: fact[key] for key in ("kind", "value", "source_quote")} for fact in facts]
-                        failure = replace(failure, code="nonliteral_evidence")
+                           for fact in facts)):
+                        positions = {uid: index for index, (uid, _) in enumerate(units)}
+                        resolved = []
+                        for fact in facts:
+                            ids = fact["source_unit_ids"]
+                            if (not isinstance(ids, list) or not ids
+                                or any(not isinstance(uid, str) or uid not in positions for uid in ids)):
+                                break
+                            indices = [positions[uid] for uid in ids]
+                            if indices != list(range(indices[0], indices[0] + len(indices))):
+                                break
+                            quote = "".join(units[index][1] for index in indices)
+                            if not quote.strip() or quote not in source_chunk or quote not in source_text:
+                                break
+                            resolved.append({"kind": fact["kind"], "value": fact["value"], "source_quote": quote})
+                        else:
+                            return resolved
+                        failure = replace(failure, code="invalid_source_reference")
                 elif data is not None:
                     outcome = parse_semantic_review(raw)
                     if outcome.status != "unavailable":
@@ -501,14 +530,8 @@ class ScriptGuardian:
                         else:
                             return outcome
                 if mode == "facts":
-                    # Repetir a mesma entrada determinística repete a evidência inválida.
-                    # Feedback não aprova nem normaliza citações; o gate exato continua.
+                    # Feedback não inclui texto do modelo nem aprova referências inválidas.
                     feedback = {"failure_code": failure.code}
-                    if failure.code == "nonliteral_evidence":
-                        feedback["invalid_source_quotes"] = [
-                            fact["source_quote"] for fact in facts
-                            if fact["source_quote"] not in context["source_chunk"]
-                        ]
             if attempt < max_attempts:
                 # Esperas longas ficam limitadas em blocos; o orçamento não aumenta.
                 remaining = wait

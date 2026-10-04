@@ -192,8 +192,8 @@ class FakeSemanticReviewer:
         self.calls.append(SimpleNamespace(**kwargs))
         if kwargs["mode"] == "facts":
             return self.facts if self.facts is not None else json.dumps({"facts": [{
-                "kind": "event", "value": kwargs["source_chunk"],
-                "source_quote": kwargs["source_chunk"],
+                "kind": "event", "value": "".join(u["text"] for u in kwargs["source_units"]),
+                "source_unit_ids": [u["id"] for u in kwargs["source_units"]],
             }]})
         return self.responses.pop(0) if self.responses else resposta(True, [])
 
@@ -204,6 +204,80 @@ def guardian_fake(tmp_path, semantic=None, lt=None, **config):
         languagetool=lt or FakeLanguageTool(),
         semantic_reviewer=semantic or FakeSemanticReviewer(),
     )
+
+
+def test_referencias_factuais_copiam_unidades_unicode_sem_regenerar(tmp_path):
+    source = "I (28M) traded a Pokémon card.\r\n" + "X" * 410 + " Never a credit card! 🃏"
+    contexts = []
+
+    class Reviewer:
+        def review(self, **context):
+            contexts.append(context)
+            units = context.get("source_units", [])
+            return json.dumps({"facts": [{"kind": "event", "value": "traded a Pokémon card",
+                                         "source_unit_ids": [unit["id"] for unit in units]}]})
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    facts = json.loads(guardian._collect_facts(source, "en"))
+    assert facts == [{"kind": "event", "value": "traded a Pokémon card", "source_quote": source}]
+    assert "source_chunk" not in contexts[0]
+    assert "".join(u["text"] for u in contexts[0]["source_units"]) == source
+    assert len(contexts[0]["source_units"]) >= 3
+
+
+@pytest.mark.parametrize("ids", [[], ["unknown"], ["u0", "u0"], ["u1", "u0"],
+                                ["u0", "u2"], [0], "u0", None])
+def test_referencias_invalidas_bloqueiam_coleta(tmp_path, ids):
+    from stages.script_guardian import _ReviewUnavailable
+
+    class Reviewer:
+        def review(self, **context):
+            return json.dumps({"facts": [{"kind": "event", "value": "event",
+                                         "source_unit_ids": ids}]})
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._collect_facts("X" * 610, "en")
+    assert caught.value.failure.code == "invalid_source_reference"
+    assert caught.value.failure.attempts == 3
+    assert guardian._facts == ()
+
+
+def test_referencia_nao_aceita_citacao_adicional_do_modelo(tmp_path):
+    from stages.script_guardian import _ReviewUnavailable
+
+    class Reviewer:
+        def review(self, **context):
+            return json.dumps({"facts": [{"kind": "event", "value": "event",
+                                         "source_unit_ids": ["u0"], "source_quote": "Invented"}]})
+
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian_fake(tmp_path, Reviewer())._collect_facts("Original.", "en")
+    assert caught.value.failure.code == "invalid_schema"
+
+
+def test_referencia_usa_fonte_imutavel_mesmo_se_reviewer_alterar_contexto(tmp_path):
+    class Reviewer:
+        def review(self, **context):
+            if "source_units" in context:
+                context["source_units"][0]["text"] = "Invented."
+            return json.dumps({"facts": [{"kind": "event", "value": "event",
+                                         "source_unit_ids": ["u0"]}]})
+
+    facts = json.loads(guardian_fake(tmp_path, Reviewer())._collect_facts("Original.", "en"))
+    assert facts[0]["source_quote"] == "Original."
+
+
+@pytest.mark.parametrize("kind", [[], {}])
+def test_kind_malformado_falha_tipificada_sem_excecao_de_parser(tmp_path, kind):
+    from stages.script_guardian import _ReviewUnavailable
+    semantic = FakeSemanticReviewer(facts=json.dumps({"facts": [{
+        "kind": kind, "value": "event", "source_unit_ids": ["u0"],
+    }]}))
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian_fake(tmp_path, semantic)._collect_facts("Original.", "en")
+    assert caught.value.failure.code == "invalid_schema"
+    assert caught.value.failure.attempts == 3
 
 
 def revisar(guardian, perfil, **kwargs):
@@ -282,7 +356,7 @@ def test_cobertura_total_fatos_no_fim_e_cache(tmp_path, perfil_feminino):
     guardian = guardian_fake(tmp_path, semantic, chunk_chars=100)
     first = revisar(guardian, perfil_feminino, source_text=source, candidate_text=candidate)
     facts_calls = [c for c in semantic.calls if c.mode == "facts"]
-    assert "".join(c.source_chunk for c in facts_calls) == source
+    assert "".join(u["text"] for c in facts_calls for u in c.source_units) == source
     assert "The surgery never existed." in first.factual_context
     chunks = [c for c in semantic.calls if c.mode == "chunk"]
     assert "".join(c.candidate_text for c in chunks) == candidate
@@ -403,11 +477,13 @@ def test_posicao_de_patch_nao_pode_sair_do_chunk_revisado(tmp_path, perfil_femin
 
 
 def test_fatos_cacheados_nao_atravessam_idiomas_e_sao_deduplicados(tmp_path, perfil_feminino):
-    fact = {"kind": "event", "value": "trabalha com limpeza", "source_quote": "cleaner"}
+    fact = {"kind": "event", "value": "trabalha com limpeza", "source_unit_ids": ["u0"]}
     semantic = FakeSemanticReviewer(facts=json.dumps({"facts": [fact, fact]}))
     guardian = guardian_fake(tmp_path, semantic)
     review = revisar(guardian, perfil_feminino)
-    assert json.loads(review.factual_context) == [fact]
+    assert json.loads(review.factual_context) == [{
+        "kind": "event", "value": "trabalha com limpeza", "source_quote": "I am a cleaner.",
+    }]
     revisar(guardian, perfil_feminino, language="es")
     assert [c.language for c in semantic.calls if c.mode == "facts"] == ["pt", "es"]
 
@@ -525,15 +601,15 @@ def test_contrato_estrito_do_provider_preserva_fatos_e_patches(monkeypatch, mode
     item = schema["properties"][collection]["items"]
     assert item["additionalProperties"] is False
     assert set(item["required"]) == set(item["properties"])
-    assert item["properties"]["source_quote"] == {"type": "string"}
     if mode == "facts":
+        assert "source_quote" not in item["properties"]
+        assert item["properties"]["source_unit_ids"] == {"type": "array", "items": {"type": "string"}}
         assert item["properties"]["kind"]["enum"] == ["relationship", "amount", "event", "outcome", "identity"]
         assert '"relationship|amount|event|outcome|identity"' not in request["messages"][0]["content"]
         assert "exatamente um" in request["messages"][0]["content"]
-        assert "caractere por caractere" in request["messages"][0]["content"]
-        assert "maiúsculas" in request["messages"][0]["content"]
         assert item["properties"]["value"] == {"type": "string"}
     else:
+        assert item["properties"]["source_quote"] == {"type": "string"}
         assert schema["properties"]["approved"] == {"type": "boolean"}
         assert item["properties"]["category"]["enum"] == list(module.REVIEW_CATEGORIES)
         assert item["properties"]["severity"]["enum"] == ["info", "warning", "critical"]
@@ -570,7 +646,7 @@ def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, statu
     event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
     assert event["semantic_failure"] == {
         "code": expected, "http_status": status, "mode": "facts",
-        "attempts": attempts, "context_chars": 17, "provider_code": None,
+        "attempts": attempts, "context_chars": 94, "provider_code": None,
         "generation_json_error": None, "generation_chars": None, "generation_error_at": None,
     }
     assert error.value.review.semantic_failure.code == expected
@@ -598,24 +674,24 @@ def test_fato_com_capitalizacao_alterada_continua_bloqueado(tmp_path, perfil_fem
     with pytest.raises(QualityUnavailable) as caught:
         revisar(guardian, perfil_feminino)
     failure = caught.value.review.semantic_failure
-    assert (failure.code, failure.mode, failure.attempts) == ("nonliteral_evidence", "facts", 3)
+    assert (failure.code, failure.mode, failure.attempts) == ("invalid_schema", "facts", 3)
 
 
-def test_retry_factual_informa_citacao_recusada_sem_alterar_fonte(tmp_path):
+def test_retry_factual_informa_referencia_recusada_sem_alterar_fonte(tmp_path):
     calls = []
     source = "I am a cleaner."
     class Reviewer:
         def review(self, **context):
             calls.append(context)
-            assert context["source_chunk"] == source
+            assert context["source_units"] == [{"id": "u0", "text": source}]
             if len(calls) == 1:
-                quote = "I AM A CLEANER."
+                ids = ["unknown"]
             else:
                 assert context["retry_feedback"] == {
-                    "failure_code": "nonliteral_evidence", "invalid_source_quotes": ["I AM A CLEANER."],
+                    "failure_code": "invalid_source_reference",
                 }
-                quote = source
-            return json.dumps({"facts": [{"kind": "identity", "value": "cleaner", "source_quote": quote}]})
+                ids = ["u0"]
+            return json.dumps({"facts": [{"kind": "identity", "value": "cleaner", "source_unit_ids": ids}]})
     guardian = guardian_fake(tmp_path, Reviewer())
     facts = json.loads(guardian._collect_facts(source, "en"))
     assert len(calls) == 2
@@ -631,7 +707,7 @@ def test_feedback_factual_nao_ultrapassa_limite_de_contexto(tmp_path):
             calls.append(context)
             return json.dumps({"facts": [{"kind": "identity", "value": "cleaner",
                                           "source_quote": "I AM A CLEANER."}]})
-    guardian = guardian_fake(tmp_path, Reviewer(), max_context_chars=20)
+    guardian = guardian_fake(tmp_path, Reviewer(), max_context_chars=110)
     with pytest.raises(_ReviewUnavailable) as caught:
         guardian._collect_facts("I am a cleaner.", "en")
     assert caught.value.failure.code == "context_limit"

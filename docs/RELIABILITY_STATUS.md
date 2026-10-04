@@ -4,6 +4,17 @@ Main permanece em 30a0a0c; não houve integração/publicação nesta validaçã
 Branch de trabalho: pipeline-reliability. Retomada técnica e rulings ficam no
 ledger privado `.superpowers/sdd/2026-10-03-pipeline-reliability/progress.md`.
 
+## Continuação: referências factuais aprovadas
+
+Implementação limitada: unidades lossless de 200 caracteres com IDs locais,
+seleção ordenada/contígua/única; evidência copiada da fonte pelo código.
+Referências inválidas bloqueiam, e revisão de value/fidelidade/gênero/gramática
+permanece obrigatória. Revisão independente aprovou. Probe Groq da história
+sintética: dez fatos literais em duas chamadas. Ainda não é aceite de vídeo.
+Probe da fonte preservada depende de autorização específica após bloqueio
+da verificação de segurança, sem contorno. Decisões sobre sete uploads sem ID
+e encerramento de kits/capas legados foram solicitadas ao operador.
+
 ## Investigação e validação
 
 - Runs antigos 37128480329/37209564422: revisão de adaptação EN indisponível;
@@ -60,7 +71,7 @@ TikTok nem sucesso de capa. Bootstrap exige relatório aprovado e candidato
 
 ## Gates restantes
 
-1. Aprovar/revisar ajuste da coleta factual, mantendo evidência verificável.
+1. Validar operacionalmente a coleta factual aprovada, sem enfraquecer gates.
 2. Gerar PT/EN/ES completos, conferir roteiro/voz/ASS/card e restore da mídia.
 3. Aprovar reconciliação específica de efeitos externos e mídias legadas.
 4. Bootstrap, verify independente, integração em main e rodada dentro da meta.

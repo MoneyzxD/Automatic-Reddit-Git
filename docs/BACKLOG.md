@@ -26,9 +26,13 @@ novo remendo de prompt ou enfraquecimento do gate. Main não liberado.
 Reprodução factual com fontes verificadas: 1wf0he0 passou em três chamadas;
 1wfduc8 falhou por nonliteral_evidence após três. Comparação com GPT-OSS120B
 na mesma chave EN também rejeitou evidência não literal na primeira chamada.
-Trocar apenas o modelo não resolveu. Proposta de ajuste do contrato interno
-de evidência por referências de trechos aguarda aprovação; nenhuma alteração
-desse contrato foi implementada.
+Trocar apenas o modelo não resolveu. O operador aprovou referências de trechos:
+a coleta agora recebe unidades lossless, retorna IDs válidos/contíguos e o
+código copia a citação literal da fonte. O contrato público e os gates são
+preservados. Revisão independente aprovou o ajuste; probe real da história
+sintética confirmou dez fatos literais em duas chamadas. Isso não comprova
+roteiro/mídia completos. Probe da fonte preservada aguarda autorização
+específica para enviá-la à Groq após bloqueio da verificação de segurança.
 
 Falha de estado demonstrada separadamente: run37063586921 falhou nos testes
 antes do restore e salvou DB cache mesmo assim. Run37064703594 restaurou esse
