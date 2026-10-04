@@ -121,7 +121,7 @@ def preencher_lote(
         )
         codigo = _executar_historia(grupo, limite_historia)
         if codigo == 2:
-                raise BatchUnavailable("Dependência ou estado obrigatório indisponível (codigo 2); lote interrompido")
+            raise BatchUnavailable("Dependência ou estado obrigatório indisponível (codigo 2); lote interrompido")
         if codigo != 0:
             raise RuntimeError(f"main.py falhou com codigo {codigo}")
 

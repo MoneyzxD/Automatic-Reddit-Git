@@ -557,6 +557,8 @@ class Uploader:
         Retorna dict com resultado por plataforma.
         """
         from scheduler.queue import update_status, mark_for_deletion, get_item
+        from utils.pipeline_execution import assert_upload_namespace
+        assert_upload_namespace()
 
         item_id  = item["id"]
         results  = {}

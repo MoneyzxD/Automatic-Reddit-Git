@@ -69,7 +69,8 @@ def test_cron_usa_tres_idiomas_tambem_na_publicacao():
         encoding="utf-8"
     )
 
-    assert workflow.count("inputs.idiomas || 'pt en es'") >= 2
+    assert "INPUT_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}" in workflow
+    assert workflow.count("PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}") == 2
     assert "python scripts/generate_daily_batch.py" in workflow
     assert "vars.DAILY_VIDEO_TARGET || '3'" in workflow
     assert "python publish.py --lang $PIPELINE_LANGUAGES" in workflow

@@ -54,3 +54,27 @@ Não interpretar teste unitário verde como execução do LanguageTool real nem
 como publicação bem-sucedida. O erro 413 legado continua sem confirmação
 operacional específica (ver `KNOWN_ISSUES.md`); análise de TPM usa telemetria
 existente antes de justificar outro provedor ou mudança de orçamento.
+
+## Confiabilidade em implementação — 2026-10-03
+
+Worktree isolada: `_export_repo_publico/.worktrees/pipeline-reliability`, branch
+`pipeline-reliability`, base `23f7f9c`. Documentos pendentes do checkout main
+permanecem intactos; integrar preservando suas edições, sem usar o sync legado.
+Tarefas 1–6 registradas em commits locais: classificação/retry, DB aditivo,
+retomada por fonte/perfil/idioma, snapshots verificáveis, transporte privado
+e confirmação de upload antes dos demais efeitos. Suíte dessa etapa: **703
+passed**, 23 warnings. Integração inicial de modos/checkpoints/workflow: **97
+passed**, 12 warnings em áreas afetadas. Ambos usam serviços falsos.
+
+`MoneyzxD/Automatic-Reddit-State` foi criado e verificado PRIVATE com a conta
+MoneyzxD. Não foram criados tokens nem enviados Secrets, snapshots, vídeos ou
+alterações ao main. O fluxo novo ainda não foi exercitado no Actions/Groq real.
+[PIPELINE_STATE](docs/PIPELINE_STATE.md) registra pré-requisitos e bloqueios.
+
+Retomar pela tarefa 7 do plano de confiabilidade: terminar revisão/testes,
+obter Secret limitado pelo operador, reconciliar/importar estado existente,
+validar geração PT/EN/ES sem upload e restaurar no segundo runner. Só depois
+liberar main e confirmar uma rodada dentro da meta normal. Agentes de
+manutenção/crescimento ficam fora desta entrega. O incidente semântico anterior
+continua sem causa operacional comprovada; a classificação nova não é prova
+retroativa de cota.

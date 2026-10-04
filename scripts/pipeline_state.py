@@ -261,7 +261,7 @@ def _bootstrap(base: Path, db: Path, namespace: str, args, store: PrivateStateSt
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Estado privado verificável do pipeline")
-    parser.add_argument("command", choices=("verify", "save", "restore", "bootstrap"))
+    parser.add_argument("command", choices=("verify", "save", "save-if-ready", "restore", "bootstrap"))
     parser.add_argument("--base-dir", default=str(Path(__file__).resolve().parent.parent))
     parser.add_argument("--namespace", default=os.getenv("PIPELINE_STATE_NAMESPACE", ""))
     parser.add_argument("--db-path")
@@ -290,7 +290,13 @@ def main(argv: list[str] | None = None) -> int:
                 restore_snapshot(store.fetch_latest(), base)
             else:
                 _bootstrap(base, db, args.namespace, args, store)
-        elif args.command == "save":
+        elif args.command in {"save", "save-if-ready"}:
+            if args.command == "save-if-ready":
+                try:
+                    require_ready(base, args.namespace)
+                except StateError:
+                    print("Checkpoint final ignorado: restauração não confirmada")
+                    return 0
             checkpoint_from_environment(base, reason="cli_save")
         else:
             require_ready(base, args.namespace)

@@ -325,6 +325,12 @@ def checkpoint_from_environment(base_dir: Path, *, reason: str) -> dict:
         run_id = os.getenv("GITHUB_RUN_ID", "0")
         attempt = int(os.getenv("GITHUB_RUN_ATTEMPT", "1"))
         commit = os.getenv("GITHUB_SHA", "0")
+        if (not re.fullmatch(r"[0-9]+", run_id) or not isinstance(ready["run_id"], str)
+                or not re.fullmatch(r"[0-9]+", ready["run_id"]) or type(ready["run_attempt"]) is not int
+                or ready["run_attempt"] < 1 or attempt < 1):
+            raise StateError("Identidade do gravador incompatível")
+        if (int(run_id), attempt) < (int(ready["run_id"]), ready["run_attempt"]):
+            raise StateError("Run anterior ao head restaurado; inicie uma nova execução")
         sequence_path = base / "data/state/sequence.json"
         previous = ready["sequence"]
         if sequence_path.exists():

@@ -151,3 +151,15 @@ python -m pytest tests -q
 
 Os testes unitários usam adaptadores locais/falsos; passar a suíte não comprova
 serviço real ou publicação. O workflow executa a saúde real antes dos testes.
+
+## Recuperação privada (implantação pendente)
+
+A branch `pipeline-reliability` acrescenta retomada por idioma, diagnóstico
+seguro do guardião e snapshots privados de DB/fila/mídia. Confira
+[PIPELINE_STATE](docs/PIPELINE_STATE.md) para credencial limitada, bootstrap
+reconciliado, validação isolada e tratamento de uploads incertos.
+
+O destino `MoneyzxD/Automatic-Reddit-State` foi criado privado. A liberação
+exige Secret de acesso específico, importação revisada do histórico e dois
+runs reais de geração/restauração antes da publicação normal. Testes locais
+não substituem esses passos. Meta, janelas e OAuth manual permanecem iguais.

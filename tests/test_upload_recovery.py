@@ -12,6 +12,7 @@ from utils.pipeline_state import StateError
 @pytest.fixture
 def youtube_fake(tmp_path, monkeypatch):
     monkeypatch.setattr(queue, "_QUEUE_DIR_PATHS", [tmp_path / "data/queue"])
+    monkeypatch.setenv("PIPELINE_STATE_NAMESPACE", "production")
     monkeypatch.setattr(module, "_think_time", lambda: None)
     monkeypatch.setattr("googleapiclient.http.MediaFileUpload", lambda filename, **kwargs: SimpleNamespace(filename=filename))
     from scheduler import notifier
@@ -269,3 +270,21 @@ def test_scheduler_nao_engole_state_error_nem_inicia_retry(youtube_fake, monkeyp
     with pytest.raises(StateError):
         runner.upload_job(config)
     assert queue.get_item("pt", ctx.item_id)["attempts"] == 0
+
+
+@pytest.mark.parametrize("caller", ["wrapper", "publish"])
+def test_namespace_validacao_nao_publica(youtube_fake, monkeypatch, caller):
+    import publish
+    ctx = youtube_fake
+    monkeypatch.setenv("PIPELINE_STATE_REQUIRED", "true")
+    monkeypatch.setenv("PIPELINE_STATE_NAMESPACE", "validation-test")
+    monkeypatch.setattr(publish, "require_ready", lambda *args: {})
+    monkeypatch.setattr(module, "checkpoint_from_environment", lambda *args, **kwargs: {})
+    monkeypatch.setattr(publish, "_enviar_kit_tiktok", lambda *args, **kwargs: False)
+    monkeypatch.setattr(module, "Uploader", lambda *args: ctx.wrapper)
+    with pytest.raises(StateError):
+        if caller == "wrapper":
+            ctx.wrapper.upload_item(ctx.item)
+        else:
+            publish.publicar_idioma("pt", publishing_config(), maximo=3)
+    ctx.service.videos.assert_not_called()

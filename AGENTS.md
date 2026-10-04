@@ -242,8 +242,11 @@ versionados).
 
 `.github/workflows/pipeline.yml` roda geração E publicação no mesmo job
 (de propósito: o runner é efêmero, o arquivo de vídeo só existe enquanto o
-job vive). Cache via `actions/cache` restaura/salva `db/pipeline.db` e
-`data/queue/` entre execuções (senão o dedupe nasceria vazio a cada run).
+job vive). A versão com recuperação restaura DB/fila/mídia de snapshots no
+repositório privado aprovado; cache legado serve somente ao bootstrap assistido.
+Para bootstrap, restore, upload incerto ou rollback, leia
+[docs/PIPELINE_STATE.md](docs/PIPELINE_STATE.md) antes de alterar estado.
+Produção usa `pipeline-videos`; validação tem namespace/grupo distinto e não publica.
 O mesmo workflow instala Temurin 17, verifica SHA-256 do ZIP 6.6 inclusive
 após cache hit, aquece os três locales do LanguageTool em loopback antes de
 gerar e preserva logs/quarentena sanitizada por 14 dias. Oracle Linux tem
@@ -339,38 +342,31 @@ Dependências de sistema fora do gerenciador de pacotes Python:
   `scripts/install_languagetool.sh` suporta Ubuntu 22.04/24.04, Debian 12/13,
   Oracle Linux/RHEL 8 (AppStream 8.8+ e Python 3.11) e 9 (Python 3.9+).
 
-## Estado entre execuções e como reiniciar do zero
+## Estado entre execuções e recuperação
 
-O pipeline mantém estado em três lugares independentes:
+O estado operacional tem componentes distintos, recuperados juntos:
 
 1. **`db/pipeline.db`** (SQLite, gitignorado) — dedupe de histórias já
    processadas e status por idioma/parte (`utils/db.py`). No GitHub
-   Actions é restaurado/salvo via `actions/cache` entre execuções (chave
-   `pipeline-db-*`) — sem isso, cada execução reprocessaria as mesmas
-   histórias do zero.
+   Actions é restaurado de snapshot privado verificado; `story_languages`
+   distingue processamento, indisponibilidade, rejeição e batch exportado.
 2. **`data/queue/{lang}.json`** (gitignorado) — fila de upload pendente
-   por idioma (`scheduler/queue.py`). Também cacheado no GitHub Actions
-   (chave `pipeline-queue-*`).
+   por idioma (`scheduler/queue.py`). Snapshot preserva também mídia necessária
+   e IDs confirmados; `uploading` incerto bloqueia reenvio.
 3. **`data/oauth_token_status.json`** (versionado, sem segredo) — data de
    geração de cada token OAuth do YouTube, usado só pra calcular quando
    avisar de expiração (`scripts/check_oauth_expiry.py`).
 
-**Para reiniciar do zero com segurança**:
-- Local: apague `db/pipeline.db` e os arquivos em `data/queue/` — o
-  código recria ambos automaticamente na próxima execução. Isso faz o
-  pipeline "esquecer" quais histórias já processou, então histórias
-  antigas podem ser reprocessadas.
-- GitHub Actions: apague os caches (Settings → Actions → Caches no repo,
-  ou `gh cache delete` via CLI) com as chaves `pipeline-db-*` e
-  `pipeline-queue-*`. Sem apagar o cache, um `git rm`/reset local não tem
-  efeito nenhum no runner — ele restaura do cache, não do repositório.
-- `data/oauth_token_status.json` não precisa ser resetado — só reflete
-  quando cada token foi gerado; apagá-lo só faz o aviso de expiração
-  parar de disparar até a próxima renovação manual.
+4. **`data/recovery/` e `data/scripts/profiles/`** (privados) — fonte íntegra,
+   perfil imutável e passos aprovados para retomar somente idiomas incompletos.
+5. **`data/state/`** (privado) — staging e recibos locais de restauração/checkpoint.
 
-Nada disso é necessário pra rodar o pipeline pela primeira vez — só é
-relevante se algo ficar em estado inconsistente e você quiser garantir um
-recomeço limpo.
+Recuperação segue [PIPELINE_STATE](docs/PIPELINE_STATE.md), com inventário e
+conferência de efeitos externos. Ausência/corrupção não autoriza reset vazio.
+Preserve cache legado, filas e dedupe até a importação reconciliada. Reinício
+deliberado ou limpeza externa exige aprovação específica; não apagar histórico
+para desbloquear uma falha. `oauth_token_status.json` não integra snapshots nem
+contém credenciais; continue atualizando-o pelo fluxo de renovação OAuth.
 
 ## Segredos e variáveis de ambiente
 

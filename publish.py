@@ -114,6 +114,8 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
         return resumo
 
     if not dry_run and os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true":
+        from utils.pipeline_execution import assert_upload_namespace
+        assert_upload_namespace()
         require_ready(BASE_DIR, os.getenv("PIPELINE_STATE_NAMESPACE", ""))
     if get_uncertain(language):
         from scheduler.notifier import send_admin_alert

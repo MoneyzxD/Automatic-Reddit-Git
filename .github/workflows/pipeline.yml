@@ -35,6 +35,20 @@ on:
         required: false
         default: false
         type: boolean
+      state_action:
+        description: "Estado: normal, bootstrap aprovado ou verify sem gerar/publicar"
+        required: true
+        default: normal
+        type: choice
+        options: [normal, bootstrap, verify]
+      validation_namespace:
+        description: "Namespace validation-* para reutilizar um teste; vazio isola pelo run"
+        required: false
+        type: string
+      bootstrap_confirm_digest:
+        description: "SHA256 do relatório privado revisado (somente bootstrap)"
+        required: false
+        type: string
 
   schedule:
     # Uma rodada diaria as 09:00 UTC. A API agenda cada idioma dentro da sua
@@ -45,7 +59,11 @@ on:
 # banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).
 # Nao cancela a que estiver rodando — deixa terminar e enfileira a proxima.
 concurrency:
-  group: pipeline-videos
+  group: >-
+    ${{ github.event_name == 'schedule' && 'pipeline-videos' ||
+        ((inputs.state_action == 'bootstrap' || inputs.state_action == 'verify') && !inputs.validation_namespace) && 'pipeline-videos' ||
+        (inputs.apenas_gerar || inputs.historia_teste || inputs.dry_run || inputs.validation_namespace) &&
+        format('pipeline-videos-{0}', inputs.validation_namespace || format('validation-{0}', github.run_id)) || 'pipeline-videos' }}
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +76,8 @@ jobs:
       ${{ github.event_name != 'schedule' ||
           vars.PIPELINE_AUTOMATION_ENABLED == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     # Teto de 6h do GitHub; 300 min deixa margem e evita job pendurado
     # queimando tempo se algo travar (ex: espera de rede infinita).
     timeout-minutes: 300
@@ -147,15 +167,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Resolver modo e namespace sem interpolacao shell
+        id: execution
+        env:
+          INPUT_STATE_ACTION: ${{ inputs.state_action || 'normal' }}
+          INPUT_VALIDATION_NAMESPACE: ${{ inputs.validation_namespace }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_ONLY_GENERATE: ${{ inputs.apenas_gerar }}
+          INPUT_TEST_STORY: ${{ inputs.historia_teste }}
+          INPUT_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
+        run: python -m utils.pipeline_execution
+
       - name: Validar codigo antes da geracao
         run: python -m pytest tests -q
 
       # ── ESTADO ENTRE EXECUCOES ──────────────────────────────────────────
-      # O runner e efemero: sem isto, o banco de dedupe nasce vazio a cada
-      # execucao e a mesma historia do Reddit seria reprocessada e publicada
-      # de novo. O cache e best-effort (o GitHub pode expulsa-lo); a garantia
-      # real vem do commit de volta no fim do job.
+      # Cache legado só oferece candidatos ao bootstrap explícito. Em normal
+      # ou verify, a autoridade é o snapshot privado verificado, inclusive mídia.
       - name: Restaurar banco de dedupe
+        if: ${{ steps.execution.outputs.state_operation == 'bootstrap' }}
         uses: actions/cache/restore@v4
         with:
           path: db/pipeline.db
@@ -164,6 +194,7 @@ jobs:
             pipeline-db-
 
       - name: Restaurar filas de upload
+        if: ${{ steps.execution.outputs.state_operation == 'bootstrap' }}
         uses: actions/cache/restore@v4
         with:
           path: data/queue
@@ -171,10 +202,60 @@ jobs:
           restore-keys: |
             pipeline-queue-
 
+      - name: Restaurar estado privado verificado
+        id: state_restore
+        if: ${{ steps.execution.outputs.required == 'true' }}
+        env:
+          PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+          PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+          PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
+          STATE_OPERATION: ${{ steps.execution.outputs.state_operation }}
+          BOOTSTRAP_REPORT: ${{ secrets.PIPELINE_STATE_RECONCILIATION_REPORT }}
+          BOOTSTRAP_CONFIRM_DIGEST: ${{ inputs.bootstrap_confirm_digest }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from scripts.pipeline_state import main
+          operation = os.environ['STATE_OPERATION']
+          args = ['--base-dir', '.']
+          if operation == 'bootstrap-validation':
+              args = ['bootstrap', '--allow-empty-validation', *args]
+          elif operation == 'bootstrap':
+              # Relatório privado e aprovação são externos; nunca imprimir JSON.
+              report = os.environ.get('BOOTSTRAP_REPORT', '')
+              digest = os.environ.get('BOOTSTRAP_CONFIRM_DIGEST', '')
+              if not report or not digest:
+                  raise SystemExit('Bootstrap bloqueado: relatório privado aprovado ausente')
+              target = Path('data/state/reconciliation.json')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(report, encoding='utf-8')
+              args = ['bootstrap', '--reconciliation-file', str(target), '--confirm-digest', digest, *args]
+          elif operation == 'restore':
+              args = ['restore', *args]
+          else:
+              raise SystemExit('Operação de estado inválida')
+          raise SystemExit(main(args))
+          PY
+
+      - name: Verificar estado restaurado sem gerar
+        if: ${{ steps.execution.outputs.state_action == 'verify' || steps.execution.outputs.state_action == 'bootstrap' }}
+        env:
+          PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
+        run: python scripts/pipeline_state.py verify --base-dir .
+
       # ── GERACAO ─────────────────────────────────────────────────────────
       - name: Gerar video
+        id: generate
+        if: ${{ steps.execution.outputs.generate == 'true' }}
         env:
-          PIPELINE_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
+          PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}
+          PIPELINE_DRY_RUN: ${{ steps.execution.outputs.dry_run }}
+          PIPELINE_TEST_STORY: ${{ steps.execution.outputs.test_story }}
+          PIPELINE_STATE_REQUIRED: ${{ steps.execution.outputs.required }}
+          PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+          PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+          PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
           DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           PIPELINE_ENV: runner
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -199,18 +280,25 @@ jobs:
           # scripts/check_oauth_expiry.py pro aviso de expiracao).
           REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
+          options=()
+          [[ "$PIPELINE_DRY_RUN" == "true" ]] && options+=(--dry-run)
+          [[ "$PIPELINE_TEST_STORY" == "true" ]] && options+=(--test-story)
           python scripts/generate_daily_batch.py \
             --lang $PIPELINE_LANGUAGES \
-            ${{ inputs.dry_run && '--dry-run' || '' }} \
-            ${{ inputs.historia_teste && '--test-story' || '' }}
+            "${options[@]}"
 
       # ── PUBLICACAO ──────────────────────────────────────────────────────
       # Mesmo job, de proposito: o arquivo de video so existe aqui dentro.
       - name: Publicar (YouTube agendado + kit TikTok no Telegram)
-        if: ${{ github.event_name == 'schedule' || (!inputs.apenas_gerar && !inputs.dry_run) }}
+        id: publish
+        if: ${{ steps.execution.outputs.publish == 'true' }}
         env:
+          PIPELINE_STATE_REQUIRED: "true"
+          PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+          PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+          PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
           PIPELINE_ENV: runner
-          PIPELINE_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
+          PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}
           DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
@@ -231,19 +319,14 @@ jobs:
           python publish.py --lang $PIPELINE_LANGUAGES
 
       # ── PERSISTENCIA DO ESTADO ──────────────────────────────────────────
-      - name: Salvar banco de dedupe
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: db/pipeline.db
-          key: pipeline-db-${{ github.run_id }}
-
-      - name: Salvar filas de upload
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data/queue
-          key: pipeline-queue-${{ github.run_id }}
+      - name: Salvar checkpoint final somente apos restauracao confirmada
+        id: state_save
+        if: ${{ always() && steps.state_restore.outcome == 'success' && steps.execution.outputs.state_action == 'normal' && steps.execution.outputs.required == 'true' }}
+        env:
+          PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+          PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+          PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
+        run: python scripts/pipeline_state.py save-if-ready --base-dir .
 
       # ── OBSERVABILIDADE ─────────────────────────────────────────────────
       # Nao ha SSH para o runner. Sem os logs anexados, diagnosticar uma

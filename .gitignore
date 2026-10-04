@@ -21,6 +21,7 @@ data/exports/
 data/quarantine/
 data/recovery/
 data/state/
+data/scripts/profiles/
 
 # Banco
 db/*.db

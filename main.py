@@ -42,6 +42,7 @@ Execucao de teste rapido (pula etapas 1 e 2):
 import argparse
 import hashlib
 import logging
+import os
 import random
 import re
 import subprocess
@@ -55,6 +56,7 @@ load_dotenv()
 import yaml
 from stages.narrator_profile import NarratorProfile
 from stages.script_guardian import QualityRejected, QualityUnavailable, ScriptReview, ReviewIssue
+from utils.pipeline_state import StateError
 
 BASE_DIR = Path(__file__).parent
 
@@ -653,9 +655,18 @@ def run_pipeline(
     from utils.db import PipelineDB
     from utils.pipeline_recovery import save_source, load_source, save_approved_step, load_approved_step, json_sha256
     from utils import environment as env, telemetry
+    from utils import pipeline_state
     from scheduler.notifier import notify_pipeline_result
 
     languages = list(dict.fromkeys("pt" if lang == "pt-br" else lang for lang in languages))
+    state_required = not dry_run and os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true"
+    if state_required:
+        pipeline_state.require_ready(BASE_DIR, os.getenv("PIPELINE_STATE_NAMESPACE", ""))
+
+    def durable_checkpoint(reason):
+        if state_required:
+            pipeline_state.checkpoint_from_environment(BASE_DIR, reason=reason)
+
     logger = logging.getLogger("pipeline.main")
     pipeline_started_at = datetime.now()
     telemetry.reset()
@@ -729,6 +740,7 @@ def run_pipeline(
         else:
             save_source(BASE_DIR, story, source_hash, expanded_source=expanded_source)
         db.register_story(story, languages, source_hash)
+        durable_checkpoint("source_registered")
     resolver = NarratorProfileResolver(config.get("narrator_profile", {}), semantic_enabled=not dry_run)
     profile = None if dry_run else load_profile(story_id, BASE_DIR, source_hash, resolver.resolver_version)
     if recovery and recovery["profile_id"] and (profile is None or profile.profile_id != recovery["profile_id"]):
@@ -744,6 +756,7 @@ def run_pipeline(
         save_profile(profile, BASE_DIR)
         for language in languages:
             db.set_language_status(story_id, language, "processing", profile_id=profile.profile_id)
+        durable_checkpoint("narrator_locked")
     active_languages = set(languages) if not dry_run else set()
     adapted = attach_narrator_profile(adapter.adapt(story_for_adapter), profile) if dry_run else {
         **story_for_adapter, "full_script": expanded_source}
@@ -754,6 +767,8 @@ def run_pipeline(
         if language in active_languages:
             db.set_language_status(story_id, language, status, profile_id=profile.profile_id, reason_code=reason_code)
             active_languages.discard(language)
+            if status != "exported":
+                durable_checkpoint("language_" + status)
 
     def finish_active(status, reason_code):
         for language in list(active_languages):
@@ -824,6 +839,9 @@ def run_pipeline(
             review = checkpoint(expanded_source, lambda: adapter.adapt(story_for_adapter)["full_script"], "en", "adaptation")
             clean_script, factual_context = review.approved_text, review.factual_context
             adapted["full_script"] = clean_script
+            durable_checkpoint("adaptation_approved")
+        except StateError:
+            raise
         except QualityRejected as error:
             finish_active("rejected", "content_rejected")
             failed_review(error)
@@ -861,6 +879,7 @@ def run_pipeline(
                 review = checkpoint(approved_translation,
                                     lambda: naturalizer.naturalize(expanded_translation, lang, narrator_gender), lang, "naturalization")
                 lang_script, lang_facts = review.approved_text, review.factual_context
+                durable_checkpoint("localized_script_approved")
 
             validated_story = lang_script
             derived_source = validated_story + (f"\n\nFatos validados:\n{lang_facts}" if lang_facts else "")
@@ -931,6 +950,7 @@ def run_pipeline(
                 "source_sha256": source_hash, "profile_id": profile.profile_id,
                 "input_sha256": prepared_hash, "parts": prepared,
             })
+            durable_checkpoint("parts_prepared")
 
             # Todas as partes/metadados são aprovados antes de qualquer trabalho caro.
             completed = []
@@ -1001,9 +1021,12 @@ def run_pipeline(
                 generation_key = json_sha256([story_id, lang, source_hash, profile.profile_id])
                 organizer.organize_batch(completed, generation_key=generation_key)
                 finish_language(lang, "exported")
+                durable_checkpoint("language_exported")
                 parts_done += len(completed)
             else:
                 finish_language(lang, "unavailable", "media_failed")
+        except StateError:
+            raise
         except QualityRejected as error:
             finish_language(lang, "rejected", "content_rejected")
             failed_review(error)
@@ -1085,7 +1108,7 @@ def cli(argv: list[str] | None = None) -> int:
             config, args.lang, dry_run=args.dry_run,
             test_story=args.test_story, max_parts=args.max_parts,
         )
-    except QualityUnavailable:
+    except (QualityUnavailable, StateError):
         logging.getLogger("pipeline.main").error("Dependência obrigatória indisponível; lote interrompido")
         return 2
     return 0

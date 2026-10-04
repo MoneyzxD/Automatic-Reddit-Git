@@ -6,6 +6,22 @@ antes desta migração. Gerado na migração Claude Code → Codex CLI
 
 ## Em aberto — precisam de ação
 
+### Recuperação privada — implementação local, rollout pendente (2026-10-03)
+
+Na branch `pipeline-reliability`, estados aditivos por idioma e fonte/checkpoints
+privados corrigem o dedupe prematuro; uploads incertos bloqueiam reenvio e a
+confirmação precede capa/limpeza. Não confundir isso com implantação concluída.
+O repositório `MoneyzxD/Automatic-Reddit-State` foi criado e verificado privado.
+Faltam credencial limitada, bootstrap reconciliado e validação real do Actions.
+Leia [PIPELINE_STATE](docs/PIPELINE_STATE.md) para recuperar sem apagar histórico.
+
+O run 37128480329 não preservou a classe da indisponibilidade semântica de
+`1wfduc8`; retries não comprovam 429. Novas chamadas classificam HTTP/timeout,
+JSON/schema e evidência literal sem body bruto. Sem fonte original íntegra,
+essa história legada não pode ser reconstruída da quarentena redigida.
+Processing abandonado e head incerto ainda exigem recuperação assistida;
+não há CLI de edição automática de heads nem cleanup de releases habilitado.
+
 ### 1. Token OAuth do YouTube expira a cada 7 dias
 O app OAuth no Google Cloud Console está em modo **"Testing"**, não
 publicado. Nesse modo, todo token de refresh expira sozinho em 7 dias,

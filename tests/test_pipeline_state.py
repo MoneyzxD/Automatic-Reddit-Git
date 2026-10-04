@@ -240,12 +240,34 @@ def test_save_exige_ready_e_sequencia_persistida(snapshot_fixture, monkeypatch):
     assert second["manifest"]["sequence"] == first["manifest"]["sequence"] + 1
 
 
+@pytest.mark.parametrize("run_id,attempt", [("9", "1"), ("10", "1")])
+def test_run_anterior_ao_head_nao_confirma_checkpoint(snapshot_fixture, monkeypatch, run_id, attempt):
+    from utils import pipeline_state as module
+    from utils.pipeline_snapshot import restore_snapshot
+    base, db = snapshot_fixture
+    first = build(snapshot_fixture)
+    first = replace(first, manifest={**first.manifest, "run_id": "10", "run_attempt": 2})
+    restore_snapshot(first, base)
+    client = store()
+    monkeypatch.setenv("PIPELINE_DB_PATH", str(db.db_path))
+    monkeypatch.setenv("GITHUB_RUN_ID", run_id)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", attempt)
+    monkeypatch.setenv("GITHUB_SHA", "abc")
+    monkeypatch.setattr(module.PrivateStateStore, "from_environment", lambda root: client)
+    with pytest.raises(module.StateError):
+        module.checkpoint_from_environment(base, reason="before_upload")
+    assert not any(method == "POST" for method, _, _ in client.session.calls)
+    assert not (base / "data/state/sequence.json").exists()
+
+
 def test_snapshot_error_vira_state_error_seguro(snapshot_fixture, monkeypatch):
     from utils import pipeline_state as module
     from utils.pipeline_snapshot import restore_snapshot, SnapshotError
     base, _ = snapshot_fixture
     restore_snapshot(build(snapshot_fixture), base)
     monkeypatch.setenv("PIPELINE_STATE_NAMESPACE", "validation-test")
+    monkeypatch.setenv("GITHUB_RUN_ID", "10")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     monkeypatch.setattr(module.PrivateStateStore, "from_environment", lambda root: store())
     def fail(*args, **kwargs):
         raise SnapshotError("SYNTHETIC_TOKEN")
