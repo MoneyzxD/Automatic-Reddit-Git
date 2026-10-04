@@ -40,7 +40,11 @@ on:
         required: true
         default: normal
         type: choice
-        options: [normal, bootstrap, verify]
+        options: [normal, bootstrap, verify, inventory]
+      legacy_cache_run_id:
+        description: "Run exato dos caches legados; somente inventory, sem gerar/publicar"
+        required: false
+        type: string
       validation_namespace:
         description: "Namespace validation-* para reutilizar um teste; vazio isola pelo run"
         required: false
@@ -61,7 +65,7 @@ on:
 concurrency:
   group: >-
     ${{ github.event_name == 'schedule' && 'pipeline-videos' ||
-        ((inputs.state_action == 'bootstrap' || inputs.state_action == 'verify') && !inputs.validation_namespace) && 'pipeline-videos' ||
+        ((inputs.state_action == 'bootstrap' || inputs.state_action == 'verify' || inputs.state_action == 'inventory') && !inputs.validation_namespace) && 'pipeline-videos' ||
         (inputs.apenas_gerar || inputs.historia_teste || inputs.dry_run || inputs.validation_namespace) &&
         format('pipeline-videos-{0}', inputs.validation_namespace || format('validation-{0}', github.run_id)) || 'pipeline-videos' }}
   cancel-in-progress: false
@@ -176,6 +180,7 @@ jobs:
           INPUT_ONLY_GENERATE: ${{ inputs.apenas_gerar }}
           INPUT_TEST_STORY: ${{ inputs.historia_teste }}
           INPUT_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
+          INPUT_LEGACY_CACHE_RUN_ID: ${{ inputs.legacy_cache_run_id }}
         run: python -m utils.pipeline_execution
 
       - name: Validar codigo antes da geracao
@@ -185,22 +190,34 @@ jobs:
       # Cache legado só oferece candidatos ao bootstrap explícito. Em normal
       # ou verify, a autoridade é o snapshot privado verificado, inclusive mídia.
       - name: Restaurar banco de dedupe
-        if: ${{ steps.execution.outputs.state_operation == 'bootstrap' }}
+        id: legacy_db
+        if: ${{ steps.execution.outputs.state_operation == 'bootstrap' || steps.execution.outputs.state_operation == 'inventory' }}
         uses: actions/cache/restore@v4
         with:
           path: db/pipeline.db
-          key: pipeline-db-${{ github.run_id }}
-          restore-keys: |
-            pipeline-db-
+          key: pipeline-db-${{ steps.execution.outputs.legacy_cache_run_id || github.run_id }}
+          restore-keys: ${{ steps.execution.outputs.state_operation == 'bootstrap' && 'pipeline-db-' || '' }}
 
       - name: Restaurar filas de upload
-        if: ${{ steps.execution.outputs.state_operation == 'bootstrap' }}
+        id: legacy_queue
+        if: ${{ steps.execution.outputs.state_operation == 'bootstrap' || steps.execution.outputs.state_operation == 'inventory' }}
         uses: actions/cache/restore@v4
         with:
           path: data/queue
-          key: pipeline-queue-${{ github.run_id }}
-          restore-keys: |
-            pipeline-queue-
+          key: pipeline-queue-${{ steps.execution.outputs.legacy_cache_run_id || github.run_id }}
+          restore-keys: ${{ steps.execution.outputs.state_operation == 'bootstrap' && 'pipeline-queue-' || '' }}
+
+      - name: Preservar candidato legado somente no destino privado
+        id: legacy_inventory
+        if: ${{ steps.execution.outputs.state_operation == 'inventory' }}
+        env:
+          PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+          PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+          PIPELINE_STATE_NAMESPACE: legacy-inventory
+          LEGACY_CACHE_RUN_ID: ${{ steps.execution.outputs.legacy_cache_run_id }}
+          MATCHED_DB_CACHE_KEY: ${{ steps.legacy_db.outputs.cache-matched-key }}
+          MATCHED_QUEUE_CACHE_KEY: ${{ steps.legacy_queue.outputs.cache-matched-key }}
+        run: python scripts/capture_legacy_state.py
 
       - name: Restaurar estado privado verificado
         id: state_restore

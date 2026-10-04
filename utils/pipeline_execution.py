@@ -11,7 +11,7 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
                       only_generate: bool = False, test_story: bool = False) -> dict:
     if event not in {"workflow_dispatch", "schedule"} or not re.fullmatch(r"[0-9]+", run_id):
         raise StateError("Evento ou identidade de execução inválidos")
-    if state_action not in {"normal", "bootstrap", "verify"}:
+    if state_action not in {"normal", "bootstrap", "verify", "inventory"}:
         raise StateError("Ação de estado inválida")
     if validation_namespace and not re.fullmatch(r"validation-[a-z0-9-]{1,80}", validation_namespace):
         raise StateError("Namespace de validação inválido")
@@ -22,11 +22,13 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
             raise StateError("Cron permitido somente na produção em main")
         dry_run = only_generate = test_story = False
     preview = dry_run or only_generate or test_story
+    if state_action == "inventory" and (validation_namespace or dry_run):
+        raise StateError("Inventário legado não aceita namespace de teste/dry-run")
     if state_action != "normal":
         if dry_run:
             raise StateError("Bootstrap/verify não aceitam dry-run")
         namespace = validation_namespace or "production"
-        operation = "bootstrap" if state_action == "bootstrap" else "restore"
+        operation = state_action if state_action in {"bootstrap", "inventory"} else "restore"
     elif preview:
         namespace = validation_namespace or f"validation-{run_id}"
         operation = "skip" if dry_run else "bootstrap-validation"
@@ -36,7 +38,7 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
         namespace, operation = "production", "restore"
     return {"namespace": namespace, "state_action": state_action, "state_operation": operation,
             "generate": state_action == "normal", "publish": state_action == "normal" and not preview,
-            "dry_run": dry_run, "test_story": test_story, "required": not dry_run}
+            "dry_run": dry_run, "test_story": test_story, "required": not dry_run and state_action != "inventory"}
 
 
 def assert_upload_namespace() -> None:
@@ -62,6 +64,13 @@ def main() -> int:
         if not languages or any(language not in {"pt", "pt-br", "en", "es"} for language in languages):
             raise StateError("Idiomas inválidos")
         result["languages"] = " ".join(languages)
+        cache_id = os.getenv("INPUT_LEGACY_CACHE_RUN_ID", "")
+        if result["state_action"] == "inventory":
+            if not re.fullmatch(r"[0-9]{1,20}", cache_id):
+                raise StateError("Inventário exige ID exato do cache legado")
+        elif cache_id:
+            raise StateError("ID de cache permitido somente no inventário")
+        result["legacy_cache_run_id"] = cache_id
         with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
             for name, value in result.items():
                 output.write(f"{name}={str(value).lower() if isinstance(value, bool) else value}\n")

@@ -22,7 +22,7 @@ def workflow():
 
 def test_workflow_restauracao_antecede_geracao_e_publicacao():
     data = workflow()
-    assert set(data["on"]["workflow_dispatch"]["inputs"]["state_action"]["options"]) == {"normal", "bootstrap", "verify"}
+    assert set(data["on"]["workflow_dispatch"]["inputs"]["state_action"]["options"]) == {"normal", "bootstrap", "verify", "inventory"}
     steps = data["jobs"]["gerar-e-publicar"]["steps"]
     ids = [step.get("id") for step in steps]
     assert ids.index("state_restore") < ids.index("generate") < ids.index("publish")
@@ -67,6 +67,7 @@ def test_perfis_de_recuperacao_ficam_fora_do_git_publico():
     ({"dry_run": True}, ("validation-123", True, False, "skip")),
     ({"state_action": "verify", "validation_namespace": "validation-shared"}, ("validation-shared", False, False, "restore")),
     ({"state_action": "bootstrap"}, ("production", False, False, "bootstrap")),
+    ({"state_action": "inventory"}, ("production", False, False, "inventory")),
 ])
 def test_resolucao_de_modo(options, expected):
     from utils.pipeline_execution import resolve_execution
@@ -94,6 +95,23 @@ def test_cron_somente_main_production():
     assert result["publish"] is True and result["namespace"] == "production"
     with pytest.raises(StateError):
         resolve_execution(event="schedule", ref="refs/heads/feature", run_id="123")
+
+
+def test_inventory_nao_exige_restore_nem_permite_namespace_de_teste():
+    from utils.pipeline_execution import resolve_execution
+    result = resolve_execution(event="workflow_dispatch", ref="refs/heads/feature", run_id="123", state_action="inventory")
+    assert result["required"] is False
+    with pytest.raises(StateError):
+        resolve_execution(event="workflow_dispatch", ref="refs/heads/feature", run_id="123", state_action="inventory", validation_namespace="validation-test")
+
+
+def test_inventory_workflow_nao_publica_estado_em_artifacts():
+    steps = workflow()["jobs"]["gerar-e-publicar"]["steps"]
+    step = next(s for s in steps if s.get("id") == "legacy_inventory")
+    assert "inventory" in step["if"]
+    assert "secrets.PIPELINE_STATE_TOKEN" in step["env"]["PIPELINE_STATE_TOKEN"]
+    assert step["env"]["PIPELINE_STATE_NAMESPACE"] == "legacy-inventory"
+    assert not any("YOUTUBE_TOKEN" in k for k in step["env"])
 
 
 def test_pipeline_sem_recibo_bloqueia_antes_de_extracao(pipeline, monkeypatch):

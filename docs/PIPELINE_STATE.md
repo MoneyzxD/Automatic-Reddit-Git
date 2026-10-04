@@ -28,6 +28,17 @@ OAuth YouTube continua separado, com renovação manual enquanto Testing.
 
 ## Bootstrap de produção: importação assistida
 
+Antes do bootstrap, quando o candidato existe apenas no cache do Actions,
+execute `state_action=inventory` na branch revisada, com `legacy_cache_run_id`
+do run exato. O modo restaura DB e fila desse mesmo run e preserva um ZIP
+somente no destino privado, namespace `legacy-inventory`. Ausência de fila é
+registrada, nunca preenchida. Ele não gera/publica, não cria marker/head,
+não salva cache nem altera a autoridade de produção. Falta/divergência de um
+dos caches bloqueia a captura. O ZIP é candidato para comparação/reconciliação,
+não snapshot aprovado; mídias não estavam no cache e precisam de recuperação.
+Compare também o último estado íntegro quando o DB recente apresentar perda de
+histórico. A decisão de importação continua exigindo o relatório abaixo.
+
 1. Preserve a cópia atual do DB/filas e recupere a mídia referenciada. Não
    apague caches, dedupe ou IDs. Paths devem pertencer à raiz candidata.
 2. Na raiz candidata, gere o inventário privado:
