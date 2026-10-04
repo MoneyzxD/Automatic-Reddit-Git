@@ -124,3 +124,10 @@ uma tentativa, revisão da adaptação EN de `test_male_001`. Publicação foi p
 O adaptador do guardião foi ajustado para JSON schema estrito nos modelos
 GPT-OSS já usados; parser e gates de fidelidade/gênero continuam obrigatórios.
 Regressões locais não substituem a próxima chamada real do Groq no Actions.
+
+A terceira validação, [37218385352](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37218385352),
+passou 754 testes e restore/save privados, mas repetiu HTTP 400
+`json_validate_failed` no modo facts mesmo com schema estrito. O ajuste não
+resolveu a chamada real. Diagnóstico adicional classifica somente sintaxe,
+tamanho e posição da geração recusada; nunca persiste sua resposta ou mensagem
+bruta. A causa permanece em investigação, sem liberar main ou publicar vídeos.

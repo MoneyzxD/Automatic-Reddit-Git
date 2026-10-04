@@ -27,7 +27,9 @@ mas a geração parou no Groq: HTTP 400, `json_validate_failed`, modo facts,
 contexto de 4002 caracteres, uma tentativa. É falha real do formato de saída
 JSON, sem evidência de 429 nesse teste. O guardião agora usa schema estrito
 nos modelos GPT-OSS 20B/120B, mantendo as verificações locais de citação literal,
-gênero e fatos. A resposta real após esse ajuste ainda precisa ser validada.
+gênero e fatos. O run 37218385352 repetiu a mesma rejeição mesmo com schema
+estrito; portanto esse ajuste não comprovou resolução. Diagnóstico sanitizado
+da geração recusada identifica sintaxe/tamanho/posição sem salvar seu conteúdo.
 Outros modelos configurados conservam JSON object e podem ter a mesma limitação;
 não há troca automática de modelo, chave ou aprovação por fallback.
 

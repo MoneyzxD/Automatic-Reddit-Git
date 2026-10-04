@@ -84,6 +84,9 @@ class SemanticFailure:
     attempts: int
     context_chars: int
     provider_code: str | None = None
+    generation_json_error: str | None = None
+    generation_chars: int | None = None
+    generation_error_at: int | None = None
 
 
 @dataclass(frozen=True)
@@ -204,6 +207,37 @@ class _ReviewUnavailable(RuntimeError):
         self.failure = failure
 
 
+def _generation_diagnostic(generation):
+    """Classifica a sintaxe recusada sem preservar qualquer conteúdo privado."""
+    if not isinstance(generation, str):
+        return None, None, None
+    size = len(generation)
+    if size > 131072:
+        return "diagnostic_size_limit", size, None
+    leading = generation.lstrip()
+    if leading.startswith("```"):
+        return "fenced_output", size, None
+    if leading.startswith(("<think>", "<analysis>")):
+        return "reasoning_output", size, None
+    try:
+        json.loads(generation)
+    except json.JSONDecodeError as error:
+        known = {
+            "Unterminated string starting at": "unterminated_string",
+            "Expecting property name enclosed in double quotes": "invalid_property",
+            "Expecting value": "expected_value",
+            "Extra data": "extra_data",
+            "Invalid control character at": "invalid_control",
+            "Invalid \\escape": "invalid_escape",
+            "Expecting ',' delimiter": "missing_delimiter",
+            "Expecting ':' delimiter": "missing_colon",
+        }
+        return known.get(error.msg, "invalid_json"), size, error.pos
+    except RecursionError:
+        return "diagnostic_depth_limit", size, None
+    return "valid_json", size, None
+
+
 def _provider_failure(exc, mode, attempts, context_chars):
     status = getattr(exc, "status_code", None)
     status = status if type(status) is int and 100 <= status <= 599 else None
@@ -216,6 +250,7 @@ def _provider_failure(exc, mode, attempts, context_chars):
             code = "connection"
     body = getattr(exc, "body", None)
     provider_code = None
+    diagnostic = (None, None, None)
     if isinstance(body, dict):
         error = body.get("error", body)
         if isinstance(error, dict) and "code" in error:
@@ -224,7 +259,9 @@ def _provider_failure(exc, mode, attempts, context_chars):
             raw_code = error["code"]
             provider_code = raw_code if isinstance(raw_code, str) and raw_code in known else "other"
             code = known.get(provider_code, code)
-    return SemanticFailure(code, status, mode, attempts, context_chars, provider_code)
+            if provider_code == "json_validate_failed":
+                diagnostic = _generation_diagnostic(error.get("failed_generation"))
+    return SemanticFailure(code, status, mode, attempts, context_chars, provider_code, *diagnostic)
 
 
 def _retry_wait(exc, default):

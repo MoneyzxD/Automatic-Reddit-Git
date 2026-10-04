@@ -567,6 +567,7 @@ def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, statu
     assert event["semantic_failure"] == {
         "code": expected, "http_status": status, "mode": "facts",
         "attempts": attempts, "context_chars": 17, "provider_code": None,
+        "generation_json_error": None, "generation_chars": None, "generation_error_at": None,
     }
     assert error.value.review.semantic_failure.code == expected
     assert len(calls) == attempts
@@ -675,6 +676,31 @@ def test_codigo_api_e_allowlist_sem_body(tmp_path, perfil_feminino, provider_cod
     assert error.value.review.semantic_failure.code == expected
     assert error.value.review.semantic_failure.provider_code == safe_code
     assert "SEGREDO_TESTE" not in guardian.report_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("generation,expected", [
+    ('{"facts":[{"source_quote":"SYNTHETIC_PRIVATE', "unterminated_string"),
+    ('<think>SYNTHETIC_PRIVATE</think>{"facts":[]}', "reasoning_output"),
+    ('```json\n{"secret":"SYNTHETIC_PRIVATE"}\n```', "fenced_output"),
+    ('{"secret":"SYNTHETIC_PRIVATE"}', "valid_json"),
+    ('{SYNTHETIC_PRIVATE: []}', "invalid_property"),
+])
+def test_diagnostico_json_recusado_nao_persiste_geracao(tmp_path, perfil_feminino, generation, expected):
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SYNTHETIC_PRIVATE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed", "failed_generation": generation}}
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(QualityUnavailable) as caught:
+        revisar(guardian, perfil_feminino)
+    failure = caught.value.review.semantic_failure
+    assert failure.generation_json_error == expected
+    assert failure.generation_chars == len(generation)
+    assert failure.generation_error_at is None or 0 <= failure.generation_error_at < len(generation)
+    assert failure.attempts == 1
+    assert "SYNTHETIC_PRIVATE" not in guardian.report_path.read_text(encoding="utf-8")
 
 
 def test_fonte_curta_integral_chega_ao_global_mesmo_sem_fatos(tmp_path, perfil_feminino):
