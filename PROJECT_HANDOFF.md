@@ -8,10 +8,14 @@ antes de restore; candidatos antigo/atual preservados privados, sem bootstrap.
 Há84IDs conservados, sete itens sem ID e mídia legada recuperada. O contrato
 de evidência aprovado usa IDs lossless e copia citações pelo código; probe da
 fonte preservada1wfduc8 passou13fatos/1chamada. FullPTENES ainda interrompido
-por429; diagnóstico sanitizado adicional em validação no run37244100764.
+por429; diagnóstico sanitizado confirmou TPD no run37244100764. Após respeitar
+430s, run37244757274 voltou a falhar por TPD, espera647s. Não repetir chamadas
+sob cota nem confundir Retry-After com garantia de rodada completa.
 Suíte fresh809pass não é vídeo real aprovado. Encerrar91kits/56capas autorizado,
 propostas privadas preparadas; sete possíveis uploads manuais seguem bloqueados.
 Não repetir remendos de prompt/modelo, trocar chave nem liberar main sem gates.
+Verify37244536054 passou em outro runner:809testes19.15s/7arquivos/mídiazero.
+Não houve bootstrap production, rodada normal, upload ou implementação de agentes.
 
 ## Estado integrado
 

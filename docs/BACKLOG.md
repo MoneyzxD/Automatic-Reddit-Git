@@ -61,6 +61,10 @@ Testes/LT/restore/save passaram; sem mídia. Respeitar intervalo antes de nova
 validação. Novas propostas privadas preservam inventário e bloqueiam sete
 sem confirmação manual. Watch visual parcial dos vídeos legados não valida
 roteiro/voz da branch nova nem autoriza publicação.
+Verify37244536054 passou:809tests19.15s/7arquivoscontrole/mídia0. Mesmo após
+respeitar Retry-After, run37244757274 parou em facts por TPD/espera647s;
+sem mídia/upload, save preservado. Não fazer novas chamadas enquanto a cota
+permanecer indisponível. Propostasv2 conservam datas históricas com fuso.
 
 Plano: `superpowers/plans/2026-10-03-pipeline-reliability.md`. Código revisado
 com 763 testes locais passando. Secret `PIPELINE_STATE_TOKEN` cadastrado e

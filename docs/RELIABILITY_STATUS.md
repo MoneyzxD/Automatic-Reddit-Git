@@ -41,6 +41,12 @@ por dia (TPD), Retry-After430s, uma tentativa, contexto4794. Testes/LanguageTool
 restore/save final passaram; sem mídia/upload. O cancelamento do processo LT
 ocorreu no encerramento, após health/warmup bem-sucedidos. Respeitar a espera
 indicada antes de novo teste; não inferir renovação completa da cota diária.
+Verify37244536054 passou em outro runner: 809 testes/19.15s, restore confirmado,
+sete arquivos de controle/mídia zero, sem Groq/geração/publicação. Após a espera,
+run37244757274 (dispatch23:43:03UTC) voltou a falhar em facts por TPD às23:46:15,
+Retry-After647s, uma tentativa/contexto4794. Sem mídia/upload; save final passou.
+Não continuar repetindo geração sob cota: a espera informada não garantiu
+disponibilidade para essa chamada. FullPTENES permanece não validado.
 
 Rascunho privado de reconciliação preparado em cópia local separada:
 84 IDs/91 itens legados/7 incertos, 14 arquivos de mídia copiados com hash,
@@ -50,6 +56,8 @@ Snapshot candidato continua inválido por necessidade de reconciliação.
 Propostas adicionais privadas: 84 IDs, 7 desconhecidos bloqueados, 91 kits e
 56 capas; inventário original intacto, nenhuma decisão aplicada. As propostas
 não declaram Studio conferido nem constituem aprovação para bootstrap.
+Versão2 das propostas preserva os horários reais do campo legado YouTube,
+com fuso explícito, para não contabilizar 84 envios históricos como feitos hoje.
 
 ## Investigação e validação
 
@@ -118,5 +126,7 @@ Bootstrap exige relatório aprovado e candidato
 3. Aprovar reconciliação específica de efeitos externos e mídias legadas.
 4. Bootstrap, verify independente, integração em main e rodada dentro da meta.
 
+Cron legado permanece habilitado (`PIPELINE_AUTOMATION_ENABLED=true`), sem
+alteração neste trabalho; isso não significa que a branch nova foi liberada.
 Agentes de manutenção/crescimento ficam após esses gates. Nenhum Secret
 YouTube/Groq/Reddit, cron, meta, vídeo remoto ou estado production foi alterado.
