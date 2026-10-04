@@ -56,6 +56,11 @@ Suporte aditivo de cancelamento de capa failed/missing implementado e revisado,
 sem alterar IDs/erros; ainda não aplicado ao estado de produção. Run37243243200
 parou antes da coleta factual por HTTP429. Diagnóstico seguro adicional está
 em validação para distinguir cota diária/minuto, sem trocar chave ou fallback.
+Run37244100764/ec15619 confirmou TPD, Retry-After430s, facts429/1tentativa.
+Testes/LT/restore/save passaram; sem mídia. Respeitar intervalo antes de nova
+validação. Novas propostas privadas preservam inventário e bloqueiam sete
+sem confirmação manual. Watch visual parcial dos vídeos legados não valida
+roteiro/voz da branch nova nem autoriza publicação.
 
 Plano: `superpowers/plans/2026-10-03-pipeline-reliability.md`. Código revisado
 com 763 testes locais passando. Secret `PIPELINE_STATE_TOKEN` cadastrado e

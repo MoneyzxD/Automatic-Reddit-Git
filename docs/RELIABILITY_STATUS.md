@@ -36,11 +36,20 @@ não guarda mensagem livre, não muda retry e não alterna chaves.
 Suíte local atual: 809 passed, 30 warnings, 54.89s; compilação e diff check
 passaram. Revisão independente do diagnóstico aprovou o escopo, não o rollout.
 
+Run37244100764, código ec15619: HTTP429 em facts confirmou limite de tokens
+por dia (TPD), Retry-After430s, uma tentativa, contexto4794. Testes/LanguageTool/
+restore/save final passaram; sem mídia/upload. O cancelamento do processo LT
+ocorreu no encerramento, após health/warmup bem-sucedidos. Respeitar a espera
+indicada antes de novo teste; não inferir renovação completa da cota diária.
+
 Rascunho privado de reconciliação preparado em cópia local separada:
 84 IDs/91 itens legados/7 incertos, 14 arquivos de mídia copiados com hash,
 112 referências ainda sem bytes. Originais conferidos antes/depois, preservados.
 Paths rebased só na cópia; nenhuma decisão aprovada, head ou importação.
 Snapshot candidato continua inválido por necessidade de reconciliação.
+Propostas adicionais privadas: 84 IDs, 7 desconhecidos bloqueados, 91 kits e
+56 capas; inventário original intacto, nenhuma decisão aplicada. As propostas
+não declaram Studio conferido nem constituem aprovação para bootstrap.
 
 ## Investigação e validação
 
@@ -86,8 +95,12 @@ outro título: operador precisa conferir e aprovar a decisão antes de reenvio.
 
 Mídias desses sete itens recuperadas de video-36737131418: 7 MP4 + 14 JPG,
 490246562 bytes. ffprobe: todos 1080x1920, durações 77.30–137.54s. Não foram
-assistidos nem aprovados semanticamente nesta etapa; são mídia legada para
-reconciliação, não prova da renderização da branch nova.
+aprovados semanticamente nesta etapa; são mídia legada para reconciliação,
+não prova da renderização da branch nova. Skill watch conferiu três amostras
+locais (PT casa, EN/ES irmão, parte1) em 00:01/00:03/00:15. Cards legíveis e
+sem corte nos dois primeiros quadros de cada vídeo; legendas visíveis em PT/EN
+aos15s, não no quadro ES. Sem transcrição/áudio, não distinguir pausa de fala
+de problema de legenda nem aprovar voz/sincronização. Nenhum upload externo.
 
 Todos os 91 kits TikTok continuam pending no original. EN/ES têm 56 tentativas
 de capa failed. Encerramento autorizado, mas ainda não aplicado ao estado
@@ -100,7 +113,7 @@ Bootstrap exige relatório aprovado e candidato
 
 ## Gates restantes
 
-1. Diagnosticar a cota no runner; coleta factual de 1wfduc8 passou, sem relaxar gates.
+1. Cota TPD identificada no runner; respeitar espera antes de validar geração.
 2. Gerar PT/EN/ES completos, conferir roteiro/voz/ASS/card e restore da mídia.
 3. Aprovar reconciliação específica de efeitos externos e mídias legadas.
 4. Bootstrap, verify independente, integração em main e rodada dentro da meta.

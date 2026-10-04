@@ -5,10 +5,13 @@
 Leia [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md) antes de continuar T7.
 Investigação revelou perda do histórico DB por cache salvo após teste falho
 antes de restore; candidatos antigo/atual preservados privados, sem bootstrap.
-Há84IDs conservados, sete itens sem ID e mídia legada recuperada. Coleta factual
-real continua instável: nonliteral_evidence também no modelo maior. Ajuste
-limitado do contrato de evidência aguarda aprovação; não repetir remendos de
-prompt/modelo nem liberar main. Suíte fresh773pass não é vídeo real aprovado.
+Há84IDs conservados, sete itens sem ID e mídia legada recuperada. O contrato
+de evidência aprovado usa IDs lossless e copia citações pelo código; probe da
+fonte preservada1wfduc8 passou13fatos/1chamada. FullPTENES ainda interrompido
+por429; diagnóstico sanitizado adicional em validação no run37244100764.
+Suíte fresh809pass não é vídeo real aprovado. Encerrar91kits/56capas autorizado,
+propostas privadas preparadas; sete possíveis uploads manuais seguem bloqueados.
+Não repetir remendos de prompt/modelo, trocar chave nem liberar main sem gates.
 
 ## Estado integrado
 
