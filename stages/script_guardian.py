@@ -87,6 +87,8 @@ class SemanticFailure:
     generation_json_error: str | None = None
     generation_chars: int | None = None
     generation_error_at: int | None = None
+    rate_limit_type: str | None = None
+    retry_after_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -251,8 +253,29 @@ def _provider_failure(exc, mode, attempts, context_chars):
     body = getattr(exc, "body", None)
     provider_code = None
     diagnostic = (None, None, None)
+    rate_limit_type = None
+    retry_after = None
+    if status == 429:
+        wait = _retry_wait(exc, None)
+        if wait is not None and math.isfinite(wait):
+            retry_after = wait
     if isinstance(body, dict):
         error = body.get("error", body)
+        # Extrai somente a enumeração declarada, nunca a mensagem livre.
+        # Esses campos são diagnóstico: não alteram o orçamento nem os retries.
+        if status == 429 and isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and len(message) <= 8192:
+                declared = {
+                    abbreviation for label, abbreviation in (
+                        ("tokens per day (TPD)", "TPD"),
+                        ("tokens per minute (TPM)", "TPM"),
+                        ("requests per day (RPD)", "RPD"),
+                        ("requests per minute (RPM)", "RPM"),
+                    ) if label.lower() in message.lower()
+                }
+                if len(declared) == 1:
+                    rate_limit_type = declared.pop()
         if isinstance(error, dict) and "code" in error:
             known = {"json_validate_failed": "invalid_json", "context_length_exceeded": "context_limit",
                      "model_not_found": "provider_error", "invalid_api_key": "authentication"}
@@ -261,7 +284,8 @@ def _provider_failure(exc, mode, attempts, context_chars):
             code = known.get(provider_code, code)
             if provider_code == "json_validate_failed":
                 diagnostic = _generation_diagnostic(error.get("failed_generation"))
-    return SemanticFailure(code, status, mode, attempts, context_chars, provider_code, *diagnostic)
+    return SemanticFailure(code, status, mode, attempts, context_chars, provider_code, *diagnostic,
+                           rate_limit_type=rate_limit_type, retry_after_seconds=retry_after)
 
 
 def _retry_wait(exc, default):

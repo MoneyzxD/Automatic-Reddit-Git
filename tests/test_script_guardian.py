@@ -648,6 +648,7 @@ def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, statu
         "code": expected, "http_status": status, "mode": "facts",
         "attempts": attempts, "context_chars": 94, "provider_code": None,
         "generation_json_error": None, "generation_chars": None, "generation_error_at": None,
+        "rate_limit_type": None, "retry_after_seconds": None,
     }
     assert error.value.review.semantic_failure.code == expected
     assert len(calls) == attempts
@@ -740,6 +741,61 @@ def test_espera_excessiva_nao_provoca_retry(tmp_path, perfil_feminino, header, m
         revisar(guardian_fake(tmp_path, Reviewer()), perfil_feminino)
     assert len(calls) == 1
     assert waits == []
+
+
+@pytest.mark.parametrize("description,expected", [
+    ("tokens per day (TPD)", "TPD"), ("tokens per minute (TPM)", "TPM"),
+    ("requests per day (RPD)", "RPD"), ("requests per minute (RPM)", "RPM"),
+    ("tokens per day (TPD) and tokens per minute (TPM)", None),
+    ("TPD", None), ("SEGREDO_TESTE", None),
+])
+def test_diagnostico_cota_enum_sem_persistir_mensagem(tmp_path, perfil_feminino, description, expected):
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SEGREDO_TESTE")
+            exc.status_code = 429
+            exc.body = {"error": {"message": f"Rate limit reached on {description}: SEGREDO_TESTE"}}
+            exc.response = SimpleNamespace(headers={"Retry-After": "86400", "Authorization": "SEGREDO_TESTE"})
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(QualityUnavailable) as caught:
+        revisar(guardian, perfil_feminino)
+    failure = caught.value.review.semantic_failure
+    assert failure.rate_limit_type == expected
+    assert failure.retry_after_seconds == 86400
+    event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert event["semantic_failure"]["rate_limit_type"] == expected
+    assert "SEGREDO_TESTE" not in json.dumps(event)
+
+
+@pytest.mark.parametrize("headers,expected", [
+    ({"Retry-After": "NaN"}, None), ({"Retry-After": "inf"}, None),
+    ({"Retry-After": "-3"}, None), ({"Retry-After": "SEGREDO_TESTE"}, None),
+    ({"retry-after-ms": "750"}, 0.75),
+    ({"Retry-After": "Thu, 01 Jan 1970 00:00:05 GMT"}, 5),
+])
+def test_diagnostico_espera_apenas_numero_finito(headers, expected, monkeypatch):
+    import stages.script_guardian as module
+    monkeypatch.setattr(module.time, "time", lambda: 0)
+    exc = RuntimeError("SEGREDO_TESTE")
+    exc.status_code = 429
+    exc.response = SimpleNamespace(headers=headers)
+    failure = module._provider_failure(exc, "facts", 1, 20)
+    assert failure.retry_after_seconds == expected
+    assert failure.rate_limit_type is None
+
+
+@pytest.mark.parametrize("status,message", [(400, "tokens per day (TPD)"), (429, {"private": "SEGREDO_TESTE"})])
+def test_diagnostico_cota_nao_inventa_tipo(status, message):
+    import stages.script_guardian as module
+    exc = RuntimeError("SEGREDO_TESTE")
+    exc.status_code = status
+    exc.body = {"error": {"message": message}}
+    exc.response = SimpleNamespace(headers={"Retry-After": "3600"})
+    failure = module._provider_failure(exc, "facts", 1, 20)
+    assert failure.rate_limit_type is None
+    if status != 429:
+        assert failure.retry_after_seconds is None
 
 
 @pytest.mark.parametrize("headers,expected", [

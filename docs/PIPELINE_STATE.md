@@ -53,6 +53,9 @@ histórico. A decisão de importação continua exigindo o relatório abaixo.
    `retain_pending` + `confirmed_absent: true`; `confirmed_uploaded` +
    `video_id` e `confirmed_at` com fuso; ou `cancel_unknown` sem ID conhecido.
    `tiktok: cancelled` é decisão opcional para encerramento do kit manual.
+   `thumbnail: cancelled` encerra somente uma tentativa de capa `failed` ou
+   `missing`, exige `confirmed_uploaded` e preserva o ID, os erros e os estados
+   anteriores no registro de reconciliação. Não declara sucesso de capa.
    Um ID já confirmado nunca é substituído nem volta a pending.
 4. Calcule SHA256 do arquivo revisado. Bootstrap exige esse digest, a mesma
    raiz/namespace e inventário ainda idêntico; qualquer mudança invalida a

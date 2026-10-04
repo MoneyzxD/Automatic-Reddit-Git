@@ -31,8 +31,8 @@ a coleta agora recebe unidades lossless, retorna IDs válidos/contíguos e o
 código copia a citação literal da fonte. O contrato público e os gates são
 preservados. Revisão independente aprovou o ajuste; probe real da história
 sintética confirmou dez fatos literais em duas chamadas. Isso não comprova
-roteiro/mídia completos. Probe da fonte preservada aguarda autorização
-específica para enviá-la à Groq após bloqueio da verificação de segurança.
+roteiro/mídia completos. Após autorização de continuação, probe da fonte
+preservada 1wfduc8 passou: 13 fatos literais em uma chamada. Não é aceite de vídeo.
 
 Falha de estado demonstrada separadamente: run37063586921 falhou nos testes
 antes do restore e salvou DB cache mesmo assim. Run37064703594 restaurou esse
@@ -50,7 +50,12 @@ Nenhum vídeo/upload; checkpoint salvo. Verify37242044138 passou em outro runner
 Suíte local786 passou; não repetir geração para burlar cota nem trocar chave.
 Rascunho de reconciliação privado preserva84IDs,91itens/7incertos e originais;
 nenhuma decisão aplicada ou bootstrap production. Autorizações específicas
-de mídias/efeitos externos continuam pendentes; agentes ainda posteriores.
+de ausência manual dos sete sem ID continuam pendentes; agentes ainda posteriores.
+Operador autorizou encerrar 91 kits TikTok e 56 tentativas antigas de capa.
+Suporte aditivo de cancelamento de capa failed/missing implementado e revisado,
+sem alterar IDs/erros; ainda não aplicado ao estado de produção. Run37243243200
+parou antes da coleta factual por HTTP429. Diagnóstico seguro adicional está
+em validação para distinguir cota diária/minuto, sem trocar chave ou fallback.
 
 Plano: `superpowers/plans/2026-10-03-pipeline-reliability.md`. Código revisado
 com 763 testes locais passando. Secret `PIPELINE_STATE_TOKEN` cadastrado e

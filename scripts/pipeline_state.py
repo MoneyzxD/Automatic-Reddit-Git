@@ -169,6 +169,9 @@ def _apply_decisions(staged: Path, report: dict) -> None:
         key = (decision["language"], decision["item_id"])
         if key in decisions or key not in required or decision.get("studio_checked") is not True:
             raise StateError("Decisão de reconciliação inválida")
+        if "thumbnail" in decision and (decision["thumbnail"] != "cancelled"
+                                          or decision.get("action") != "confirmed_uploaded"):
+            raise StateError("Encerramento de capa exige ação explícita e upload confirmado")
         decisions[key] = decision
     if set(decisions) != required:
         raise StateError("Uploads legados/incertos exigem conferência explícita no Studio")
@@ -201,6 +204,23 @@ def _apply_decisions(staged: Path, report: dict) -> None:
                 item["platforms"]["tiktok"]["status"] = "cancelled"
             else:
                 raise StateError("Ação de reconciliação inválida")
+            if decision.get("thumbnail") == "cancelled":
+                thumbnail = yt.get("thumbnail", {})
+                if not isinstance(thumbnail, dict):
+                    raise StateError("Estado legado de capa inválido")
+                previous = thumbnail.get("status")
+                flat_previous = yt.get("thumbnail_status")
+                if previous not in {"failed", "missing"} and flat_previous not in {"failed", "missing"}:
+                    raise StateError("Somente pendência de capa recusada/ausente pode ser encerrada")
+                # Encerra a tentativa, não simula sucesso; mantém erros e ID externo.
+                yt["thumbnail_reconciliation"] = {
+                    "reason_code": "operator_retired_legacy_thumbnail",
+                    "previous_status": previous, "previous_thumbnail_status": flat_previous,
+                }
+                if previous in {"failed", "missing"}:
+                    thumbnail["status"] = "cancelled"
+                if flat_previous in {"failed", "missing"}:
+                    yt["thumbnail_status"] = "cancelled"
             if decision.get("tiktok") == "cancelled":
                 item["platforms"]["tiktok"]["status"] = "cancelled"
                 if yt["status"] == "uploaded":

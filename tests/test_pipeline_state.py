@@ -432,6 +432,86 @@ def test_bootstrap_legado_exige_decisao_e_preserva_dedupe(tmp_path, monkeypatch,
         assert database.processing_languages("legacy", ["pt", "en", "es"]) == []
 
 
+@pytest.mark.parametrize("legacy_field", ["nested", "flat", "both"])
+def test_encerramento_aprovado_capa_preserva_id_erro_e_dispensa_midia(tmp_path, legacy_field):
+    from scripts.pipeline_state import _apply_decisions
+    from utils.pipeline_snapshot import _needs_media
+    from utils.db import PipelineDB
+    base = tmp_path / "candidate"
+    PipelineDB(base / "db/pipeline.db")
+    youtube = {"status": "uploaded", "video_id": "abcdefghijk", "error": "403 original"}
+    if legacy_field in {"nested", "both"}:
+        youtube["thumbnail"] = {"status": "failed", "error": "forbidden original"}
+    if legacy_field in {"flat", "both"}:
+        youtube["thumbnail_status"] = "failed"
+    item = {"id": "legacy_pt", "status": "partial", "schedule": {},
+            "platforms": {"youtube": youtube, "tiktok": {"status": "pending"}}}
+    for language in ("pt", "pt-br", "en", "es"):
+        path = base / f"data/queue/{language}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"language": language, "items": [item] if language == "pt" else []}), encoding="utf-8")
+    report = {"uncertain": [], "legacy_ambiguous": [{"language": "pt", "item_id": "legacy_pt"}],
+              "decisions": [{"language": "pt", "item_id": "legacy_pt", "action": "confirmed_uploaded",
+                             "studio_checked": True, "video_id": "abcdefghijk",
+                             "confirmed_at": "2026-10-03T12:00:00+00:00",
+                             "tiktok": "cancelled", "thumbnail": "cancelled"}]}
+    _apply_decisions(base, report)
+    updated = json.loads((base / "data/queue/pt.json").read_text(encoding="utf-8"))["items"][0]
+    assert not _needs_media(updated)
+    yt = updated["platforms"]["youtube"]
+    assert yt["status"] == "uploaded"
+    assert yt["video_id"] == "abcdefghijk"
+    assert yt["error"] == "403 original"
+    if legacy_field in {"nested", "both"}:
+        assert yt["thumbnail"] == {"status": "cancelled", "error": "forbidden original"}
+    if legacy_field in {"flat", "both"}:
+        assert yt["thumbnail_status"] == "cancelled"
+    assert yt["thumbnail_reconciliation"]["reason_code"] == "operator_retired_legacy_thumbnail"
+
+
+@pytest.mark.parametrize("option", [True, "uploaded", "canceled", None])
+def test_acao_capa_invalida_nao_e_ignorada(tmp_path, option):
+    from scripts.pipeline_state import _apply_decisions
+    from utils.pipeline_state import StateError
+    from utils.db import PipelineDB
+    base = tmp_path
+    PipelineDB(base / "db/pipeline.db")
+    path = base / "data/queue/pt.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"items": [{"id": "old", "schedule": {}, "platforms": {
+        "youtube": {"status": "uploaded", "video_id": "abcdefghijk"}, "tiktok": {"status": "pending"}}}]}))
+    for language in ("pt-br", "en", "es"):
+        (base / f"data/queue/{language}.json").write_text('{"items":[]}')
+    before = path.read_bytes()
+    report = {"uncertain": [], "legacy_ambiguous": [{"language": "pt", "item_id": "old"}],
+              "decisions": [{"language": "pt", "item_id": "old", "studio_checked": True,
+                             "action": "confirmed_uploaded", "video_id": "abcdefghijk",
+                             "confirmed_at": "2026-10-03T12:00:00+00:00", "thumbnail": option}]}
+    with pytest.raises(StateError):
+        _apply_decisions(base, report)
+    assert path.read_bytes() == before
+
+
+def test_capa_de_upload_nao_confirmado_nao_pode_ser_encerrada(tmp_path):
+    from scripts.pipeline_state import _apply_decisions
+    from utils.pipeline_state import StateError
+    from utils.db import PipelineDB
+    PipelineDB(tmp_path / "db/pipeline.db")
+    path = tmp_path / "data/queue/pt.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"items": [{"id": "old", "schedule": {}, "platforms": {
+        "youtube": {"status": "failed"}, "tiktok": {"status": "pending"}}}]}))
+    for language in ("pt-br", "en", "es"):
+        (tmp_path / f"data/queue/{language}.json").write_text('{"items":[]}')
+    before = path.read_bytes()
+    report = {"uncertain": [], "legacy_ambiguous": [{"language": "pt", "item_id": "old"}],
+              "decisions": [{"language": "pt", "item_id": "old", "studio_checked": True,
+                             "action": "retain_pending", "confirmed_absent": True, "thumbnail": "cancelled"}]}
+    with pytest.raises(StateError):
+        _apply_decisions(tmp_path, report)
+    assert path.read_bytes() == before
+
+
 def test_marker_corrompido_nao_vira_namespace_novo(snapshot_fixture):
     from utils.pipeline_state import StateError
     session = Session()

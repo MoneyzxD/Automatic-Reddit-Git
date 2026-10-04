@@ -11,9 +11,11 @@ seleção ordenada/contígua/única; evidência copiada da fonte pelo código.
 Referências inválidas bloqueiam, e revisão de value/fidelidade/gênero/gramática
 permanece obrigatória. Revisão independente aprovou. Probe Groq da história
 sintética: dez fatos literais em duas chamadas. Ainda não é aceite de vídeo.
-Probe da fonte preservada depende de autorização específica após bloqueio
-da verificação de segurança, sem contorno. Decisões sobre sete uploads sem ID
-e encerramento de kits/capas legados foram solicitadas ao operador.
+Após autorização do operador para continuar, probe da fonte preservada
+1wfduc8 passou: 13 fatos, uma chamada, todas as citações literais. Isso valida
+a coleta factual, não o roteiro completo. O encerramento de 91 kits TikTok
+e 56 tentativas de capa antigas foi autorizado. A autorização não confirma
+a ausência de publicação manual dos sete vídeos sem ID; esses ficam bloqueados.
 
 Commit de código `dc87c02`, suíte local 786 passed/30 warnings/53.57s,
 compileall e diff check passaram. Run37241728126 passou testes, LanguageTool
@@ -24,6 +26,15 @@ cancelled no encerramento, mas seu health/warmup passaram; não atribuir a ele
 a falha de geração. Verify37242044138 passou em outro runner, sem Groq/geração/
 publicação: 786 testes/17.33s, sete arquivos de controle restaurados, mídia zero.
 Confirma recuperação de fonte/perfil/controle, não renderização nem upload.
+
+Run37243243200, no mesmo namespace isolado: geração interrompida por HTTP429
+em facts, uma tentativa, contexto4794; sem mídia/publicação. Ainda não havia
+diagnóstico do tipo de cota. Não atribuir esse limite aos incidentes antigos
+nem concluir que a credencial local é idêntica à do runner. Ajuste aditivo
+registra somente enumeração de limite declarada e Retry-After numérico finito;
+não guarda mensagem livre, não muda retry e não alterna chaves.
+Suíte local atual: 809 passed, 30 warnings, 54.89s; compilação e diff check
+passaram. Revisão independente do diagnóstico aprovou o escopo, não o rollout.
 
 Rascunho privado de reconciliação preparado em cópia local separada:
 84 IDs/91 itens legados/7 incertos, 14 arquivos de mídia copiados com hash,
@@ -78,16 +89,18 @@ Mídias desses sete itens recuperadas de video-36737131418: 7 MP4 + 14 JPG,
 assistidos nem aprovados semanticamente nesta etapa; são mídia legada para
 reconciliação, não prova da renderização da branch nova.
 
-Todos os 91 kits TikTok continuam pending. EN/ES têm 56 tentativas de capa failed.
-Esses estados ainda requerem mídia no snapshot, mesmo com YouTube confirmado.
-Recuperar artefatos disponíveis ou obter decisão explícita sobre encerrar
-kits/tentativas antigos, conservando IDs e diagnóstico; não fingir postagem
-TikTok nem sucesso de capa. Bootstrap exige relatório aprovado e candidato
+Todos os 91 kits TikTok continuam pending no original. EN/ES têm 56 tentativas
+de capa failed. Encerramento autorizado, mas ainda não aplicado ao estado
+production. Código de reconciliação aceita cancelamento explícito de capa
+failed/missing somente junto de upload confirmado, conservando ID/erros e
+auditando estados anteriores. Testes reais de clone/fila passaram e revisão
+independente aprovou. Não fingir postagem TikTok nem sucesso de capa.
+Bootstrap exige relatório aprovado e candidato
 íntegro; ele não foi executado. Não substituir faltantes por fila vazia.
 
 ## Gates restantes
 
-1. Validar operacionalmente a coleta factual aprovada, sem enfraquecer gates.
+1. Diagnosticar a cota no runner; coleta factual de 1wfduc8 passou, sem relaxar gates.
 2. Gerar PT/EN/ES completos, conferir roteiro/voz/ASS/card e restore da mídia.
 3. Aprovar reconciliação específica de efeitos externos e mídias legadas.
 4. Bootstrap, verify independente, integração em main e rodada dentro da meta.
