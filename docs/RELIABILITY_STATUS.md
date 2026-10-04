@@ -15,8 +15,8 @@ ledger privado `.superpowers/sdd/2026-10-03-pipeline-reliability/progress.md`.
 - Probe da coleta com fontes conferidas: 1wf0he0 aprovado em três chamadas;
   1wfduc8 nonliteral_evidence após três. GPT-OSS120B também falhou com essa
   fonte, na mesma chave EN. Probes não testaram o roteiro completo/voz/card.
-- Suíte local fresh: 773passed, 30warnings, 83.30s. Os dois runs de captura
-  passaram 773testes e LanguageTool real; isso não é aceite de geração.
+- Suíte local: 773 testes passaram, 30 avisos, 83.30s. Os dois runs de captura
+  passaram 773 testes e LanguageTool real; isso não é aceite de geração.
 
 ## Estado preservado, ainda não importado
 
@@ -27,16 +27,16 @@ Capturas somente privadas, sem marker/head production:
 | 37209564422 | 37238541263 | 2 | 0 |
 | 37025408714 | 37238543218 | 30 | 91 |
 
-ZIPs e arquivos conferidos por SHA256. Filas PT/EN/ES são iguais byte a byte
+ZIPs e arquivos conferidos por SHA-256. Filas PT/EN/ES são iguais byte a byte
 nas duas cópias; a cópia anterior inclui as duas histórias dos incidentes.
 Run37063586921 salvou cache de DB após falha dos testes antes de restaurar;
 run37064703594 o combinou com fila37025408714. O workflow novo remove essa
 autoridade de cache e exige restore confirmado para save final. Dry-run agora
 não abre/migra DB persistente. Essas correções ainda não estão em main.
 
-Filas: PT31itens/28IDs, EN31/29IDs, ES29/27IDs. Total84IDs confirmados,
+Filas: PT 31 itens/28 IDs, EN 31/29 IDs, ES 29/27 IDs. Total de 84 IDs confirmados,
 preservados sem alteração. Consulta autenticada de leitura aos canais confirmou
-81IDs. Três PT não foram encontrados em playlist nem videos.list:
+81 IDs. Três PT não foram encontrados em playlist nem videos.list:
 2kj7o4kuHrw, ay5u5p8f3mw, kMH9jjv8XQo. Preservar histórico; ausência atual
 não autoriza recriar vídeos nem apagar registros.
 
@@ -46,12 +46,12 @@ de iniciar envio; os runs36887596133/37025408714 não os tentaram novamente.
 Playlist atual não encontrou título exato. Isso não exclui upload manual com
 outro título: operador precisa conferir e aprovar a decisão antes de reenvio.
 
-Mídias desses sete itens recuperadas de video-36737131418: 7MP4 +14JPG,
-490246562bytes. ffprobe: todos1080x1920, durações77.30–137.54s. Não foram
+Mídias desses sete itens recuperadas de video-36737131418: 7 MP4 + 14 JPG,
+490246562 bytes. ffprobe: todos 1080x1920, durações 77.30–137.54s. Não foram
 assistidos nem aprovados semanticamente nesta etapa; são mídia legada para
 reconciliação, não prova da renderização da branch nova.
 
-Todos91kits TikTok continuam pending. EN/ES têm56tentativas de capa failed.
+Todos os 91 kits TikTok continuam pending. EN/ES têm 56 tentativas de capa failed.
 Esses estados ainda requerem mídia no snapshot, mesmo com YouTube confirmado.
 Recuperar artefatos disponíveis ou obter decisão explícita sobre encerrar
 kits/tentativas antigos, conservando IDs e diagnóstico; não fingir postagem
