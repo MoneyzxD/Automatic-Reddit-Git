@@ -52,9 +52,18 @@ def test_dependencia_obrigatoria_indisponivel_retorna_codigo_2(monkeypatch, tmp_
     assert main.cli(["--test-story", "--lang", "pt"]) == 2
 
 
+def test_fixture_pipeline_nao_consulta_groq_real(pipeline, monkeypatch):
+    import utils.groq_client as groq_client
+    monkeypatch.setenv("GROQ_API_KEY_EN", "chave-sintetica-nao-usar")
+    client = Mock(side_effect=AssertionError("Teste não pode consultar Groq real"))
+    monkeypatch.setattr(groq_client, "tracked_groq", client)
+    main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    client.assert_not_called()
+
+
 @pytest.fixture
 def pipeline(monkeypatch, tmp_path):
-    from stages import (adapter, translator, naturalizer, titler, voice, subtitle,
+    from stages import (adapter, translator, naturalizer, titler, voice, subtitle, narrator_profile,
                         video, thumbnail, metadata, script_guardian, word_timing)
     from scheduler import notifier, queue
     story = {"id": "s1", "title": "My sister asked for money", "text":
@@ -106,6 +115,8 @@ def pipeline(monkeypatch, tmp_path):
 
     monkeypatch.setattr(script_guardian, "LanguageToolClient", LT)
     monkeypatch.setattr(script_guardian, "_GroqReviewer", Semantic)
+    # O perfil usa evidência explícita sintética; nenhum teste chama a API real.
+    monkeypatch.setattr(narrator_profile.NarratorProfileResolver, "_groq_evidence", lambda *args: [])
     monkeypatch.setattr(adapter.StoryAdapter, "_groq_adapt", lambda self, story: {
         **story, "full_script": story["text"] + " ERRADO.", "adapted_by": "groq"})
     localized = {

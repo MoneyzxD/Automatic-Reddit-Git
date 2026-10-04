@@ -30,6 +30,11 @@ nos modelos GPT-OSS 20B/120B, mantendo as verificações locais de citação lit
 gênero e fatos. O run 37218385352 repetiu a mesma rejeição mesmo com schema
 estrito; portanto esse ajuste não comprovou resolução. Diagnóstico sanitizado
 da geração recusada identifica sintaxe/tamanho/posição sem salvar seu conteúdo.
+Run 37219383922 confirmou sintaxe válida. Probe local encontrou kind fora do
+enum e citação com capitalização alterada. Prompt e feedback de retry foram
+ajustados, sem relaxar schema/parser/citação literal ou aumentar orçamento.
+Último probe local recebeu 429 com espera acima do permitido; não contornar
+cota com troca de chaves nem tratar testes falsos como prova da correção real.
 Outros modelos configurados conservam JSON object e podem ter a mesma limitação;
 não há troca automática de modelo, chave ou aprovação por fallback.
 

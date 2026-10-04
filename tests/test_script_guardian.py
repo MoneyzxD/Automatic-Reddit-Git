@@ -528,6 +528,10 @@ def test_contrato_estrito_do_provider_preserva_fatos_e_patches(monkeypatch, mode
     assert item["properties"]["source_quote"] == {"type": "string"}
     if mode == "facts":
         assert item["properties"]["kind"]["enum"] == ["relationship", "amount", "event", "outcome", "identity"]
+        assert '"relationship|amount|event|outcome|identity"' not in request["messages"][0]["content"]
+        assert "exatamente um" in request["messages"][0]["content"]
+        assert "caractere por caractere" in request["messages"][0]["content"]
+        assert "maiúsculas" in request["messages"][0]["content"]
         assert item["properties"]["value"] == {"type": "string"}
     else:
         assert schema["properties"]["approved"] == {"type": "boolean"}
@@ -585,6 +589,53 @@ def test_resposta_invalida_distinta_do_provider(tmp_path, perfil_feminino, raw, 
     failure = error.value.review.semantic_failure
     assert (failure.code, failure.mode, failure.attempts) == (expected, "chunk", 3)
     assert failure.http_status is None
+
+
+def test_fato_com_capitalizacao_alterada_continua_bloqueado(tmp_path, perfil_feminino):
+    facts = json.dumps({"facts": [{"kind": "identity", "value": "narrator is a cleaner",
+                                  "source_quote": "I AM A CLEANER."}]})
+    guardian = guardian_fake(tmp_path, FakeSemanticReviewer(facts=facts))
+    with pytest.raises(QualityUnavailable) as caught:
+        revisar(guardian, perfil_feminino)
+    failure = caught.value.review.semantic_failure
+    assert (failure.code, failure.mode, failure.attempts) == ("nonliteral_evidence", "facts", 3)
+
+
+def test_retry_factual_informa_citacao_recusada_sem_alterar_fonte(tmp_path):
+    calls = []
+    source = "I am a cleaner."
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            assert context["source_chunk"] == source
+            if len(calls) == 1:
+                quote = "I AM A CLEANER."
+            else:
+                assert context["retry_feedback"] == {
+                    "failure_code": "nonliteral_evidence", "invalid_source_quotes": ["I AM A CLEANER."],
+                }
+                quote = source
+            return json.dumps({"facts": [{"kind": "identity", "value": "cleaner", "source_quote": quote}]})
+    guardian = guardian_fake(tmp_path, Reviewer())
+    facts = json.loads(guardian._collect_facts(source, "en"))
+    assert len(calls) == 2
+    assert "retry_feedback" not in calls[0]
+    assert facts[0]["source_quote"] == source
+
+
+def test_feedback_factual_nao_ultrapassa_limite_de_contexto(tmp_path):
+    from stages.script_guardian import _ReviewUnavailable
+    calls = []
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            return json.dumps({"facts": [{"kind": "identity", "value": "cleaner",
+                                          "source_quote": "I AM A CLEANER."}]})
+    guardian = guardian_fake(tmp_path, Reviewer(), max_context_chars=20)
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._collect_facts("I am a cleaner.", "en")
+    assert caught.value.failure.code == "context_limit"
+    assert caught.value.failure.attempts == len(calls) == 1
 
 
 @pytest.mark.parametrize("exception,expected", [(TimeoutError, "timeout"), (ConnectionError, "connection")])

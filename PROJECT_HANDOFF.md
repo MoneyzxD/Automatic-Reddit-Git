@@ -131,3 +131,13 @@ passou 754 testes e restore/save privados, mas repetiu HTTP 400
 resolveu a chamada real. Diagnóstico adicional classifica somente sintaxe,
 tamanho e posição da geração recusada; nunca persiste sua resposta ou mensagem
 bruta. A causa permanece em investigação, sem liberar main ou publicar vídeos.
+
+O diagnóstico do run 37219383922 mostrou JSON válido, 4677 caracteres. Probe
+local real, com a chave EN configurada, encontrou três rótulos kind fora do
+enum em 14 fatos. Schema/parser foram preservados; o prompt agora explicita
+categorias e cópia literal, e retry factual recebe a citação recusada como dado
+sem aumentar o orçamento. Uma citação também alterava capitalização; o gate
+continua rejeitando esse caso. O último probe encontrou 429 com espera acima
+do orçamento, portanto a correção completa ainda precisa de prova no Actions.
+Fixture de integração foi isolada do Groq real; ela não pode consumir a chave
+presente no ambiente. Suíte interrompida durante essa investigação não é prova.

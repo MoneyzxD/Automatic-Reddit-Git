@@ -333,10 +333,17 @@ class _GroqReviewer:
         if context["mode"] == "facts":
             instruction = (
                 'Extraia fatos compactos da fonte em JSON estrito: {"facts":[{"kind":'
-                '"relationship|amount|event|outcome|identity","value":"fato compacto",'
+                '"event","value":"fato compacto",'
                 '"source_quote":"citação literal exata"}]}. Preserve todos os eventos, '
                 "valores, relações, negações e desfechos; nenhuma citação inventada. "
-                "Deduplicate fatos repetidos. Não traduza as citações."
+                "kind deve ser exatamente um destes rótulos: relationship, amount, event, "
+                "outcome, identity. Use event para ações, decisões, tempo e negações; "
+                "não crie categorias novas. Deduplicate fatos repetidos. "
+                "Copie source_quote de um trecho contíguo de source_chunk, caractere por caractere, "
+                "preservando maiúsculas, minúsculas, pontuação e espaços. Não altere a primeira "
+                "letra para iniciar uma frase. Não traduza nem parafraseie as citações. "
+                "Se houver retry_feedback, corrija o defeito indicado: as citações recusadas "
+                "são exemplos inválidos, nunca evidência. Copie novamente da fonte original."
             )
         else:
             instruction = (
@@ -444,11 +451,17 @@ class ScriptGuardian:
             raise _ReviewUnavailable("Contexto excede o limite configurado; nenhum trecho foi truncado",
                                      SemanticFailure("context_limit", None, mode, 0, context_chars))
         max_attempts = self.config["semantic_max_attempts"]
+        feedback = None
         for attempt in range(1, max_attempts + 1):
+            request_context = dict(context, retry_feedback=feedback) if feedback else context
+            context_chars = sum(len(str(value)) for value in request_context.values())
+            if context_chars > self.max_context_chars:
+                raise _ReviewUnavailable("Feedback excede o limite; nenhum trecho foi truncado",
+                                         SemanticFailure("context_limit", None, mode, attempt - 1, context_chars))
             self._semantic_calls += 1
             wait = self.config["semantic_retry_wait_seconds"]
             try:
-                raw = self.semantic.review(mode=mode, **context)
+                raw = self.semantic.review(mode=mode, **request_context)
             except _ReviewUnavailable as exc:
                 if exc.failure:
                     exc.failure = replace(exc.failure, attempts=attempt, context_chars=context_chars)
@@ -487,6 +500,15 @@ class ScriptGuardian:
                             failure = replace(failure, code="nonliteral_evidence")
                         else:
                             return outcome
+                if mode == "facts":
+                    # Repetir a mesma entrada determinística repete a evidência inválida.
+                    # Feedback não aprova nem normaliza citações; o gate exato continua.
+                    feedback = {"failure_code": failure.code}
+                    if failure.code == "nonliteral_evidence":
+                        feedback["invalid_source_quotes"] = [
+                            fact["source_quote"] for fact in facts
+                            if fact["source_quote"] not in context["source_chunk"]
+                        ]
             if attempt < max_attempts:
                 # Esperas longas ficam limitadas em blocos; o orçamento não aumenta.
                 remaining = wait
