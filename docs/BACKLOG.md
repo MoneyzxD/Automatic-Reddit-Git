@@ -48,8 +48,14 @@ Correção de emissão/cadência autorizada enviada em `5aea94b` à branch isola
 tradução/naturalização PT, sem HTTP429 registrado. Título falhou por `reason`
 ausente em três tentativas; nenhuma mídia/upload. `3d65d84` corrige feedback
 que não informava os campos ausentes, sem preencher valores ou relaxar schema.
-879 testes locais/revisão passaram; run `37341313520` retoma a validação isolada,
-resultado pendente. Limites e evidência atual estão na seção inicial de
+879 testes locais/revisão passaram; run `37341313520` passou 879 testes/18.09s,
+LT e restore/save, mas terminou failure/34m20s sem mídia/upload. Recusas JSON
+recuperadas, nenhum HTTP429 registrado. PT/título e ES/metadados parte2 tiveram
+rejeições factuais; EN/título terminou invalid_source_reference/3, HTTP ausente.
+O subtipo não foi capturado. Antes de nova rodada: conferir candidatos contra
+fonte/script aprovado e diagnosticar referência inválida de modo sanitizado,
+mantendo evidência/gates. Isso não prova defeito no código nem mesma causa
+dos incidentes antigos. Limites e evidência atual estão na seção inicial de
 [RELIABILITY_STATUS](RELIABILITY_STATUS.md). Agentes/main/bootstrap aguardam
 aceite completo; a cronologia abaixo não autoriza repetir correções antigas.
 

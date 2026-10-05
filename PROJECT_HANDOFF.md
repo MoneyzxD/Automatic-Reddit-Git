@@ -10,7 +10,13 @@ sem HTTP429 registrado; título falhou por `reason` ausente em três tentativas.
 Nenhuma mídia/upload. Gap de feedback reproduzido e corrigido em `3d65d84`:
 retry agora recebe somente os nomes reason/start ausentes, sem valores/índices
 ou preenchimento automático. 879 testes locais e revisão independente passaram.
-Run `37341313520` retoma o mesmo namespace sem publicar; resultado pendente.
+Run `37341313520` passou 879 testes/18.09s, LT e restore/save; terminou failure
+34m20s sem mídia/upload. Recusas JSON recuperadas; nenhum HTTP429 registrado.
+PT/título e ES/metadados parte2 foram rejeitados por achados factuais. ES chegou
+à divisão/metadados; EN aprovou tradução/naturalização e parou na coleta factual
+do título, invalid_source_reference/3, HTTP ausente. Subtipo/IDs não capturados;
+investigar antes de novo dispatch ou correção. Não chamar esses achados de
+mesma causa anterior nem de defeito comprovado no código.
 Consulte a seção inicial do
 [status](docs/RELIABILITY_STATUS.md) para limites e aceite real. Bootstrap,
 main, rodada normal e agentes permanecem posteriores à validação completa.

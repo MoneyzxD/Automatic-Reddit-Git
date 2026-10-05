@@ -44,8 +44,29 @@ e orçamento continuam iguais. Outros campos permanecem no feedback genérico
 até evidência e regressão justificarem ampliação. TDD seis falhas esperadas;
 211 testes do guardião/1.12s, suíte completa 879/30warnings/49.69s,
 compile/diff check e revisão independente (211/1.14s, sem achados) passaram.
-Run `37341313520` retoma o mesmo namespace PT/EN/ES sem publicar/resetar;
-resultado pendente. Os registros abaixo são antecedentes.
+Run `37341313520`/`3d65d84` passou 879 testes/18.09s, LanguageTool e restore/save;
+terminou failure/34m20s, sem mídia/upload. As recusas JSON intermediárias foram
+recuperadas dentro do orçamento: PT/título saiu de unavailable para rejected;
+ES aprovou tradução, naturalização, título/hooks, duas partes e metadados da
+parte 1. Nenhum HTTP429 registrado nos relatórios. Ainda houve omissão de
+`reason` em respostas iniciais e uma geração JSON vazia no título ES: o ajuste
+recupera falhas, não garante que o provedor nunca emita resposta inválida.
+
+Bloqueios distintos preservados: PT/título foi rejeitado por diferença entre
+perder o jantar e não ir ao jantar; ES/metadados da parte 2 descreviam recusa
+de empréstimo, enquanto o guardião apontou empréstimo já realizado. Esses
+achados são evidência do guardião, não conclusão independente sobre seus
+candidatos ou prova de defeito no código. EN aprovou tradução/naturalização,
+mas a coleta factual do título terminou `invalid_source_reference` após três
+tentativas (HTTP ausente, contexto4737). A resposta/IDs inválidos não foram
+preservados; não é possível dizer se foram vazios, desconhecidos, repetidos,
+fora de ordem ou não contíguos. Isso não foi quota/OAuth/schema `reason`.
+
+Próximo diagnóstico: comparar os candidatos de título/metadados com a fonte
+e scripts aprovados; identificar de forma sanitizada o subtipo da referência
+inválida antes de corrigir esse contrato. Não repetir dispatch, enfraquecer
+evidência ou reescrever etapas por suposição. Main/bootstrap/rodada normal e
+agentes continuam pendentes. Os registros abaixo são antecedentes.
 
 ## Diagnóstico estrutural autorizado — 2026-10-05
 
