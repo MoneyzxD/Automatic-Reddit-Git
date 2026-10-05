@@ -394,6 +394,13 @@ class _GroqReviewer:
                 '"subject":"narrator ou personagem real","reason":"motivo",'
                 '"source_quote":"citação literal da fonte"}]}. '
                 "Achados de fidelidade/gênero precisam de citação literal; estilo é warning. "
+                "Copie source_quote exatamente de source_chunk ou de uma source_quote do "
+                "factual_context, nunca de value, candidate_text ou de uma paráfrase. "
+                "Para grammar, style e language, use source_quote vazio quando não precisar "
+                "de evidência da fonte. Se retry_feedback indicar nonliteral_evidence, "
+                "corrija as citações mantendo os achados sustentados; não apague um achado "
+                "crítico para aprovar. Se indicar invalid_json ou invalid_schema, corrija "
+                "somente o formato exigido. "
                 "Sem achados, issues vazio. Falha crítica impede approved=true."
             )
         model = self.config.get("groq_model", "openai/gpt-oss-20b")
@@ -553,9 +560,8 @@ class ScriptGuardian:
                             failure = replace(failure, code="nonliteral_evidence")
                         else:
                             return outcome
-                if mode == "facts":
-                    # Feedback não inclui texto do modelo nem aprova referências inválidas.
-                    feedback = {"failure_code": failure.code}
+                # Feedback não inclui texto do modelo nem aprova evidências inválidas.
+                feedback = {"failure_code": failure.code}
             if attempt < max_attempts:
                 # Esperas longas ficam limitadas em blocos; o orçamento não aumenta.
                 remaining = wait

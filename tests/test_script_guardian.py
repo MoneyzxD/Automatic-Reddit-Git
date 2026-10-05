@@ -700,6 +700,52 @@ def test_retry_factual_informa_referencia_recusada_sem_alterar_fonte(tmp_path):
     assert facts[0]["source_quote"] == source
 
 
+@pytest.mark.parametrize("mode", ["chunk", "global"])
+def test_retry_de_revisao_informa_evidencia_recusada_sem_aprovar_achado(tmp_path, mode):
+    source = "I kept the Pokémon card."
+    candidate = "I sold the Pokémon card."
+    calls = []
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            quote = "SEGREDO_TESTE: invented evidence"
+            if context.get("retry_feedback") == {"failure_code": "nonliteral_evidence"}:
+                quote = source
+            return resposta(False, [achado(
+                original="sold", replacement="kept", category="event",
+                source_quote=quote,
+            )])
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    outcome = guardian._request(mode=mode, source_text=source,
+                                source_chunk=source, candidate_text=candidate, language="en")
+    assert outcome.status == "rejected"
+    assert outcome.patches[0].source_quote == source
+    assert len(calls) == 2
+    assert "retry_feedback" not in calls[0]
+    assert calls[1]["retry_feedback"] == {"failure_code": "nonliteral_evidence"}
+    assert all(c["candidate_text"] == candidate and c["source_chunk"] == source for c in calls)
+    assert "SEGREDO_TESTE" not in json.dumps(calls)
+
+
+def test_feedback_de_revisao_nao_ultrapassa_limite_de_contexto(tmp_path):
+    from stages.script_guardian import _ReviewUnavailable
+    calls = []
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            return resposta(False, [achado(source_quote="inventada")])
+
+    guardian = guardian_fake(tmp_path, Reviewer(), max_context_chars=30)
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._request(mode="global", source_text="source", source_chunk="source",
+                          candidate_text="candidate", language="en")
+    assert caught.value.failure.code == "context_limit"
+    assert caught.value.failure.attempts == len(calls) == 1
+
+
 def test_feedback_factual_nao_ultrapassa_limite_de_contexto(tmp_path):
     from stages.script_guardian import _ReviewUnavailable
     calls = []
