@@ -470,6 +470,8 @@ class _GroqReviewer:
                 "corrija as citações mantendo os achados sustentados; não apague um achado "
                 "crítico para aprovar. Se indicar invalid_json ou invalid_schema, corrija "
                 "somente o formato exigido. "
+                "Se retry_feedback trouxer missing_issue_fields, inclua esses campos em "
+                "cada issue, com motivo real em reason e inteiro ou null em start. "
                 "Sem achados, issues vazio. Falha crítica impede approved=true."
             )
         model = self.config.get("groq_model", "openai/gpt-oss-20b")
@@ -596,8 +598,16 @@ class ScriptGuardian:
                         and failure.http_status < 500 and not invalid_generation):
                     break
                 if invalid_generation:
-                    # Descarta a geração recusada; só o código orienta a próxima tentativa.
+                    # Descarta a geração recusada; só o diagnóstico controlado orienta o retry.
                     feedback = {"failure_code": failure.code}
+                    # Limite deliberado: apenas reason/start, os campos do incidente.
+                    # Ampliar a lista exige evidência e regressão; nenhum valor/índice é reenviado.
+                    missing = sorted({field for field in ("reason", "start")
+                                      for error in failure.generation_schema_errors
+                                      if error.get("rule") == "required" and re.fullmatch(
+                                          rf"\$\.issues\[\d+\]\.{field}", error.get("path", ""))})
+                    if missing:
+                        feedback["missing_issue_fields"] = missing
                 wait = _retry_wait(exc, wait)
                 if wait > self.config["semantic_max_retry_wait_seconds"]:
                     break

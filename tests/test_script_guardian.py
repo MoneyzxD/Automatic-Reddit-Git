@@ -999,6 +999,36 @@ def test_json_validate_failed_repete_sem_usar_geracao_recusada(tmp_path, mode):
         assert outcome.issues[0].source_quote == "source"
 
 
+@pytest.mark.parametrize("mode", ["chunk", "global"])
+@pytest.mark.parametrize("missing", [("reason",), ("start",), ("reason", "start")])
+def test_retry_comunica_campos_ausentes_sem_reutilizar_geracao(tmp_path, mode, missing):
+    calls = []
+    invalid = achado(start=None, original="SYNTHETIC_PRIVATE", private_extra="SYNTHETIC_PRIVATE")
+    for field in missing:
+        invalid.pop(field)
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            if len(calls) == 1:
+                exc = RuntimeError("SYNTHETIC_PRIVATE")
+                exc.status_code = 400
+                exc.body = {"error": {"code": "json_validate_failed", "failed_generation":
+                            json.dumps({"approved": False, "issues": [invalid, invalid]})}}
+                raise exc
+            return resposta(False, [achado(start=None, category="event", source_quote="source")])
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    outcome = guardian._request(mode=mode, source_text="source", source_chunk="source",
+                                candidate_text="candidate", language="pt")
+    assert calls[1]["retry_feedback"] == {"failure_code": "invalid_json",
+                                         "missing_issue_fields": list(missing)}
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(calls)
+    assert "private_extra" not in json.dumps(calls)
+    assert outcome.status == "rejected"
+    assert len(calls) == 2
+
+
 @pytest.mark.parametrize("status,provider_code", [
     (400, "other"), (400, None), (401, "json_validate_failed"),
     (403, "json_validate_failed"), (413, "json_validate_failed"),
