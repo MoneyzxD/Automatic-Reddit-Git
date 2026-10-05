@@ -580,6 +580,30 @@ def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfi
     assert "recortes deliberados" in calls[-1]["messages"][0]["content"]
 
 
+@pytest.mark.parametrize("mode", ["chunk", "global"])
+def test_exemplo_de_revisao_enviado_ao_modelo_inclui_campos_obrigatorios(monkeypatch, mode):
+    import stages.script_guardian as module
+    import utils.groq_client as groq_client
+    requests = []
+
+    def create(**kwargs):
+        requests.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+
+    monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
+    monkeypatch.setattr(groq_client, "tracked_groq", lambda *args, **kwargs:
+                        SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    module._GroqReviewer({"semantic_timeout_seconds": 60}).review(language="pt", mode=mode)
+    instruction = requests[0]["messages"][0]["content"]
+    example, _ = json.JSONDecoder().raw_decode(instruction[instruction.index('{"approved"'):])
+    issue = example["issues"][0]
+    assert set(issue) == {"original", "replacement", "category", "severity", "subject",
+                          "reason", "source_quote", "start"}
+    assert issue["start"] is None
+    assert issue["reason"].strip()
+    assert issue["severity"] in {"info", "warning", "critical"}
+
+
 def test_rejeicao_json_validate_failed_prevenida_pelo_schema(tmp_path, perfil_feminino, monkeypatch):
     import stages.script_guardian as module
     import utils.groq_client as groq_client

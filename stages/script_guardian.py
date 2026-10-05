@@ -451,13 +451,17 @@ class _GroqReviewer:
                 "cobertura de todos os fatos. Títulos, hooks, metadados e partes/pre_tts "
                 "são recortes deliberados: não exija que repitam a história inteira. "
                 "Não reescreva o roteiro inteiro; ofereça só substituições pontuais exatas. "
-                "start, se necessário, é offset Python relativo ao candidate_text recebido. "
+                "Todos os campos de cada issue são obrigatórios, inclusive reason e start. "
+                "reason deve explicar o achado; nunca omita o motivo. "
+                "start é offset Python relativo ao candidate_text recebido: envie um inteiro "
+                "quando souber a posição, ou null quando não precisar dela; nunca omita start. "
                 f"Categorias permitidas: {', '.join(REVIEW_CATEGORIES)}. "
                 'Retorne somente JSON estrito: {"approved":true,"issues":[{"original":'
                 '"trecho exato","replacement":"correção pontual ou vazio",'
-                '"category":"grammar","severity":"info|warning|critical",'
+                '"category":"grammar","severity":"warning",'
                 '"subject":"narrator ou personagem real","reason":"motivo",'
-                '"source_quote":"citação literal da fonte"}]}. '
+                '"source_quote":"citação literal da fonte","start":null}]}. '
+                "severity deve ser exatamente info, warning ou critical, nunca a lista de opções. "
                 "Achados de fidelidade/gênero precisam de citação literal; estilo é warning. "
                 "Copie source_quote exatamente de source_chunk ou de uma source_quote do "
                 "factual_context, nunca de value, candidate_text ou de uma paráfrase. "

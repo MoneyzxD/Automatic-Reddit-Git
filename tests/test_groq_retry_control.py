@@ -6,6 +6,15 @@ import pytest
 from utils import groq_client, telemetry
 
 
+@pytest.fixture(autouse=True)
+def isolated_cadence(monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(groq_client, "_NEXT_REQUEST_AT", {})
+    monkeypatch.setattr(groq_client.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(groq_client.time, "sleep", lambda seconds: now.__setitem__(0, now[0] + seconds))
+    return now
+
+
 def cliente_fake(monkeypatch, failures):
     constructor, calls = [], []
     def create(**kwargs):
@@ -38,12 +47,16 @@ def test_guardiao_nao_multiplica_retry_do_sdk_e_wrapper(monkeypatch):
     assert len(calls) == 1
 
 
-def test_chamador_legado_preserva_retry_e_telemetria(monkeypatch):
+def test_chamador_legado_preserva_retry_e_telemetria(monkeypatch, isolated_cadence):
     constructor, calls = cliente_fake(monkeypatch, [rate_limit()])
     waits = []
-    monkeypatch.setattr(groq_client.time, "sleep", waits.append)
+    def sleep(seconds):
+        waits.append(seconds)
+        isolated_cadence[0] += seconds
+    monkeypatch.setattr(groq_client.time, "sleep", sleep)
     groq_client.tracked_groq("opaque", "adapter").chat.completions.create(model="model", messages=[])
     assert constructor == [{"api_key": "opaque"}]
     assert len(calls) == 2
-    assert waits == [15]
+    assert waits[0] == 15
+    assert sum(waits) == 61
     assert telemetry.usage_by_stage()["adapter"]["total"] == 5
