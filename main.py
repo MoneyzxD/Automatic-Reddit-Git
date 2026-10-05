@@ -883,7 +883,9 @@ def run_pipeline(
                 durable_checkpoint("localized_script_approved")
 
             validated_story = lang_script
-            derived_source = validated_story + (f"\n\nFatos validados:\n{lang_facts}" if lang_facts else "")
+            # O ledger auxilia geração, mas não é fonte: reextraí-lo criava citações de JSON.
+            # Os gates derivam sua própria evidência somente do roteiro aprovado completo.
+            derived_source = validated_story
             if dry_run:
                 title_for_lang = hook_for_lang = story_title
                 closing_hook_for_lang = ""

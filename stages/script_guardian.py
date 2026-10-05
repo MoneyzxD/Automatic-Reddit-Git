@@ -92,6 +92,7 @@ class SemanticFailure:
     generation_schema_status: str | None = None
     generation_schema_errors: tuple[dict, ...] = ()
     generation_schema_truncated: bool = False
+    source_reference_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -632,19 +633,34 @@ class ScriptGuardian:
                         resolved = []
                         for fact in facts:
                             ids = fact["source_unit_ids"]
-                            if (not isinstance(ids, list) or not ids
-                                or any(not isinstance(uid, str) or uid not in positions for uid in ids)):
+                            # Somente enums locais; IDs/valores recusados nunca entram no diagnóstico.
+                            reference_error = None
+                            if not isinstance(ids, list) or any(not isinstance(uid, str) for uid in ids):
+                                reference_error = "invalid_type"
+                            elif not ids:
+                                reference_error = "empty"
+                            elif any(uid not in positions for uid in ids):
+                                reference_error = "unknown_id"
+                            elif len(set(ids)) != len(ids):
+                                reference_error = "duplicate_id"
+                            if reference_error:
                                 break
                             indices = [positions[uid] for uid in ids]
+                            if indices != sorted(indices):
+                                reference_error = "out_of_order"
+                                break
                             if indices != list(range(indices[0], indices[0] + len(indices))):
+                                reference_error = "noncontiguous"
                                 break
                             quote = "".join(units[index][1] for index in indices)
                             if not quote.strip() or quote not in source_chunk or quote not in source_text:
+                                reference_error = "nonliteral_quote"
                                 break
                             resolved.append({"kind": fact["kind"], "value": fact["value"], "source_quote": quote})
                         else:
                             return resolved
-                        failure = replace(failure, code="invalid_source_reference")
+                        failure = replace(failure, code="invalid_source_reference",
+                                          source_reference_error=reference_error)
                 elif data is not None:
                     outcome = parse_semantic_review(raw)
                     if outcome.status != "unavailable":
@@ -656,6 +672,8 @@ class ScriptGuardian:
                             return outcome
                 # Feedback não inclui texto do modelo nem aprova evidências inválidas.
                 feedback = {"failure_code": failure.code}
+                if failure.source_reference_error:
+                    feedback["source_reference_error"] = failure.source_reference_error
             if attempt < max_attempts:
                 # Esperas longas ficam limitadas em blocos; o orçamento não aumenta.
                 remaining = wait

@@ -1,5 +1,42 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Fonte narrativa separada do ledger — 2026-10-05
+
+Diagnóstico independente dos candidatos do run `37341313520`: ES/meta2 contém
+a recusa **depois** da descoberta, sustentada pela fonte; o achado citava apenas
+o empréstimo anterior e foi falso positivo temporal. PT/título é impreciso
+(perder versus faltar ao jantar), sem contradição factual demonstrada. Não
+aprovar automaticamente nenhuma dessas frases nem dispensar nova revisão.
+
+Defeito de código comprovado: `derived_source` juntava roteiro aprovado e JSON
+do ledger. A reextração no primeiro gate derivado passou a citar esse JSON como
+fonte: 15/33 citações PT e 10/28 ES continham chaves JSON no artifact sanitizado.
+Agora os gates recebem só a narrativa localizada aprovada; o ledger continua
+separado na geração. O cache existente reaproveita os fatos dessa narrativa.
+Isso corrige a autoridade da evidência, mas não comprova sozinho a recuperação
+do julgamento temporal nem explica retroativamente a referência inválida EN.
+
+`source_reference_error` identifica somente enums locais (tipo, vazio, ID
+desconhecido/repetido, ordem, lacuna, citação não literal). Retry recebe esse
+subtipo, sem valores/IDs recusados. Schema, aceitação, orçamento e gates iguais.
+TDD: nove falhas esperadas antes da implementação; suíte completa 888 passed,
+33 avisos legados de datetime.utcnow, 45.19s; compile/diff check passaram.
+Revisão independente aprovou a próxima validação isolada. Limite de teste:
+o ramo de citação não literal conserva a condição anterior, sem caso novo
+específico; adaptadores sintéticos não comprovam a Groq real.
+
+Compatibilidade: prepared.json antigo tem hash da fonte concatenada; retomada
+através desta revisão bloqueia para reconciliação explícita. Não apagar ou
+promover esse checkpoint automaticamente. A validação anterior não chegou a
+salvar prepared, porém PT/ES ficaram rejected: usar namespace novo isolado
+para provar os três idiomas, preservando os anteriores e produção.
+
+Run recente `37349810900` de main/`30a0a0c` também falhou antes de mídia, na
+adaptação EN de `1w8npme`. Testes/LT passaram, publicação foi pulada; relatório
+antigo não preservou SemanticFailure/HTTP. Não atribuir a mesma causa por
+suposição. Artifact privado preservado; main/bootstrap/rodada normal/agentes
+continuam pendentes de aceite real.
+
 ## Correção de emissão e cadência — 2026-10-05
 
 Operador autorizou corrigir os dois bloqueios capturados. Código `5aea94b`

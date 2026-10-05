@@ -2,6 +2,16 @@
 
 ## Continuação atual — 2026-10-05
 
+Continuação: separação fonte/ledger corrigida após comprovar citações de JSON
+nos gates derivados. Diagnóstico de referência agora tem subtipo enum, sem IDs
+ou valores. 888 testes/33 avisos/45.19s, compile/diff check e revisão independente
+passaram; falta validação real, não liberar main. Prepared antigo exige
+reconciliação explícita; PT/ES rejected anteriores não são retomáveis. Próxima
+rodada usa namespace novo isolado, sem upload/reset de produção. Detalhes e
+limites na seção inicial de [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md).
+Run main37349810900 também falhou na adaptação EN antes de mídia, sem classe
+HTTP preservada; não diagnosticar por analogia. Antecedentes abaixo.
+
 Correção autorizada de emissão e TPM enviada em `5aea94b`, só na branch isolada:
 exemplo com todos os campos e cadência por recarga TPM entre etapas/clientes.
 Schema/gates/chaves/orçamento preservados. 873 testes locais e revisão

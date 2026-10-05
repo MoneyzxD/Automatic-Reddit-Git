@@ -256,6 +256,39 @@ def test_referencia_nao_aceita_citacao_adicional_do_modelo(tmp_path):
     assert caught.value.failure.code == "invalid_schema"
 
 
+@pytest.mark.parametrize("ids,reason", [
+    (None, "invalid_type"), ("u0", "invalid_type"), ([], "empty"),
+    ([0], "invalid_type"), (["PRIVATE_UNKNOWN_ID"], "unknown_id"),
+    (["u0", "u0"], "duplicate_id"), (["u1", "u0"], "out_of_order"),
+    (["u0", "u2"], "noncontiguous"),
+])
+def test_referencia_recusada_informa_subtipo_sem_reenviar_ids(tmp_path, ids, reason):
+    from dataclasses import asdict
+    from stages.script_guardian import _ReviewUnavailable
+
+    calls = []
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            return json.dumps({"facts": [{"kind": "event", "value": "PRIVATE_FACT_VALUE",
+                                         "source_unit_ids": ids}]})
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._collect_facts("X" * 610, "en")
+    failure = caught.value.failure
+    assert failure.code == "invalid_source_reference"
+    assert failure.source_reference_error == reason
+    assert failure.attempts == 3
+    assert len(calls) == 3
+    assert "retry_feedback" not in calls[0]
+    assert all(c["retry_feedback"] == {"failure_code": "invalid_source_reference",
+                                      "source_reference_error": reason} for c in calls[1:])
+    diagnostic = json.dumps(asdict(failure)) + json.dumps(calls[-1]["retry_feedback"])
+    assert "PRIVATE_UNKNOWN_ID" not in diagnostic and "PRIVATE_FACT_VALUE" not in diagnostic
+    assert guardian._facts == ()
+
+
 def test_referencia_usa_fonte_imutavel_mesmo_se_reviewer_alterar_contexto(tmp_path):
     class Reviewer:
         def review(self, **context):
@@ -710,6 +743,7 @@ def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, statu
         "rate_limit_type": None, "retry_after_seconds": None,
         "generation_schema_status": None, "generation_schema_errors": [],
         "generation_schema_truncated": False,
+        "source_reference_error": None,
     }
     assert error.value.review.semantic_failure.code == expected
     assert len(calls) == attempts
@@ -751,6 +785,7 @@ def test_retry_factual_informa_referencia_recusada_sem_alterar_fonte(tmp_path):
             else:
                 assert context["retry_feedback"] == {
                     "failure_code": "invalid_source_reference",
+                    "source_reference_error": "unknown_id",
                 }
                 ids = ["u0"]
             return json.dumps({"facts": [{"kind": "identity", "value": "cleaner", "source_unit_ids": ids}]})

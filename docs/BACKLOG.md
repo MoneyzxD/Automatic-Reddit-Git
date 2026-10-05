@@ -43,6 +43,15 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Fonte narrativa separada do JSON do ledger após evidência de contaminação
+das citações. Falso positivo temporal ES comprovado; PT é imprecisão, não
+contradição demonstrada. Subtipo de referência inválida agora é diagnosticado
+sem IDs/valores. 888 testes e revisão passaram; próximo gate é nova validação
+isolada dos três idiomas, sem upload. Prepared antigo bloqueia por hash e exige
+reconciliação, não limpeza automática. Run main37349810900 falhou na adaptação
+EN com diagnóstico antigo genérico; evidência privada preservada. Consulte a
+seção inicial do status para limites; ainda não há aceite operacional.
+
 Correção de emissão/cadência autorizada enviada em `5aea94b` à branch isolada.
 873 testes locais e revisão independente passaram; run `37338112115` aprovou
 tradução/naturalização PT, sem HTTP429 registrado. Título falhou por `reason`

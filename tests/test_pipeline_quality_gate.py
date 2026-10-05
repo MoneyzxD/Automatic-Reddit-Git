@@ -164,6 +164,37 @@ def pipeline(monkeypatch, tmp_path):
     return state
 
 
+def test_gates_derivados_usam_roteiro_sem_serializar_ledger_como_fonte(pipeline, monkeypatch):
+    from stages import naturalizer, script_guardian
+
+    localized = {"pt": "Recusei novos empréstimos depois de descobrir a mentira.",
+                 "es": "Rechacé nuevos préstamos después de descubrir la mentira.",
+                 "en": "I refused further loans after discovering the lie."}
+    monkeypatch.setattr(naturalizer.ScriptNaturalizer, "_groq_rewrite",
+                        lambda self, text, language, gender: localized[language])
+    original_review = script_guardian._GroqReviewer.review
+    facts_sources = []
+
+    def review(self, **context):
+        if context["mode"] == "facts":
+            units = context["source_units"]
+            facts_sources.append("".join(unit["text"] for unit in units))
+            return json.dumps({"facts": [{"kind": "event", "value": "loan decision",
+                                         "source_unit_ids": [units[0]["id"]]}]})
+        return original_review(self, **context)
+
+    monkeypatch.setattr(script_guardian._GroqReviewer, "review", review)
+    main.run_pipeline(pipeline.config, ["pt", "en", "es"], test_story=True)
+    derived = [c for c in pipeline.calls if c["stage"] in {
+        "title", "opening_hook", "closing_hook", "injected_hook", "split_part", "metadata", "pre_tts"}]
+    assert {c["language"] for c in derived} == {"pt", "en", "es"}
+    assert all(c["source_chunk"] == localized[c["language"]] for c in derived)
+    assert all("source_quote" not in source and "Fatos validados" not in source for source in facts_sources)
+    assert all(json.loads(c["factual_context"])[0]["source_quote"] == localized[c["language"]]
+               for c in derived)
+    assert len(pipeline.audios) == 3
+
+
 def test_metadados_reprovados_impedem_audio_render_export_e_fila(pipeline):
     pipeline.fail = "metadata"
     main.run_pipeline(pipeline.config, ["pt"], test_story=True)
