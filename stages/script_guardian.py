@@ -665,11 +665,14 @@ class ScriptGuardian:
                     except Exception:
                         raise _ReviewUnavailable("LanguageTool indisponível durante a revisão") from None
                     for finding in findings:
-                        style = finding.category.upper() in {"STYLE", "TYPOGRAPHY", "REDUNDANCY"}
+                        style = finding.category.upper() in {
+                            "STYLE", "TYPOGRAPHY", "REDUNDANCY", "REPETITIONS_STYLE",
+                        }
                         category, severity = ("style", "warning") if style else ("grammar", "critical")
                         issues.append(ReviewIssue(category, severity, finding.message,
                                                   finding.original, origin="languagetool"))
-                        if finding.replacements:
+                        # Estilo só avisa; sugestão mecânica não reescreve a narrativa.
+                        if finding.replacements and not style:
                             lt_patches.append(TextPatch(finding.original, finding.replacements[0], category,
                                                         severity, "text", finding.message, "", finding.start))
                 factual_context = self._collect_facts(source_text, language)

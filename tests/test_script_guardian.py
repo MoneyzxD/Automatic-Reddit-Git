@@ -384,6 +384,41 @@ def test_estilo_so_avisa(tmp_path, perfil_feminino, final_gate):
     assert review.issues[0].severity == "warning"
 
 
+@pytest.mark.parametrize("category", ["REPETITIONS_STYLE", "STYLE", "TYPOGRAPHY", "REDUNDANCY"])
+@pytest.mark.parametrize("final_gate", [False, True])
+def test_estilo_languagetool_nao_corrige_nem_reprova_texto(tmp_path, perfil_feminino, category, final_gate):
+    source = "I am a cleaner. I work hard. I help people."
+    finding = LanguageIssue(
+        "ENGLISH_WORD_REPEAT_BEGINNING_RULE", category,
+        "Three successive sentences begin with the same word.",
+        ("Furthermore, I",), 29, 30, "I",
+    )
+    lt = FakeLanguageTool([(finding,)] * 3)
+    guardian = guardian_fake(tmp_path, lt=lt)
+    review = guardian.review_and_fix(
+        source_text=source, candidate_text=source, language="en", stage="adaptation",
+        story_id=perfil_feminino.story_id, profile=perfil_feminino, final_gate=final_gate,
+    )
+    assert review.status == "approved"
+    assert review.approved_text == source
+    assert review.changed is False
+    assert review.patches == ()
+    assert [(i.category, i.severity, i.origin) for i in review.issues] == [
+        ("style", "warning", "languagetool"),
+    ]
+    assert review.attempts == lt.calls == 1
+
+
+@pytest.mark.parametrize("category", ["GRAMMAR", "MISC", "REPETITIONS"])
+def test_categoria_languagetool_nao_estilistica_continua_bloqueando(tmp_path, perfil_feminino, category):
+    finding = LanguageIssue("GRAMMAR_RULE", category, "Concordância incorreta.", (), 0, 1, "I")
+    guardian = guardian_fake(tmp_path, lt=FakeLanguageTool([(finding,)]))
+    with pytest.raises(QualityRejected) as caught:
+        revisar(guardian, perfil_feminino, final_gate=True)
+    assert caught.value.review.issues[0].category == "grammar"
+    assert caught.value.review.issues[0].severity == "critical"
+
+
 @pytest.mark.parametrize("severity", ["info", "warning"])
 @pytest.mark.parametrize("final_gate", [False, True])
 def test_omissao_nao_critica_ainda_bloqueia(tmp_path, perfil_feminino, severity, final_gate):
