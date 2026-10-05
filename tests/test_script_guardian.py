@@ -942,6 +942,78 @@ def test_codigo_api_e_allowlist_sem_body(tmp_path, perfil_feminino, provider_cod
     assert "SEGREDO_TESTE" not in guardian.report_path.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("mode", ["facts", "chunk", "global"])
+def test_json_validate_failed_repete_sem_usar_geracao_recusada(tmp_path, mode):
+    calls = []
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            if len(calls) == 1:
+                exc = RuntimeError("SEGREDO_TESTE")
+                exc.status_code = 400
+                exc.body = {"error": {"code": "json_validate_failed",
+                                      "failed_generation": '{"secret":"SEGREDO_TESTE"}'}}
+                raise exc
+            if mode == "facts":
+                return json.dumps({"facts": [{"kind": "event", "value": "kept the card",
+                                             "source_unit_ids": ["u0"]}]})
+            return resposta(False, [achado(category="event", source_quote="source")])
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    outcome = guardian._request(mode=mode, source_text="source", source_chunk="source",
+                                candidate_text="candidate", language="en")
+    assert len(calls) == 2
+    assert calls[1]["retry_feedback"] == {"failure_code": "invalid_json"}
+    assert "SEGREDO_TESTE" not in json.dumps(calls)
+    if mode == "facts":
+        assert outcome == [{"kind": "event", "value": "kept the card", "source_quote": "source"}]
+    else:
+        assert outcome.status == "rejected"
+        assert outcome.issues[0].source_quote == "source"
+
+
+@pytest.mark.parametrize("status,provider_code", [
+    (400, "other"), (400, None), (401, "json_validate_failed"),
+    (403, "json_validate_failed"), (413, "json_validate_failed"),
+])
+def test_erros_permanentes_nao_repetem_como_json(tmp_path, status, provider_code):
+    from stages.script_guardian import _ReviewUnavailable
+    calls = []
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            exc = RuntimeError("json_validate_failed SEGREDO_TESTE")
+            exc.status_code = status
+            exc.body = {"error": {"code": provider_code}}
+            raise exc
+
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._request(mode="global", source_text="source", source_chunk="source", language="en")
+    assert caught.value.failure.attempts == len(calls) == 1
+
+
+def test_json_validate_failed_respeita_teto_de_espera(tmp_path):
+    from stages.script_guardian import _ReviewUnavailable
+    calls = []
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            exc = RuntimeError("SEGREDO_TESTE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed"}}
+            exc.response = SimpleNamespace(headers={"Retry-After": "86400"})
+            raise exc
+
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian_fake(tmp_path, Reviewer())._request(
+            mode="global", source_text="source", source_chunk="source", language="en")
+    assert caught.value.failure.attempts == len(calls) == 1
+
+
 @pytest.mark.parametrize("generation,expected", [
     ('{"facts":[{"source_quote":"SYNTHETIC_PRIVATE', "unterminated_string"),
     ('<think>SYNTHETIC_PRIVATE</think>{"facts":[]}', "reasoning_output"),
@@ -963,7 +1035,7 @@ def test_diagnostico_json_recusado_nao_persiste_geracao(tmp_path, perfil_feminin
     assert failure.generation_json_error == expected
     assert failure.generation_chars == len(generation)
     assert failure.generation_error_at is None or 0 <= failure.generation_error_at < len(generation)
-    assert failure.attempts == 1
+    assert failure.attempts == 3
     assert "SYNTHETIC_PRIVATE" not in guardian.report_path.read_text(encoding="utf-8")
 
 

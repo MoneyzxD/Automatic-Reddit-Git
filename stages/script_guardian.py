@@ -512,8 +512,14 @@ class ScriptGuardian:
                 raise
             except Exception as exc:
                 failure = _provider_failure(exc, mode, attempt, context_chars)
-                if failure.http_status is not None and failure.http_status not in {408, 409, 429} and failure.http_status < 500:
+                invalid_generation = (failure.http_status == 400
+                                      and failure.provider_code == "json_validate_failed")
+                if (failure.http_status is not None and failure.http_status not in {408, 409, 429}
+                        and failure.http_status < 500 and not invalid_generation):
                     break
+                if invalid_generation:
+                    # Descarta a geração recusada; só o código orienta a próxima tentativa.
+                    feedback = {"failure_code": failure.code}
                 wait = _retry_wait(exc, wait)
                 if wait > self.config["semantic_max_retry_wait_seconds"]:
                     break
