@@ -47,9 +47,11 @@ Diagnóstico estrutural autorizado implementado em `6930e5f`, só na branch
 isolada: 856 testes passaram e revisão independente aprovou. Run `37331951705`
 falhou por HTTP429/TPM, não comprovou o campo recusado e não gerou mídia/upload.
 Registro adicional conserva recusas intermediárias mesmo após sucesso/cota;
-859 testes e revisão independente passaram. Critério atual:
-capturar campos incompatíveis sem conteúdo privado, não aprovar a geração
-recusada. Evidência e limites em [RELIABILITY_STATUS](RELIABILITY_STATUS.md).
+859 testes e revisão independente passaram. Run `37333981612` comprovou o
+diagnóstico real: cinco achados sem `reason`/`start`, HTTP400 preservado antes
+de HTTP429/TPM. Nenhuma mídia/upload. Diagnóstico concluído; próximos passos são
+alinhar emissão ao contrato e tratar TPM sem rotação ou relaxamento dos gates.
+Evidência e limites em [RELIABILITY_STATUS](RELIABILITY_STATUS.md).
 
 Atualização2026-10-05: operador confirmou nenhuma postagem manual; ownerAPI
 reconfirmou81/84IDs e0títulos dos7incertos. Candidato reconciliado e restaurado

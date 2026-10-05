@@ -32,8 +32,24 @@ apagava o diagnóstico anterior. Registro agora retém até 20 recusas JSON sani
 por revisão, com contador de chamada e aviso de truncamento; reinicia entre
 revisões. Não altera fluxo/retries. 203 testes do guardião e suíte completa
 859 passed/30 warnings/50.24s passaram, compilação/diff check e revisão independente
-também (três testes/0.27s, sem achados). Uma captura real com esse registro continua
-pendente; não afirmar qual campo foi recusado sem ela.
+também (três testes/0.27s, sem achados).
+
+Captura real `37333981612`/`d173dd2`: 859 testes/19.52s, LanguageTool,
+restore e save final passaram. PT/tradução repairing1 (quatro chamadas),
+unavailable2 (sete chamadas). Na chamada6/tentativa2, HTTP400/json_validate_failed
+com JSON válido/1601 caracteres: cinco achados sem os campos obrigatórios
+`reason` e `start` (dez violações de required), sem truncamento do diagnóstico.
+Tentativa3 terminou HTTP429/TPM, Retry-After18s/contexto15872; a recusa anterior
+foi preservada no relatório. Nenhuma mídia/publicação. O mascaramento global de PII
+mascarou um índice numérico do path; não restaurar conteúdo livre para desfazer isso.
+
+O diagnóstico autorizado está comprovado em serviço real. Próxima correção:
+alinhar instrução/exemplo de revisão ao contrato obrigatório (`start` aparece
+como opcional e falta no exemplo atual; `reason` já está no exemplo). Não
+atribuir toda a recusa apenas ao prompt: geração recusada omitiu ambos. A cota
+TPM é bloqueio separado a tratar mantendo a chave fixa e orçamento acordado.
+Schema/gates continuam intactos; não houve correção desses dois bloqueios nem
+geração PT/EN/ES completa, bootstrap de produção ou liberação de main.
 
 ## Atualização 2026-10-05 — candidato reconciliado localmente
 
@@ -226,8 +242,8 @@ Bootstrap exige relatório aprovado e candidato
 
 ## Gates restantes
 
-1. Revisar o contrato de saída após a recusa persistente de schema e obter
-   diagnóstico seguro antes de outra correção/geração; job verde sem mídia não é aceite.
+1. Com campos ausentes agora identificados, corrigir o contrato de emissão e
+   tratar TPM sem rotação de chaves; comprovar no serviço real antes de liberar.
 2. Gerar PT/EN/ES completos, conferir roteiro/voz/ASS/card e restore da mídia.
 3. Importar o candidato reconciliado após aceite real e credencial específica disponível.
 4. Bootstrap, verify independente, integração em main e rodada dentro da meta.

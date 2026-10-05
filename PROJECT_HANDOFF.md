@@ -2,14 +2,18 @@
 
 ## Continuação atual — 2026-10-05
 
-Diagnóstico estrutural aprovado pelo operador e enviado em `6930e5f`, só na
+Diagnóstico estrutural aprovado pelo operador e enviado em `d173dd2`, só na
 branch isolada. Suíte 856 passed/30 warnings/50.11s, 200 testes do guardião,
 compilação/diff check e revisão independente passaram. Registra campos/tipos/
 regras sem valores ou chaves desconhecidas; não altera schema, prompt ou gates.
 Run `37331951705` passou testes/LT/estado, mas falhou PT/tradução por HTTP429/TPM,
 três tentativas/Retry-After21s. Nenhuma mídia/upload; campo da recusa anterior ainda
-desconhecido. Diagnóstico também passa a reter recusas JSON intermediárias, antes
+desconhecido naquele run. Diagnóstico também retém recusas JSON intermediárias, antes
 sobrescritas por sucesso/cota; 859 testes e revisão independente passaram.
+Run `37333981612` comprovou a captura: revisão PT recebeu cinco achados sem
+`reason`/`start` obrigatórios; HTTP400 preservado antes do HTTP429/TPM final.
+859 testes/19.52s, LT e estado passaram; nenhuma mídia/upload. Próximo passo é
+alinhar emissão ao schema e tratar cota separadamente, não enfraquecer gates.
 Retomar pelo resultado em [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md);
 não repetir correções anteriores nem inferir qual campo falhou sem captura.
 
