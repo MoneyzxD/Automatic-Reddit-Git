@@ -19,8 +19,21 @@ suíte completa 856 passed/30 warnings/50.11s passaram. Compilação e diff chec
 passaram. Fixtures de nomes longos e profundidade foram ajustadas ao comportamento
 real do Python/Windows, sem alterar o parser de produção. Revisão independente
 aprovou: 24 testes/0.28s, sem achados Critical/Important; precisão numérica é
-limitação Minor documentada. Captura no Actions pendente; não afirmar a causa
-do campo sem essa captura nem tratar teste falso como serviço real.
+limitação Minor documentada.
+
+Run `37331951705` passou 856 testes/17.88s, LanguageTool, restore e save final;
+PT/tradução entrou em repairing e depois unavailable: HTTP429/TPM, três tentativas,
+Retry-After21s, contexto16111. Nenhuma mídia/upload. O relatório final não teve
+HTTP400; isso não prova que não houve recusa intermediária, pois o código antigo
+guardava só a última falha. Não equiparar a cota atual à recusa de schema anterior.
+
+Lacuna de observabilidade reproduzida com três testes RED: sucesso/429 posterior
+apagava o diagnóstico anterior. Registro agora retém até 20 recusas JSON sanitizadas
+por revisão, com contador de chamada e aviso de truncamento; reinicia entre
+revisões. Não altera fluxo/retries. 203 testes do guardião e suíte completa
+859 passed/30 warnings/50.24s passaram, compilação/diff check e revisão independente
+também (três testes/0.27s, sem achados). Uma captura real com esse registro continua
+pendente; não afirmar qual campo foi recusado sem ela.
 
 ## Atualização 2026-10-05 — candidato reconciliado localmente
 

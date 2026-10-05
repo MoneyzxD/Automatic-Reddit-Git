@@ -516,6 +516,8 @@ class ScriptGuardian:
         self._facts = ()
         self._lt_version = None
         self._semantic_calls = 0
+        self._semantic_json_failures = []
+        self._semantic_json_failures_truncated = False
 
     def _health(self):
         if not self.config.get("enabled", True):
@@ -580,6 +582,12 @@ class ScriptGuardian:
                                             model=self.config.get("groq_model", "openai/gpt-oss-20b"))
                 invalid_generation = (failure.http_status == 400
                                       and failure.provider_code == "json_validate_failed")
+                if invalid_generation:
+                    # Retém o diagnóstico mesmo se o próximo retry passar ou falhar por cota.
+                    if len(self._semantic_json_failures) < 20:
+                        self._semantic_json_failures.append({"call": self._semantic_calls, "failure": asdict(failure)})
+                    else:
+                        self._semantic_json_failures_truncated = True
                 if (failure.http_status is not None and failure.http_status not in {408, 409, 429}
                         and failure.http_status < 500 and not invalid_generation):
                     break
@@ -720,6 +728,8 @@ class ScriptGuardian:
         applied = []
         started = time.monotonic()
         self._semantic_calls = 0
+        self._semantic_json_failures = []
+        self._semantic_json_failures_truncated = False
         for attempt in range(self.max_repairs + 1):
             issues, accepted, rejected = [], (), ()
             unavailable_reason = None
@@ -780,6 +790,8 @@ class ScriptGuardian:
                 "attempt": attempt + 1, "semantic_calls": self._semantic_calls, "status": status,
                 "unavailable_reason": unavailable_reason,
                 "semantic_failure": asdict(semantic_failure) if semantic_failure else None,
+                "semantic_json_failures": list(self._semantic_json_failures),
+                "semantic_json_failures_truncated": self._semantic_json_failures_truncated,
                 "issue_counts": dict(Counter(f"{i.category}:{i.severity}" for i in issues)),
                 "accepted_patches": [self._patch_summary(p) for p in accepted],
                 "rejected_patches": [self._patch_summary(p) for p in rejected],

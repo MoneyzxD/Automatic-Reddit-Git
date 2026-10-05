@@ -1214,6 +1214,67 @@ def test_diagnostico_schema_respeita_modelo_sem_schema_estrito(tmp_path):
     assert diagnostic.get("generation_schema_errors") == ()
 
 
+@pytest.mark.parametrize("final_rate_limit", [False, True])
+def test_recusa_json_intermediaria_permanece_no_relatorio(tmp_path, perfil_feminino, final_rate_limit):
+    calls = 0
+    class Reviewer:
+        def review(self, **kwargs):
+            nonlocal calls
+            if kwargs["mode"] == "facts":
+                return '{"facts":[]}'
+            calls += 1
+            if calls == 1:
+                exc = RuntimeError("SYNTHETIC_PRIVATE")
+                exc.status_code = 400
+                exc.body = {"error": {"code": "json_validate_failed", "failed_generation":
+                            json.dumps({"approved": True, "issues": [achado()]})}}
+                raise exc
+            if final_rate_limit:
+                exc = RuntimeError("SYNTHETIC_PRIVATE")
+                exc.status_code = 429
+                raise exc
+            return '{"approved":true,"issues":[]}'
+    guardian = guardian_fake(tmp_path, Reviewer())
+    if final_rate_limit:
+        with pytest.raises(QualityUnavailable):
+            revisar(guardian, perfil_feminino)
+    else:
+        assert revisar(guardian, perfil_feminino).status == "approved"
+    event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+    refusals = event.get("semantic_json_failures", [])
+    assert len(refusals) == 1
+    assert refusals[0]["call"] == 2
+    assert refusals[0]["failure"]["http_status"] == 400
+    assert refusals[0]["failure"]["generation_schema_errors"] == [{"path": "$.issues[0].start", "rule": "required"}]
+    assert event.get("semantic_json_failures_truncated") is False
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(event)
+    if final_rate_limit:
+        assert event["semantic_failure"]["http_status"] == 429
+    else:
+        assert event["semantic_failure"] is None
+    # Uma nova revisão não herda recusas da história anterior.
+    if not final_rate_limit:
+        assert revisar(guardian, perfil_feminino).status == "approved"
+        latest = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+        assert latest["semantic_json_failures"] == []
+
+
+def test_historico_de_recusas_json_e_limitado_por_revisao(tmp_path, perfil_feminino):
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SYNTHETIC_PRIVATE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed", "failed_generation": '{"facts":"bad"}'}}
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer(), semantic_max_attempts=25)
+    with pytest.raises(QualityUnavailable):
+        revisar(guardian, perfil_feminino)
+    event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert len(event.get("semantic_json_failures", [])) == 20
+    assert event.get("semantic_json_failures_truncated") is True
+    assert event["semantic_failure"]["attempts"] == 25
+
+
 def test_fonte_curta_integral_chega_ao_global_mesmo_sem_fatos(tmp_path, perfil_feminino):
     semantic = FakeSemanticReviewer(facts='{"facts":[]}')
     revisar(guardian_fake(tmp_path, semantic), perfil_feminino)

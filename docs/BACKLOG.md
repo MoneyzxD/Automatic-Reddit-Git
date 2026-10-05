@@ -43,6 +43,14 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Diagnóstico estrutural autorizado implementado em `6930e5f`, só na branch
+isolada: 856 testes passaram e revisão independente aprovou. Run `37331951705`
+falhou por HTTP429/TPM, não comprovou o campo recusado e não gerou mídia/upload.
+Registro adicional conserva recusas intermediárias mesmo após sucesso/cota;
+859 testes e revisão independente passaram. Critério atual:
+capturar campos incompatíveis sem conteúdo privado, não aprovar a geração
+recusada. Evidência e limites em [RELIABILITY_STATUS](RELIABILITY_STATUS.md).
+
 Atualização2026-10-05: operador confirmou nenhuma postagem manual; ownerAPI
 reconfirmou81/84IDs e0títulos dos7incertos. Candidato reconciliado e restaurado
 localmente:30histórias/91partes/84IDs/7pendentes/91kits e56capas encerrados só
