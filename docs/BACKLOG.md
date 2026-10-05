@@ -44,8 +44,10 @@ pendências de reconciliação; nenhum candidato foi importado.
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
 Run atual37370371919/b030bd6 retoma checkpoint de validação, sem publicação.
-Queued enquanto GitHub investiga atribuição de runners. Acompanhar esse run;
-diagnóstico adicional e limites estão na seção inicial do status.
+Terminou failure antes de qualquer etapa: runner hosted não adquirido. Actions
+em major_outage; acompanhar recuperação antes de nova rodada. Sonda alternativa
+de envelope não comprovou estabilidade no contexto longo e não foi integrada.
+Diagnóstico adicional e limites estão na seção inicial do status.
 
 Run37363161214 falhou antes dos gates derivados: adaptação aprovada, tradução
 PT com três HTTP400/json_validate_failed e geração vazia. Sem mídia/upload.

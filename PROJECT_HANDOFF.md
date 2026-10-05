@@ -3,7 +3,10 @@
 ## Continuação atual — 2026-10-05
 
 Run atual `37370371919`/`b030bd6` retoma o namespace de validação anterior,
-PT/EN/ES sem upload. Queued/sem etapas durante incidente de runners do Actions.
+PT/EN/ES sem upload. Terminou failure sem runner ou etapas: anotação oficial
+de hosted runner não adquirido. Actions major_outage/investigating20:47UTC;
+aguardar recuperação antes de novo dispatch. Sonda de envelope alternativo
+também falhou no contexto longo; não incorporada, sem fallback novo.
 Probes adicionais 20B alternaram HTTP400/reason ausente e approved/sem achados;
 nenhuma correção adicional ou causa factual isolada. Status/ledger são a
 autoridade da retomada; produção/main permanecem intactos.

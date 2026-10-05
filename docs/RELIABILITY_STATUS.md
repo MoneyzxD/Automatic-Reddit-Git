@@ -3,14 +3,23 @@
 ## Fonte narrativa separada do ledger — 2026-10-05
 
 Retomada atual: run `37370371919`/`b030bd6`, mesmo namespace de validação,
-PT/EN/ES real sem upload, restaura o checkpoint anterior. Ainda queued, sem
-etapas executadas; [GitHub Status](https://www.githubstatus.com/) registra
-incidente de atribuição de runners desde19:11UTC, atualizado19:50UTC.
-Não é confirmação de nova falha de geração. Duas chamadas posteriores ao probe
+PT/EN/ES sem upload, terminou failure antes de iniciar o pipeline: job cancelled
+em15m1s, runner_id0, nome vazio, steps[]. Anotação oficial: o job não foi
+adquirido por runner hosted após várias tentativas. [GitHub Status](https://www.githubstatus.com/)
+registra incidente desde19:11UTC; API indica major_outage/investigating,
+atualizado20:47:22UTC. Nenhuma geração, restore/save, mídia ou upload nesse run;
+aguardar recuperação externa antes de novo dispatch. Duas chamadas posteriores ao probe
 comparativo, com os mesmos dados sanitizados e 20B, deram HTTP400/reason ausente
 e depois approved/sem achados pelo `_request` atual. Variabilidade observada,
 sem motivo factual específico recuperado. Código/configuração permanecem iguais;
 aguardar a prova completa, sem aprovar conteúdo por contagem ou por esse probe.
+
+Envelope alternativo de função foi testado só em sonda descartável: mesmo schema,
+sem executar função. Frases sintéticas correta/inventada tiveram emissão válida
+e decisões esperadas. No contexto longo autorizado, primeiro retorno passou pelo
+gate literal, mas o resumo se perdeu por codificação cp1252 do terminal; a chamada
+seguinte teve HTTP400/providerother. Não demonstra estabilidade/superioridade;
+nenhuma integração desse mecanismo nem fallback novo. Manter código atual.
 
 Run `37363161214`/`8628ed9`, namespace novo isolado, terminou failure/10m11s.
 Adaptação EN aprovada; tradução PT corrigiu cinco achados gramaticais, depois
