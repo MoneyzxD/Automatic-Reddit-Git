@@ -1,5 +1,27 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Diagnóstico estrutural autorizado — 2026-10-05
+
+Operador aprovou identificar o campo recusado sem armazenar a resposta. O
+diagnóstico de `json_validate_failed` agora compara o JSON sintaticamente válido
+com o schema do modelo/modo configurado. Registra somente caminhos de campos
+conhecidos, regras e tipos; chaves extras e valores livres não são expostos.
+Limites: 20 achados, 4096 nós e o teto sintático existente de 131072 caracteres.
+O leitor cobre apenas o subconjunto usado pelo schema atual; uma ampliação desse
+schema exige ampliar o diagnóstico. Números são lidos pelo parser Python; valores
+extremos de `start` podem sofrer arredondamento/overflow no diagnóstico. Isso
+não muda o gate de offsets. `matches_schema` não aprova conteúdo nem
+explica sozinho a recusa do provedor; inspeção incompleta é indicada explicitamente.
+Schema, prompt, modelos, chaves, retries e gates permanecem iguais.
+
+TDD: 23 falhas reproduzidas antes da implementação; 200 testes do guardião e
+suíte completa 856 passed/30 warnings/50.11s passaram. Compilação e diff check
+passaram. Fixtures de nomes longos e profundidade foram ajustadas ao comportamento
+real do Python/Windows, sem alterar o parser de produção. Revisão independente
+aprovou: 24 testes/0.28s, sem achados Critical/Important; precisão numérica é
+limitação Minor documentada. Captura no Actions pendente; não afirmar a causa
+do campo sem essa captura nem tratar teste falso como serviço real.
+
 ## Atualização 2026-10-05 — candidato reconciliado localmente
 
 Operador confirmou que não há publicações manuais. Consulta ownerAPI de leitura

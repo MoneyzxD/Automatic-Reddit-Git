@@ -684,6 +684,8 @@ def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, statu
         "attempts": attempts, "context_chars": 94, "provider_code": None,
         "generation_json_error": None, "generation_chars": None, "generation_error_at": None,
         "rate_limit_type": None, "retry_after_seconds": None,
+        "generation_schema_status": None, "generation_schema_errors": [],
+        "generation_schema_truncated": False,
     }
     assert error.value.review.semantic_failure.code == expected
     assert len(calls) == attempts
@@ -1037,6 +1039,179 @@ def test_diagnostico_json_recusado_nao_persiste_geracao(tmp_path, perfil_feminin
     assert failure.generation_error_at is None or 0 <= failure.generation_error_at < len(generation)
     assert failure.attempts == 3
     assert "SYNTHETIC_PRIVATE" not in guardian.report_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("generation,expected", [
+    ({"approved": True, "issues": [dict(achado())]},
+     [{"path": "$.issues[0].start", "rule": "required"}]),
+    ({"approved": "SYNTHETIC_PRIVATE", "issues": []},
+     [{"path": "$.approved", "rule": "type", "expected": "boolean", "actual": "string"}]),
+    ({"approved": True, "issues": [achado(start=False)]},
+     [{"path": "$.issues[0].start", "rule": "type", "expected": "integer|null", "actual": "boolean"}]),
+    ({"approved": True, "issues": [achado(start=1.5)]},
+     [{"path": "$.issues[0].start", "rule": "type", "expected": "integer|null", "actual": "number"}]),
+    ({"approved": True, "issues": [achado(start=None, severity="SYNTHETIC_PRIVATE")]},
+     [{"path": "$.issues[0].severity", "rule": "enum"}]),
+    ({"approved": True, "issues": [achado(start=None, category="SYNTHETIC_PRIVATE")]},
+     [{"path": "$.issues[0].category", "rule": "enum"}]),
+    ({"approved": True, "issues": [], "SYNTHETIC_PRIVATE": "SYNTHETIC_PRIVATE"},
+     [{"path": "$", "rule": "additional_properties"}]),
+    ({"approved": True, "issues": [achado(start=None, SYNTHETIC_PRIVATE="SYNTHETIC_PRIVATE")]},
+     [{"path": "$.issues[0]", "rule": "additional_properties"}]),
+    ({"approved": True, "issues": "SYNTHETIC_PRIVATE"},
+     [{"path": "$.issues", "rule": "type", "expected": "array", "actual": "string"}]),
+    ({"approved": True, "issues": ["SYNTHETIC_PRIVATE"]},
+     [{"path": "$.issues[0]", "rule": "type", "expected": "object", "actual": "string"}]),
+    ([], [{"path": "$", "rule": "type", "expected": "object", "actual": "array"}]),
+])
+def test_diagnostico_schema_indica_campo_sem_conteudo(generation, expected):
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+    exc = RuntimeError("SYNTHETIC_PRIVATE")
+    exc.status_code = 400
+    exc.body = {"error": {"code": "json_validate_failed", "failed_generation": json.dumps(generation)}}
+    diagnostic = asdict(_provider_failure(exc, "chunk", 1, 693))
+    assert diagnostic.get("generation_schema_status") == "mismatch"
+    assert list(diagnostic.get("generation_schema_errors", ())) == expected
+    assert diagnostic.get("generation_schema_truncated") is False
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(diagnostic)
+
+
+def test_diagnostico_schema_real_do_modo_chega_ao_relatorio(tmp_path, perfil_feminino):
+    generation = json.dumps({"approved": True, "issues": [achado(start=None)]})
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SYNTHETIC_PRIVATE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed", "failed_generation": generation}}
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(QualityUnavailable) as caught:
+        revisar(guardian, perfil_feminino)
+    # O primeiro gate é facts: usa o schema desse modo, não o schema de issues.
+    event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+    failure = event["semantic_failure"]
+    assert failure.get("generation_schema_status") == "mismatch"
+    assert {"path": "$.facts", "rule": "required"} in failure.get("generation_schema_errors", [])
+    assert caught.value.review.status == "unavailable"
+    assert failure["attempts"] == 3
+
+
+@pytest.mark.parametrize("mode,generation", [
+    ("facts", {"facts": [{"kind": "event", "value": "SYNTHETIC_PRIVATE", "source_unit_ids": ["u0"]}]}),
+    ("chunk", {"approved": True, "issues": [achado(start=None)]}),
+    ("global", {"approved": False, "issues": [achado(start=1.0)]}),
+])
+def test_diagnostico_schema_correto_continua_falha_do_provedor(tmp_path, mode, generation):
+    from dataclasses import asdict
+    from stages.script_guardian import _ReviewUnavailable
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SYNTHETIC_PRIVATE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed", "failed_generation": json.dumps(generation)}}
+            raise exc
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian_fake(tmp_path, Reviewer())._request(
+            mode=mode, source_text="source", source_chunk="source", language="en")
+    diagnostic = asdict(caught.value.failure)
+    assert diagnostic.get("generation_schema_status") == "matches_schema"
+    assert diagnostic.get("generation_schema_errors") == ()
+    assert diagnostic["http_status"] == 400
+    assert diagnostic["attempts"] == 3
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(diagnostic)
+
+
+@pytest.mark.parametrize("generation,expected", [
+    ({"facts": [{"kind": "SYNTHETIC_PRIVATE", "value": "ok", "source_unit_ids": ["u0"]}]},
+     [{"path": "$.facts[0].kind", "rule": "enum"}]),
+    ({"facts": [{"kind": "event", "value": "ok", "source_unit_ids": [False]}]},
+     [{"path": "$.facts[0].source_unit_ids[0]", "rule": "type", "expected": "string", "actual": "boolean"}]),
+])
+def test_diagnostico_schema_de_fatos(generation, expected):
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+    exc = RuntimeError("SYNTHETIC_PRIVATE")
+    exc.status_code = 400
+    exc.body = {"error": {"code": "json_validate_failed", "failed_generation": json.dumps(generation)}}
+    diagnostic = asdict(_provider_failure(exc, "facts", 1, 693))
+    assert diagnostic.get("generation_schema_status") == "mismatch"
+    assert list(diagnostic.get("generation_schema_errors", ())) == expected
+
+
+@pytest.mark.parametrize("generation", [None, "{truncated", '"' + "x" * 131073 + '"'],
+                         ids=["ausente", "sintaxe", "tamanho"])
+def test_schema_nao_inspeciona_geracao_ausente_invalida_ou_excessiva(generation):
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+    exc = RuntimeError("SYNTHETIC_PRIVATE")
+    exc.status_code = 400
+    exc.body = {"error": {"code": "json_validate_failed", "failed_generation": generation}}
+    diagnostic = asdict(_provider_failure(exc, "chunk", 1, 10))
+    assert diagnostic.get("generation_schema_status") is None
+    assert diagnostic.get("generation_schema_errors") == ()
+
+
+def test_schema_falha_segura_com_json_profundamente_aninhado():
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+    depth = 2000
+    exc = RuntimeError("SYNTHETIC_PRIVATE")
+    exc.status_code = 400
+    exc.body = {"error": {"code": "json_validate_failed", "failed_generation": "[" * depth + "]" * depth}}
+    diagnostic = asdict(_provider_failure(exc, "chunk", 1, 10))
+    # O limite do parser JSON depende do Python; schema não percorre tipos incompatíveis.
+    if diagnostic["generation_json_error"] == "valid_json":
+        assert diagnostic["generation_schema_status"] == "mismatch"
+        assert diagnostic["generation_schema_errors"] == (
+            {"path": "$", "rule": "type", "expected": "object", "actual": "array"},)
+    else:
+        assert diagnostic["generation_json_error"] == "diagnostic_depth_limit"
+        assert diagnostic["generation_schema_status"] is None
+        assert diagnostic["generation_schema_errors"] == ()
+
+
+def test_diagnostico_schema_limita_traversal_sem_fingir_schema_valido():
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+    exc = RuntimeError("SYNTHETIC_PRIVATE")
+    exc.status_code = 400
+    exc.body = {"error": {"code": "json_validate_failed", "failed_generation": json.dumps({"facts": [
+        {"kind": "event", "value": "ok", "source_unit_ids": ["u0"] * 5000}]})}}
+    diagnostic = asdict(_provider_failure(exc, "facts", 1, 10))
+    assert diagnostic.get("generation_schema_status") == "diagnostic_limit"
+    assert diagnostic.get("generation_schema_truncated") is True
+    assert diagnostic.get("generation_schema_errors") == ()
+
+
+def test_diagnostico_schema_tem_limite_de_achados():
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+    exc = RuntimeError("SYNTHETIC_PRIVATE")
+    exc.status_code = 400
+    exc.body = {"error": {"code": "json_validate_failed", "failed_generation":
+                json.dumps({"approved": True, "issues": [{}] * 100})}}
+    diagnostic = asdict(_provider_failure(exc, "chunk", 1, 10))
+    assert diagnostic.get("generation_schema_status") == "mismatch"
+    assert len(diagnostic.get("generation_schema_errors", ())) == 20
+    assert diagnostic.get("generation_schema_truncated") is True
+
+
+def test_diagnostico_schema_respeita_modelo_sem_schema_estrito(tmp_path):
+    from dataclasses import asdict
+    from stages.script_guardian import _ReviewUnavailable
+    class Reviewer:
+        def review(self, **kwargs):
+            exc = RuntimeError("SYNTHETIC_PRIVATE")
+            exc.status_code = 400
+            exc.body = {"error": {"code": "json_validate_failed", "failed_generation": '{"approved": "bad"}'}}
+            raise exc
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian_fake(tmp_path, Reviewer(), groq_model="modelo-legado")._request(
+            mode="chunk", source_text="source", source_chunk="source", language="en")
+    diagnostic = asdict(caught.value.failure)
+    assert diagnostic.get("generation_schema_status") == "no_strict_schema"
+    assert diagnostic.get("generation_schema_errors") == ()
 
 
 def test_fonte_curta_integral_chega_ao_global_mesmo_sem_fatos(tmp_path, perfil_feminino):

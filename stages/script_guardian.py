@@ -89,6 +89,9 @@ class SemanticFailure:
     generation_error_at: int | None = None
     rate_limit_type: str | None = None
     retry_after_seconds: float | None = None
+    generation_schema_status: str | None = None
+    generation_schema_errors: tuple[dict, ...] = ()
+    generation_schema_truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -240,7 +243,62 @@ def _generation_diagnostic(generation):
     return "valid_json", size, None
 
 
-def _provider_failure(exc, mode, attempts, context_chars):
+def _generation_schema_diagnostic(generation, response_format):
+    """Inspeciona só o subconjunto do schema enviado, sem aprovar nem guardar valores."""
+    if response_format.get("type") != "json_schema":
+        return "no_strict_schema", (), False
+    schema = response_format["json_schema"]["schema"]
+    data = json.loads(generation)
+    errors = []
+    visited = 0
+    truncated = False
+
+    def inspect(value, node, path):
+        nonlocal visited, truncated
+        # Limites de diagnóstico, não de aceitação; schema novo exige ampliar este leitor.
+        if visited >= 4096 or len(errors) >= 20:
+            truncated = True
+            return
+        visited += 1
+        actual = ("null" if value is None else "boolean" if type(value) is bool else
+                  "integer" if type(value) is int else "number" if type(value) is float else
+                  "string" if isinstance(value, str) else "array" if isinstance(value, list) else "object")
+        expected = node["type"]
+        allowed = expected if isinstance(expected, list) else [expected]
+        # JSON Schema considera 1.0 inteiro; bool nunca é inteiro.
+        integral_number = type(value) is float and math.isfinite(value) and value.is_integer()
+        if actual not in allowed and not (integral_number and "integer" in allowed):
+            errors.append({"path": path, "rule": "type", "expected": "|".join(allowed), "actual": actual})
+            return
+        if "enum" in node and value not in node["enum"]:
+            errors.append({"path": path, "rule": "enum"})
+        if actual == "object":
+            properties = node["properties"]
+            if node.get("additionalProperties") is False and any(key not in properties for key in value):
+                # O nome de chave desconhecida também pode conter roteiro/segredo.
+                errors.append({"path": path, "rule": "additional_properties"})
+            for name in properties:
+                if len(errors) >= 20:
+                    truncated = True
+                    break
+                if name not in value:
+                    if name in node["required"]:
+                        errors.append({"path": path + "." + name, "rule": "required"})
+                else:
+                    inspect(value[name], properties[name], path + "." + name)
+        elif actual == "array":
+            for index, item in enumerate(value):
+                if visited >= 4096 or len(errors) >= 20:
+                    truncated = True
+                    break
+                inspect(item, node["items"], f"{path}[{index}]")
+
+    inspect(data, schema, "$")
+    status = "mismatch" if errors else "diagnostic_limit" if truncated else "matches_schema"
+    return status, tuple(errors), truncated
+
+
+def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-oss-20b"):
     status = getattr(exc, "status_code", None)
     status = status if type(status) is int and 100 <= status <= 599 else None
     code = {401: "authentication", 403: "authorization", 413: "context_limit",
@@ -253,6 +311,7 @@ def _provider_failure(exc, mode, attempts, context_chars):
     body = getattr(exc, "body", None)
     provider_code = None
     diagnostic = (None, None, None)
+    schema_diagnostic = (None, (), False)
     rate_limit_type = None
     retry_after = None
     if status == 429:
@@ -284,8 +343,14 @@ def _provider_failure(exc, mode, attempts, context_chars):
             code = known.get(provider_code, code)
             if provider_code == "json_validate_failed":
                 diagnostic = _generation_diagnostic(error.get("failed_generation"))
+                if diagnostic[0] == "valid_json":
+                    schema_diagnostic = _generation_schema_diagnostic(
+                        error["failed_generation"], _semantic_response_format(model, mode))
     return SemanticFailure(code, status, mode, attempts, context_chars, provider_code, *diagnostic,
-                           rate_limit_type=rate_limit_type, retry_after_seconds=retry_after)
+                           rate_limit_type=rate_limit_type, retry_after_seconds=retry_after,
+                           generation_schema_status=schema_diagnostic[0],
+                           generation_schema_errors=schema_diagnostic[1],
+                           generation_schema_truncated=schema_diagnostic[2])
 
 
 def _retry_wait(exc, default):
@@ -511,7 +576,8 @@ class ScriptGuardian:
                     exc.failure = replace(exc.failure, attempts=attempt, context_chars=context_chars)
                 raise
             except Exception as exc:
-                failure = _provider_failure(exc, mode, attempt, context_chars)
+                failure = _provider_failure(exc, mode, attempt, context_chars,
+                                            model=self.config.get("groq_model", "openai/gpt-oss-20b"))
                 invalid_generation = (failure.http_status == 400
                                       and failure.provider_code == "json_validate_failed")
                 if (failure.http_status is not None and failure.http_status not in {408, 409, 429}
