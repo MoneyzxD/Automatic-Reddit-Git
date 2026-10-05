@@ -2,6 +2,16 @@
 
 ## Fonte narrativa separada do ledger — 2026-10-05
 
+Retomada atual: run `37370371919`/`b030bd6`, mesmo namespace de validação,
+PT/EN/ES real sem upload, restaura o checkpoint anterior. Ainda queued, sem
+etapas executadas; [GitHub Status](https://www.githubstatus.com/) registra
+incidente de atribuição de runners desde19:11UTC, atualizado19:50UTC.
+Não é confirmação de nova falha de geração. Duas chamadas posteriores ao probe
+comparativo, com os mesmos dados sanitizados e 20B, deram HTTP400/reason ausente
+e depois approved/sem achados pelo `_request` atual. Variabilidade observada,
+sem motivo factual específico recuperado. Código/configuração permanecem iguais;
+aguardar a prova completa, sem aprovar conteúdo por contagem ou por esse probe.
+
 Run `37363161214`/`8628ed9`, namespace novo isolado, terminou failure/10m11s.
 Adaptação EN aprovada; tradução PT corrigiu cinco achados gramaticais, depois
 ficou unavailable por três HTTP400/json_validate_failed no modo chunk, com
@@ -20,12 +30,18 @@ e recusa posterior. Não é replay do incidente nem prova de roteiro completo.
 Primeira execução do probe local não carregou o .env correto e não fez chamadas;
 caminho corrigido antes da prova real. Essa falha local não era erro do serviço.
 
-A comparação longa (fonte íntegra + candidato/ledger SANITIZADOS, não replay
-exato) foi bloqueada pelo auto-review antes da execução, por transmissão de
-conteúdo recuperado ao provedor. Nenhum dado desse probe foi enviado, nem houve
-prova 120B ou alteração de modelo. Aguardar autorização explícita para essa
-transmissão, sem contornar a rejeição. Não repetir pipeline completo ou empilhar
-ajustes de prompt sem isolar o contrato/contexto que provoca o HTTP400.
+A comparação longa foi inicialmente bloqueada pelo auto-review. O operador
+autorizou explicitamente a transmissão e o probe foi executado: fonte íntegra
+com SHA conferido, candidato/ledger SANITIZADOS, contexto12797, mesma chave PT,
+duas chamadas e nenhuma alteração de produção. GPT-OSS20B retornou rejected com
+um factual:critical; GPT-OSS120B retornou rejected com um factual:critical e um
+style:warning. Ambos forneceram JSON parseável; o HTTP400 não se reproduziu
+nessa amostra. O probe reteve somente status/contagens, não os motivos dos
+achados: não atribuir a rejeição a uma frase específica nem confirmar erro real
+do original a partir do candidato sanitizado. Não é replay exato, teste dos
+gates completos ou demonstração de superioridade do 120B. Próximo diagnóstico:
+comparar o achado concreto à fonte, preservando privacidade; não repetir o
+pipeline completo ou mudar modelo/prompt apenas por essas contagens.
 Suíte final de diagnóstico: 891 passed/33 avisos/50.95s; compile/diff check
 passaram. Revisão independente aprovou apenas o commit de caracterização,
 sem Critical/Important. Minor: required/properties iguais não detectam remoção

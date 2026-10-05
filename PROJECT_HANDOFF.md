@@ -2,14 +2,23 @@
 
 ## Continuação atual — 2026-10-05
 
+Run atual `37370371919`/`b030bd6` retoma o namespace de validação anterior,
+PT/EN/ES sem upload. Queued/sem etapas durante incidente de runners do Actions.
+Probes adicionais 20B alternaram HTTP400/reason ausente e approved/sem achados;
+nenhuma correção adicional ou causa factual isolada. Status/ledger são a
+autoridade da retomada; produção/main permanecem intactos.
+
 Run `37363161214`/`8628ed9` falhou em 10m11s: adaptação EN aprovada,
 tradução PT indisponível após três HTTP400/json_validate_failed com geração
 vazia. Sem mídia/upload; separação da fonte não chegou aos gates derivados.
 Transporte SDK comprova strict/required/closed corretos; prova curta real
-sintética passou em facts/chunk/global. Comparação longa com candidato/ledger
-sanitizados foi negada pelo auto-review antes de execução; aguarda autorização
-explícita de envio à Groq. Não houve troca de modelo/Secret/gate nem integração
-main. Retomar pelo status/ledger; não refazer dispatch completo por suposição.
+sintética passou em facts/chunk/global. Após autorização explícita, comparação
+longa sanitizada executou duas chamadas, mesma chave PT: 20B rejected com um
+factual:critical; 120B rejected com um factual:critical e um style:warning.
+Ambos retornaram JSON parseável, sem reproduzir HTTP400. Só status/contagens
+foram retidos; não concluir erro factual do original ou superioridade de modelo.
+Não houve troca de modelo/Secret/gate nem integração main. Próximo diagnóstico
+é conferir o achado concreto contra a fonte; limites no status/ledger.
 
 Continuação: separação fonte/ledger corrigida após comprovar citações de JSON
 nos gates derivados. Diagnóstico de referência agora tem subtipo enum, sem IDs

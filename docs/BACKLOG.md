@@ -43,12 +43,18 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Run atual37370371919/b030bd6 retoma checkpoint de validação, sem publicação.
+Queued enquanto GitHub investiga atribuição de runners. Acompanhar esse run;
+diagnóstico adicional e limites estão na seção inicial do status.
+
 Run37363161214 falhou antes dos gates derivados: adaptação aprovada, tradução
 PT com três HTTP400/json_validate_failed e geração vazia. Sem mídia/upload.
 Prova sintética curta real passou; wire SDK comprova schema estrito correto.
-Comparação longa com dados sanitizados do incidente bloqueada pelo auto-review:
-aguarda autorização explícita de transmissão à Groq; nenhum dado enviado.
-Consultar status/ledger antes de nova ação. Não está restaurado operacionalmente.
+Comparação longa sanitizada autorizada explicitamente e executada: 20B e 120B
+retornaram JSON parseável e rejeição factual, sem reproduzir HTTP400. Somente
+status/contagens retidos, sem prova de defeito factual no original ou vantagem
+do 120B. Próximo diagnóstico é conferir o achado concreto contra a fonte;
+consultar status/ledger antes de nova ação. Não está restaurado operacionalmente.
 
 Fonte narrativa separada do JSON do ledger após evidência de contaminação
 das citações. Falso positivo temporal ES comprovado; PT é imprecisão, não
