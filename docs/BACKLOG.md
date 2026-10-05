@@ -43,6 +43,28 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Atualização2026-10-05: operador confirmou nenhuma postagem manual; ownerAPI
+reconfirmou81/84IDs e0títulos dos7incertos. Candidato reconciliado e restaurado
+localmente:30histórias/91partes/84IDs/7pendentes/91kits e56capas encerrados só
+na cópia, sem mudar originais ou estado remoto. 89 testes state/snapshot passaram.
+Bootstrap ainda depende do aceite completo e tokenfine local (solicitado; não
+usar gh amplo). Run 37320307156 passou testes/LT/estado, mas falhou global EN
+por nonliteral_evidence/3, não HTTP429. Correção estreita do retry sem feedback
+enviada em a3b7f3a, gates preservados; 812 testes locais e revisão passaram.
+Run 37322711750 terminou verde mas sem vídeo: repetição estilística do LT foi
+tratada como gramática crítica e entrou em ciclo de correções. 12a48bf corrige
+classificação/avisos sem alterações mecânicas de estilo; 823 testes e revisão
+passaram. Run 37324808064 aprovou adaptação EN, mas PT/tradução falhou por
+HTTP400 json_validate_failed/1, sem mídia. 484a912 permite apenas esse retry
+tipificado no orçamento existente; 832 testes/revisão passaram. Run 37326768456
+passou 832 testes/17.14s, LT e restore/save, mas voltou a falhar PT/tradução:
+repairing1, unavailable2, chunk HTTP400/json_validate_failed/3 tentativas,
+JSON sintaticamente válido/693 caracteres. Sem mídia/upload; campo incompatível
+desconhecido. Retry limitado não resolveu a recusa. Próximo passo: discussão do
+contrato e diagnóstico estrutural sanitizado, antes de outro remendo/dispatch.
+Importação/main/agentes seguem posteriores ao aceite real. Os parágrafos abaixo
+registram antecedentes.
+
 Última validação, commit dc87c02/run37241728126: coleta factual avançou,
 adaptação entrou em repairing e a revisão global parou por HTTP429/cota.
 Nenhum vídeo/upload; checkpoint salvo. Verify37242044138 passou em outro runner,

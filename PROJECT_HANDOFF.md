@@ -1,5 +1,26 @@
 # PROJECT_HANDOFF.md
 
+## Continuação atual — 2026-10-05
+
+Operador confirmou nenhuma postagem manual. OwnerAPIread-only conferiu81/84IDs
+e0títulos dos7incertos. Relatório privado reconciliado aplicado sóemstaging;
+snapshot e restauração local passaram:30histórias/91partes/84IDs mantidos,
+7pendentes,91kits/56capas encerrados na cópia. Original intocado, sem head remoto.
+89testes state/snapshot passaram. Run 37320307156 falhou global EN por evidência
+não literal/3, não cota. Código a3b7f3a corrige retry sem feedback, mantendo gate;
+812 testes locais e revisão independente passaram. Run 37322711750 terminou
+verde, mas sem vídeo: estilo LT tratado como gramática crítica gerou ciclo.
+12a48bf corrige classificação/sugestões mecânicas; 823 testes locais e revisão
+passaram. Run 37324808064 aprovou adaptação EN e falhou PT/tradução por HTTP400
+json_validate_failed/1, sem mídia. 484a912 permite somente esse retry no orçamento
+atual; 832 testes/revisão passaram. Run 37326768456 passou 832 testes/17.14s,
+LT e restore/save, mas falhou PT/tradução por HTTP400/json_validate_failed
+após três tentativas. JSON válido/693 caracteres, campo incompatível desconhecido;
+sem mídia/upload. Retry limitado não resolveu a recusa. Antes de outro remendo
+ou geração, discutir contrato/diagnóstico estrutural sanitizado; gates intactos.
+tokenfine de estado disponível no Actions, não no.env local. Configuração
+solicitada; nenhum gh amplo usado. Continuar pelo status/ledger, não reiniciarT1–6.
+
 ## Retomada prioritária — 2026-10-04 à noite
 
 Leia [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md) antes de continuar T7.

@@ -1,5 +1,75 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Atualização 2026-10-05 — candidato reconciliado localmente
+
+Operador confirmou que não há publicações manuais. Consulta ownerAPI de leitura
+reconfirmou 81/84 IDs históricos e nenhum título dos sete incertos; tokens locais
+não foram alterados. Com os logs anteriores de falha antes do transporte, foram
+preparadas 91 decisões: preservar84IDs/datas, reter7pendentes, encerrar91kits e
+56tentativas de capa. Conferência é via API do proprietário, não UI simulada.
+Três IDs históricos ausentes continuam preservados, sem recriação.
+
+Decisões aplicadas somente em staging privado. Snapshot e restauração local em
+outra pasta passaram:30histórias/91partes/84IDs/7pendentes, erros/datas mantidos,
+11blobs de mídia únicos; original intacto. Testes state/snapshot:89pass/19.00s.
+Ainda não há head production/importação nem liberação de main. Token específico
+de estado está no Actions, mas não no .env local; configuração local solicitada,
+sem pedir segredo no chat nem usar credencial ampla gh como substituta.
+Run 37320307156 passou 809 testes/26.58s, LanguageTool e restore/save final;
+geração falhou em adaptação EN/global: nonliteral_evidence, três tentativas,
+HTTP ausente/contexto 16181. Nenhuma mídia/upload. Não foi HTTP429; a resposta
+inválida não foi preservada, portanto a citação exata não é conhecida. O
+candidato sanitizado difere do hash original e não foi usado como replay exato.
+
+Defeito comprovado no código: somente facts enviava o motivo da recusa no retry.
+Commit a3b7f3a estende feedback enum-only a chunk/global e explicita o contrato
+literal no prompt, mantendo gates, fonte, perfil, modelo e orçamento. TDD:
+três falhas reproduzidas, 156 testes do guardião e suíte 812/30warnings/54.05s
+passaram; compile/diff check e revisão independente aprovados. Isso não prova
+fidelidade do modelo nem conclusão de T7. Run 37322711750 passou 812 testes/23.64s,
+LanguageTool, restore/save final e revisão semântica; job terminou verde, porém
+adaptação foi rejeitada por achado gramatical persistente, sem mídia/upload.
+
+Quarentena revelou causa distinta: repetição de início de frase é regra de
+estilo oficial do LanguageTool 6.6 (`REPETITIONS_STYLE`), mas o código a tratava
+como gramática crítica. Sugestões mecânicas trocaram I → Furthermore, I → Besides
+e criaram novas repetições. Commit 12a48bf reconhece essa categoria como aviso
+e registra sugestões de estilo sem aplicá-las automaticamente. Gramática real,
+ortografia, categorias desconhecidas e gates semânticos continuam bloqueantes.
+TDD: oito falhas reproduzidas, 207 testes focados e suíte 823/30warnings/49.38s
+passaram; compile/diff check e revisão independente aprovados.
+
+Run 37324808064 passou 823 testes/21.73s e aprovou a adaptação EN após uma
+correção gramatical, com três avisos de estilo mantidos. Isso comprova avanço
+real desse gate, não renderização. PT/tradução parou em chunk por HTTP400
+json_validate_failed, uma tentativa/contexto15972; geração recusada era JSON
+sintaticamente válido/353 caracteres, campo incompatível desconhecido. Restore/
+save final passaram; nenhuma mídia/upload. Google também limitou a tradução;
+MyMemory alcançou o guardião pelo caminho existente, sem fallback local.
+
+484a912 permite retry somente de HTTP400 + código explícito json_validate_failed,
+descartando a geração recusada e enviando feedback enum-only. Mesmos orçamento,
+espera, esquema estrito e gates; outros erros permanentes não repetem. Suíte
+832/30warnings/49.68s, compile/diff check e revisão independente passaram.
+Não afirmar que o erro do provedor é necessariamente transitório. A documentação
+Groq discute retry de falhas de schema em best-effort e pede repro de HTTP400
+inesperado em strict; aqui o esquema estrito foi preservado.
+
+Run 37326768456 falhou sem mídia/publicação; 832 testes/17.14s, LanguageTool,
+restore e save final passaram. A adaptação aprovada foi preservada. Tradução PT
+entrou em repairing (quatro chamadas, cinco achados gramaticais críticos), mas
+a segunda revisão ficou indisponível após sete chamadas acumuladas: chunk,
+HTTP400/json_validate_failed, três tentativas/contexto16263. A geração recusada
+era JSON sintaticamente válido/693 caracteres; o campo incompatível continua
+desconhecido. O retry limitado funcionou, mas não resolveu a recusa do provedor.
+Antes de outro remendo ou dispatch, discutir o contrato de saída e definir
+diagnóstico estrutural sanitizado que identifique a incompatibilidade sem
+armazenar conteúdo livre. Não inferir qual campo falhou nem relaxar o esquema.
+Namespace `validation-reliability-20261005-style`
+foi criado para a amostra após rejeição terminal no anterior, que permanece
+intacto. Nenhum head anterior/produção foi resetado.
+Os registros de 2026-10-04 abaixo são antecedentes, não pendências já resolvidas.
+
 Main permanece em 30a0a0c; não houve integração/publicação nesta validação.
 Branch de trabalho: pipeline-reliability. Retomada técnica e rulings ficam no
 ledger privado `.superpowers/sdd/2026-10-03-pipeline-reliability/progress.md`.
@@ -121,9 +191,10 @@ Bootstrap exige relatório aprovado e candidato
 
 ## Gates restantes
 
-1. Cota TPD identificada no runner; respeitar espera antes de validar geração.
+1. Revisar o contrato de saída após a recusa persistente de schema e obter
+   diagnóstico seguro antes de outra correção/geração; job verde sem mídia não é aceite.
 2. Gerar PT/EN/ES completos, conferir roteiro/voz/ASS/card e restore da mídia.
-3. Aprovar reconciliação específica de efeitos externos e mídias legadas.
+3. Importar o candidato reconciliado após aceite real e credencial específica disponível.
 4. Bootstrap, verify independente, integração em main e rodada dentro da meta.
 
 Cron legado permanece habilitado (`PIPELINE_AUTOMATION_ENABLED=true`), sem
