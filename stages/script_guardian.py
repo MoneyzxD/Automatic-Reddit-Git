@@ -380,9 +380,9 @@ def _retry_wait(exc, default):
 
 
 def _semantic_response_format(model: str, mode: str) -> dict:
-    # GPT-OSS suporta decodificação por schema; JSON object pode falhar com 400.
+    # GPT-OSS e Qwen 3.8 suportam schema estrito; JSON object pode falhar com 400.
     # Outros modelos configurados conservam o contrato legado e o gate local.
-    if model not in {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}:
+    if model not in {"openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"}:
         return {"type": "json_object"}
     if mode == "facts":
         fields = {

@@ -43,6 +43,12 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Próxima candidata isolada usa Qwen3.8 fixo no guardião, mantendo contratos,
+gates e chaves. 896 testes e revisão independente passaram; sonda longa pelo
+código real teve três avisos gramaticais, sem falha JSON registrada. Isso não
+comprova geração completa. Aguardar recuperação Actions antes de nova validação
+PT/EN/ES sem upload, retomando o namespace atual. Detalhes/limites no status.
+
 Run atual37370371919/b030bd6 retoma checkpoint de validação, sem publicação.
 Terminou failure antes de qualquer etapa: runner hosted não adquirido. Actions
 em major_outage; acompanhar recuperação antes de nova rodada. Sonda alternativa

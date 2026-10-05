@@ -1,5 +1,34 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Próxima validação: guardião Qwen fixo — 2026-10-05
+
+Branch isolada passa a configurar `qwen/qwen3.8-27b` somente para o guardião.
+Modelo listado pela conta e compatível com schema estrito segundo as
+[documentações Groq](https://console.groq.com/docs/structured-outputs) e
+[limites gratuitos](https://console.groq.com/docs/rate-limits). Não é rotação
+por cota: chave fixa por idioma, schema, parser, gates, LanguageTool, cadência
+e orçamento permanecem iguais. Modelos das etapas de geração não mudaram.
+
+Sondas reais: fatos sintéticos com referências literais; frase correta aprovada;
+valor inventado rejeitado como amount:critical. Contexto longo autorizado,
+fonte com SHA conferido e candidato/ledger sanitizados: três grammar:warning,
+sem falha JSON registrada. Nova sonda pelo código alterado, sem alias de modelo,
+também retornou esses três avisos, em três chamadas semânticas, sem falha JSON.
+Não é replay exato nem aprovação completa: os avisos ainda exigem julgamento,
+inclusive o possível falso positivo de estilo em “explicar por si mesmo”.
+Não afirmar superioridade semântica, ausência universal de HTTP400 ou mídia pronta.
+
+TDD: cinco falhas esperadas antes do allowlist; foco 286 passed/15 avisos/10.77s;
+suíte completa 896 passed/33 avisos/51.37s; compile e diff check passaram.
+Revisor independente: 14 casos HTTP/schema passaram, nenhum Critical/Important/
+Minor novo. Aprovação restrita à validação, não à liberação de main.
+
+Próximo gate: aguardar recuperação do incidente Actions e disparar PT/EN/ES
+sem upload, retomando `validation-reliability-20261005-source`. Monitor de
+status ativo; nenhum novo dispatch enquanto houver indisponibilidade de runners.
+Depois: mídia, restore em segundo runner, bootstrap reconciliado e main.
+Os antecedentes abaixo descrevem a configuração anterior, não a próxima rodada.
+
 ## Fonte narrativa separada do ledger — 2026-10-05
 
 Retomada atual: run `37370371919`/`b030bd6`, mesmo namespace de validação,

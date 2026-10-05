@@ -2,6 +2,15 @@
 
 ## Continuação atual — 2026-10-05
 
+Próxima versão isolada configura Qwen3.8 fixo só no guardião, com schema/gates/
+chaves/cadência intactos. Suíte 896 passed/33 avisos/51.37s, compile/diff e
+revisão independente passaram. Sonda longa pelo código real retornou três
+grammar:warning, três chamadas semânticas, sem falha JSON; não é aceite completo
+nem prova de superioridade. Actions segue em incidente: aguardar recuperação
+antes de dispatch PT/EN/ES no namespace existente, sem upload. Main/bootstrap/
+mídia/rodada normal/agentes permanecem pendentes; seção inicial de
+[RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md) é a autoridade do próximo gate.
+
 Run atual `37370371919`/`b030bd6` retoma o namespace de validação anterior,
 PT/EN/ES sem upload. Terminou failure sem runner ou etapas: anotação oficial
 de hosted runner não adquirido. Actions major_outage/investigating20:47UTC;

@@ -62,16 +62,20 @@ def test_etapas_e_clientes_recriados_aguardam_recarga_tpm(clock, monkeypatch):
 
 
 @pytest.mark.parametrize("mode", ["facts", "chunk", "global"])
-def test_sdk_serializa_contrato_estrito_do_guardiao_no_corpo_http(clock, monkeypatch, mode):
+@pytest.mark.parametrize("model", [None, "qwen/qwen3.8-27b"])
+def test_sdk_serializa_contrato_estrito_do_guardiao_no_corpo_http(clock, monkeypatch, mode, model):
     from stages.script_guardian import _GroqReviewer
     from utils import environment
 
     calls = transport(monkeypatch, clock, {})
     monkeypatch.setattr(environment, "groq_api_key", lambda language: "synthetic-key")
-    _GroqReviewer({"semantic_timeout_seconds": 60}).review(
+    config = {"semantic_timeout_seconds": 60}
+    if model:
+        config["groq_model"] = model
+    _GroqReviewer(config).review(
         mode=mode, language="pt", candidate_text="Texto sintético.", source_chunk="Fonte sintética.")
     request = calls[0][1]
-    assert request["model"] == "openai/gpt-oss-20b"
+    assert request["model"] == (model or "openai/gpt-oss-20b")
     assert request["reasoning_effort"] == "low"
     assert request["response_format"]["type"] == "json_schema"
     contract = request["response_format"]["json_schema"]

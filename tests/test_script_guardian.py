@@ -662,7 +662,7 @@ def test_rejeicao_json_validate_failed_prevenida_pelo_schema(tmp_path, perfil_fe
     assert all(call["response_format"]["json_schema"]["strict"] is True for call in calls)
 
 
-@pytest.mark.parametrize("model", ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "legacy-model"])
+@pytest.mark.parametrize("model", ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "legacy-model"])
 @pytest.mark.parametrize("mode", ["facts", "global"])
 def test_contrato_estrito_do_provider_preserva_fatos_e_patches(monkeypatch, model, mode):
     import stages.script_guardian as module

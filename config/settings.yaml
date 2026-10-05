@@ -157,6 +157,9 @@ validator:
   groq_call_delay: 6.0
 
 script_quality:
+  # Modelo fixo gratuito em validação; não alternar modelos/chaves por cota.
+  # Gates/schema/orçamento mantidos. Aceite PT/EN/ES real precede liberação.
+  groq_model: qwen/qwen3.8-27b
   enabled: true
   fail_closed: true
   max_repair_attempts: 2
