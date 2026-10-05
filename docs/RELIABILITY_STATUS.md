@@ -2,6 +2,36 @@
 
 ## Fonte narrativa separada do ledger — 2026-10-05
 
+Run `37363161214`/`8628ed9`, namespace novo isolado, terminou failure/10m11s.
+Adaptação EN aprovada; tradução PT corrigiu cinco achados gramaticais, depois
+ficou unavailable por três HTTP400/json_validate_failed no modo chunk, com
+failed_generation string vazia/0 caracteres, contexto12735–12767. Nenhum HTTP429
+registrado, nenhuma mídia/upload. Não alcançou os gates derivados: este teste
+não prova o efeito real da separação de fonte nem resolução do falso positivo ES.
+Testes/LT/restore/save passaram; a adaptação aprovada está preservada.
+
+Diagnóstico adicional, sem mudança de produção: transporte HTTP sintético com
+SDK real comprova strict:true, required completo, objetos fechados, start nullable,
+sem tools/stream nos três modos. 15 testes de cadência/0.62s passaram. Schema
+confere com os requisitos da [Groq](https://console.groq.com/docs/structured-outputs).
+Prova curta real com conteúdo sintético e chave fixa PT passou: dois fatos
+com referências literais, chunk/global approved na sequência empréstimo inicial
+e recusa posterior. Não é replay do incidente nem prova de roteiro completo.
+Primeira execução do probe local não carregou o .env correto e não fez chamadas;
+caminho corrigido antes da prova real. Essa falha local não era erro do serviço.
+
+A comparação longa (fonte íntegra + candidato/ledger SANITIZADOS, não replay
+exato) foi bloqueada pelo auto-review antes da execução, por transmissão de
+conteúdo recuperado ao provedor. Nenhum dado desse probe foi enviado, nem houve
+prova 120B ou alteração de modelo. Aguardar autorização explícita para essa
+transmissão, sem contornar a rejeição. Não repetir pipeline completo ou empilhar
+ajustes de prompt sem isolar o contrato/contexto que provoca o HTTP400.
+Suíte final de diagnóstico: 891 passed/33 avisos/50.95s; compile/diff check
+passaram. Revisão independente aprovou apenas o commit de caracterização,
+sem Critical/Important. Minor: required/properties iguais não detectam remoção
+simultânea de um campo no schema. Outros testes verificam os campos esperados,
+mas o teste HTTP novo não fixa todos os nomes; não afirmar essa cobertura.
+
 Diagnóstico independente dos candidatos do run `37341313520`: ES/meta2 contém
 a recusa **depois** da descoberta, sustentada pela fonte; o achado citava apenas
 o empréstimo anterior e foi falso positivo temporal. PT/título é impreciso

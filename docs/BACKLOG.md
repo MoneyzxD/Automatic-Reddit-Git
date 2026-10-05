@@ -43,6 +43,13 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Run37363161214 falhou antes dos gates derivados: adaptação aprovada, tradução
+PT com três HTTP400/json_validate_failed e geração vazia. Sem mídia/upload.
+Prova sintética curta real passou; wire SDK comprova schema estrito correto.
+Comparação longa com dados sanitizados do incidente bloqueada pelo auto-review:
+aguarda autorização explícita de transmissão à Groq; nenhum dado enviado.
+Consultar status/ledger antes de nova ação. Não está restaurado operacionalmente.
+
 Fonte narrativa separada do JSON do ledger após evidência de contaminação
 das citações. Falso positivo temporal ES comprovado; PT é imprecisão, não
 contradição demonstrada. Subtipo de referência inválida agora é diagnosticado

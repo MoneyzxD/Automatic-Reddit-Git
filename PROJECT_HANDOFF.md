@@ -2,6 +2,15 @@
 
 ## Continuação atual — 2026-10-05
 
+Run `37363161214`/`8628ed9` falhou em 10m11s: adaptação EN aprovada,
+tradução PT indisponível após três HTTP400/json_validate_failed com geração
+vazia. Sem mídia/upload; separação da fonte não chegou aos gates derivados.
+Transporte SDK comprova strict/required/closed corretos; prova curta real
+sintética passou em facts/chunk/global. Comparação longa com candidato/ledger
+sanitizados foi negada pelo auto-review antes de execução; aguarda autorização
+explícita de envio à Groq. Não houve troca de modelo/Secret/gate nem integração
+main. Retomar pelo status/ledger; não refazer dispatch completo por suposição.
+
 Continuação: separação fonte/ledger corrigida após comprovar citações de JSON
 nos gates derivados. Diagnóstico de referência agora tem subtipo enum, sem IDs
 ou valores. 888 testes/33 avisos/45.19s, compile/diff check e revisão independente

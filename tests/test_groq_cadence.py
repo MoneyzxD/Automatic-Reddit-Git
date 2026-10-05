@@ -61,6 +61,33 @@ def test_etapas_e_clientes_recriados_aguardam_recarga_tpm(clock, monkeypatch):
     assert telemetry.usage_by_stage()["script_guardian"]["total"] == 2100
 
 
+@pytest.mark.parametrize("mode", ["facts", "chunk", "global"])
+def test_sdk_serializa_contrato_estrito_do_guardiao_no_corpo_http(clock, monkeypatch, mode):
+    from stages.script_guardian import _GroqReviewer
+    from utils import environment
+
+    calls = transport(monkeypatch, clock, {})
+    monkeypatch.setattr(environment, "groq_api_key", lambda language: "synthetic-key")
+    _GroqReviewer({"semantic_timeout_seconds": 60}).review(
+        mode=mode, language="pt", candidate_text="Texto sintético.", source_chunk="Fonte sintética.")
+    request = calls[0][1]
+    assert request["model"] == "openai/gpt-oss-20b"
+    assert request["reasoning_effort"] == "low"
+    assert request["response_format"]["type"] == "json_schema"
+    contract = request["response_format"]["json_schema"]
+    assert contract["strict"] is True
+    schema = contract["schema"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["required"]) == set(schema["properties"])
+    collection = "facts" if mode == "facts" else "issues"
+    item = schema["properties"][collection]["items"]
+    assert item["additionalProperties"] is False
+    assert set(item["required"]) == set(item["properties"])
+    if mode != "facts":
+        assert item["properties"]["start"] == {"type": ["integer", "null"]}
+    assert not request.get("stream") and not request.get("tools")
+
+
 def test_chaves_distintas_nao_assumem_organizacoes_distintas(clock, monkeypatch):
     calls = transport(monkeypatch, clock, {"x-ratelimit-reset-tokens": "12s"})
     complete(key="fixed-pt")
