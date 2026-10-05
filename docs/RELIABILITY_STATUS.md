@@ -1,5 +1,52 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Correção de emissão e cadência — 2026-10-05
+
+Operador autorizou corrigir os dois bloqueios capturados. Código `5aea94b`
+enviado somente à branch `pipeline-reliability`. A instrução de revisão agora
+exige todos os campos, explica `reason` e inclui `start: null` no exemplo;
+severity usa um valor válido. Schema, parser e gates permanecem estritos.
+
+O wrapper lê a recarga TPM pelo SDK público `with_raw_response`/`parse` e
+espaça chamadas por modelo entre etapas/clientes, inclusive após recusa. O
+cabeçalho diário de requests não é confundido com RPM. Resets de 0–120s têm
+margem de 1s, piso de 2,1s para 30 RPM e teto de 120s; esperas são divididas
+em blocos de até 60s. Sem cabeçalho confiável, espera 61s após a tentativa.
+Chaves continuam fixas, sem aumento de tentativas/orçamento do guardião.
+
+Limites: estado só deste processo e conservador entre chaves, pois a quota é
+por organização. Não coordena outros consumidores/processos/namespaces;
+retries internos do SDK legado ficam fora da cadência individual. O guardião
+continua com SDK retry zero. Cabeçalhos fora da faixa/formato aceitos não
+comprovam recarga em 61s; TPD e pedidos maiores que TPM continuam sujeitos ao
+erro do provedor e gates obrigatórios. Cadência não cria cota nem garante lote.
+Referências: [limites Groq](https://console.groq.com/docs/rate-limits) e
+[SDK público](https://github.com/groq/groq-python#accessing-raw-response-data-eg-headers).
+
+TDD reproduziu omissão no exemplo, chamadas sem espaçamento e os limites
+RPM/recarga de 90s. Suíte completa final: 873 passed/30 warnings/50.12s;
+warnings legados de `datetime.utcnow`. Revisão independente aprovou os deltas,
+incluindo 12 testes de cadência/0.41s com transporte HTTP sintético. Isso não
+comprova emissão/fidelidade da Groq real. Run `37338112115` passou 873 testes/22.49s,
+LanguageTool e restore/save; terminou failure/15m15s. Tradução PT aprovada após
+oito chamadas e naturalização PT após cinco. Cadência real registrada, esperas
+16–57s, nenhum HTTP429 registrado nos relatórios. Isso não garante cota futura.
+HTTP400 ainda ocorreu: tradução omitiu `reason` em três achados, depois recuperou;
+título omitiu `reason` nas três tentativas e bloqueou o lote. `start` não teve
+omissão registrada nessa amostra. Nenhuma mídia/upload, EN/ES não concluídos.
+
+Gap reproduzido: diagnóstico sabia quais campos faltavam, mas retry recebia só
+`invalid_json`. Código `3d65d84` acrescenta `missing_issue_fields`, deduplicados
+e restritos a `reason`/`start`, apenas de violações required no path exato de
+issue. Valores/índices/nomes extras não são reenviados e a geração recusada
+continua descartada. Nenhum motivo é fabricado localmente; parser/schema/gates
+e orçamento continuam iguais. Outros campos permanecem no feedback genérico
+até evidência e regressão justificarem ampliação. TDD seis falhas esperadas;
+211 testes do guardião/1.12s, suíte completa 879/30warnings/49.69s,
+compile/diff check e revisão independente (211/1.14s, sem achados) passaram.
+Run `37341313520` retoma o mesmo namespace PT/EN/ES sem publicar/resetar;
+resultado pendente. Os registros abaixo são antecedentes.
+
 ## Diagnóstico estrutural autorizado — 2026-10-05
 
 Operador aprovou identificar o campo recusado sem armazenar a resposta. O

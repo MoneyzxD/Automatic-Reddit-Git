@@ -2,6 +2,20 @@
 
 ## Continuação atual — 2026-10-05
 
+Correção autorizada de emissão e TPM enviada em `5aea94b`, só na branch isolada:
+exemplo com todos os campos e cadência por recarga TPM entre etapas/clientes.
+Schema/gates/chaves/orçamento preservados. 873 testes locais e revisão
+independente passaram. Run `37338112115` aprovou tradução/naturalização PT,
+sem HTTP429 registrado; título falhou por `reason` ausente em três tentativas.
+Nenhuma mídia/upload. Gap de feedback reproduzido e corrigido em `3d65d84`:
+retry agora recebe somente os nomes reason/start ausentes, sem valores/índices
+ou preenchimento automático. 879 testes locais e revisão independente passaram.
+Run `37341313520` retoma o mesmo namespace sem publicar; resultado pendente.
+Consulte a seção inicial do
+[status](docs/RELIABILITY_STATUS.md) para limites e aceite real. Bootstrap,
+main, rodada normal e agentes permanecem posteriores à validação completa.
+Os parágrafos abaixo preservam os antecedentes, não o próximo passo atual.
+
 Diagnóstico estrutural aprovado pelo operador e enviado em `d173dd2`, só na
 branch isolada. Suíte 856 passed/30 warnings/50.11s, 200 testes do guardião,
 compilação/diff check e revisão independente passaram. Registra campos/tipos/

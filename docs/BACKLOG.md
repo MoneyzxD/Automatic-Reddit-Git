@@ -43,6 +43,16 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Correção de emissão/cadência autorizada enviada em `5aea94b` à branch isolada.
+873 testes locais e revisão independente passaram; run `37338112115` aprovou
+tradução/naturalização PT, sem HTTP429 registrado. Título falhou por `reason`
+ausente em três tentativas; nenhuma mídia/upload. `3d65d84` corrige feedback
+que não informava os campos ausentes, sem preencher valores ou relaxar schema.
+879 testes locais/revisão passaram; run `37341313520` retoma a validação isolada,
+resultado pendente. Limites e evidência atual estão na seção inicial de
+[RELIABILITY_STATUS](RELIABILITY_STATUS.md). Agentes/main/bootstrap aguardam
+aceite completo; a cronologia abaixo não autoriza repetir correções antigas.
+
 Diagnóstico estrutural autorizado implementado em `6930e5f`, só na branch
 isolada: 856 testes passaram e revisão independente aprovou. Run `37331951705`
 falhou por HTTP429/TPM, não comprovou o campo recusado e não gerou mídia/upload.
