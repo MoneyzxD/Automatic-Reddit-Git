@@ -2,6 +2,15 @@
 
 ## Continuação atual — 2026-10-05
 
+Atualização mais recente: run 37408357221/1947aee4 falhou na adaptação EN por
+HTTP429, chunk, três tentativas e contexto de 16.695 caracteres. 959 testes
+em 18,93s, LanguageTool, restore e save passaram. Sem mídia/upload; snapshot
+privado verificado e production intacto. Consulta curta local EN, HTTP200/TPM
+8.000, não prova igualdade com o Secret do Actions. Usage/Limits da conta EN
+do runner solicitado ao operador; sem novo
+dispatch ou troca de chaves/modelo. Consulte a seção inicial do status.
+Monitores encerrados; produção ainda não foi liberada.
+
 Atualização 2026-10-06: credencial limitada local funcionando. Cópia reconciliada
 conserva84IDs/7pendentes; verify37407149313/af2f6f4 passou no Actions,955testes/
 17.90s e restoreLinux/5arquivos/11blobs. Nenhuma geração/publicação/bootstrap

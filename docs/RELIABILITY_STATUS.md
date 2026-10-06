@@ -1,5 +1,38 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Validação real atual — 2026-10-06
+
+[Run 37408357221](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37408357221)
+em `1947aee4` terminou **failure em 4m36s**. Os **959 testes passaram em
+18,93s**, LanguageTool e restore isolado passaram. A geração interrompeu na
+revisão da adaptação EN: `rate_limit`, **HTTP429**, modo `chunk`, três tentativas,
+contexto de 16.695 caracteres. Subtipo de limite e Retry-After não vieram no
+diagnóstico; nenhuma falha JSON foi registrada nessa amostra. Não atribuir
+esse 429 ao token de estado, OAuth YouTube, erro de ancoragem ou a todos os
+incidentes anteriores. PT/EN/ES não chegaram à geração de mídia.
+
+Upload foi pulado, checkpoint final passou e logs foram preservados. Head do
+namespace `validation-reliability-20261006-anchors` confirmado, com cópia
+local verificada por hash e schema: sete checkpoints completos, sequência seis,
+sete arquivos de controle, zero mídia/etapas aprovadas. Sem restore de produção,
+reset de estados anteriores ou alteração de fonte/perfil. Watch encerrado.
+Namespace production reconferido: zero checkpoints completos.
+
+Uma consulta **sintética curta local EN**, sem retries, recebeu HTTP200:
+teto TPM 8.000, restante TPM 6.960, teto RPD 1.000, restante RPD 999,
+319 tokens de uso. É diagnóstico dessa credencial local e dessa chamada,
+não prova de igualdade com o Secret do Actions, suficiência para contexto
+longo, limite diário atingido ou aprovação pelo guardião completo. Secrets
+GROQ por idioma existem; seus valores não foram lidos/trocados. A
+[documentação oficial](https://console.groq.com/docs/rate-limits) distingue
+limites por minuto/dia e orienta conferir a cota efetiva na organização.
+
+Próximo diagnóstico: confirmar Usage/Limits da conta EN efetivamente usada no
+Actions e, se necessário, coletar somente metadados numéricos do transporte.
+Captura sem chave API solicitada ao operador. Sem novo dispatch automático,
+rotação de credenciais/modelo ou afrouxamento dos gates. Bootstrap production,
+main, rodada normal e agentes permanecem pendentes dos aceites reais.
+
 ## Credencial e restauração real — 2026-10-06
 
 Credencial limitada local configurada e acesso ao destino privado aprovado

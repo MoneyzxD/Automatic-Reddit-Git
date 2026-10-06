@@ -43,6 +43,13 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Run37408357221/1947aee4: 959testes18.93s/LT/restore/save passaram; adaptaçãoEN
+interrompida por HTTP429/chunk após3tentativas. Sem subtipo/Retry-After ou mídia.
+Consulta curta localEN respondeu200/TPM8000; não comprova igualdade com Secret
+do Actions ou capacidade para lote. Conferir Usage/Limits da conta EN do runner
+antes de novos disparos/remendos. Snapshot verificado, production intacto;
+detalhes na seção inicial do status. Agentes ainda aguardam os aceites.
+
 Credencial local resolvida em2026-10-06. Verify37407149313/af2f6f4 passou:
 955testes e restore da cópia reconciliada no runnerLinux/11blobs. Preserva84IDs/
 7pendentes, sem headproduction/main ou publicação. Sonda curta ES recebeu2fatos
