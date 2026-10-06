@@ -53,6 +53,8 @@ class TextPatch:
     reason: str
     source_quote: str
     start: int | None = None
+    # Diagnóstico interno; não vem do schema/modelo nem altera o aceite.
+    anchor_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -727,10 +729,12 @@ class ScriptGuardian:
             )
             issues.extend(outcome.issues)
             for patch in outcome.patches:
-                if (patch.original not in chunk.text or (patch.start is not None and
-                        chunk.text[patch.start:patch.start + len(patch.original)] != patch.original)):
+                if patch.original not in chunk.text:
+                    patches.append(replace(patch, start=-1, anchor_error="chunk_original_missing"))
+                elif (patch.start is not None and
+                        chunk.text[patch.start:patch.start + len(patch.original)] != patch.original):
                     # Um offset do modelo nunca pode escapar do bloco que ele revisou.
-                    patches.append(replace(patch, start=-1))
+                    patches.append(replace(patch, start=-1, anchor_error="chunk_offset_mismatch"))
                 else:
                     patches.append(replace(patch, start=patch.start + chunk.start)
                                    if patch.start is not None else patch)
@@ -838,4 +842,7 @@ class ScriptGuardian:
     def _patch_summary(patch):
         # Comprimentos e categorias bastam para auditoria sem copiar conteúdo sensível.
         return {"category": patch.category, "severity": patch.severity, "start": patch.start,
-                "original_chars": len(patch.original), "replacement_chars": len(patch.replacement)}
+                "original_chars": len(patch.original), "replacement_chars": len(patch.replacement),
+                "anchor_error": patch.anchor_error if patch.anchor_error in {
+                    "chunk_original_missing", "chunk_offset_mismatch",
+                } else None}

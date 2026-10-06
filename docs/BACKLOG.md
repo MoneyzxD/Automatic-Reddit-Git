@@ -43,6 +43,12 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Credencial local resolvida em2026-10-06. Verify37407149313/af2f6f4 passou:
+955testes e restore da cópia reconciliada no runnerLinux/11blobs. Preserva84IDs/
+7pendentes, sem headproduction/main ou publicação. Sonda curta ES recebeu2fatos
+sem429; geração completa e reparosPT ainda não validados. Seção inicial do
+status orienta a retomada; tokenlocalausente abaixo é antecedente resolvido.
+
 Retomada atual: run37379031931 terminou failure, sem mídia/upload; PT tradução
 aprovada, naturalização rejeitada por evento e ES revisão HTTP429. Consulta
 sintética única posterior ainda recebeu429; subtipo/espera desconhecidos.

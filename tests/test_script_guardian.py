@@ -206,6 +206,53 @@ def guardian_fake(tmp_path, semantic=None, lt=None, **config):
     )
 
 
+@pytest.mark.parametrize("original,start,error_code", [
+    ("Citei a clínica.", None, "chunk_original_missing"),
+    ("Citei a cirurgia.", 1, "chunk_offset_mismatch"),
+    ("Citei a cirurgia.", 7, None),
+])
+def test_ancora_de_patch_tem_diagnostico_sem_vazar_texto(
+    tmp_path, perfil_feminino, original, start, error_code,
+):
+    # Incidente PT: start=-1 não distinguia posição errada de trecho ausente.
+    source = "I explained the surgery."
+    candidate = "Antes. Citei a cirurgia. Depois."
+    semantic = FakeSemanticReviewer([
+        resposta(False, [achado(original=original, start=start,
+            replacement="Expliquei a cirurgia.", category="event",
+            source_quote=source, reason="Preservar a sequência da fonte.")]),
+        resposta(True, []),
+    ])
+    guardian = guardian_fake(tmp_path, semantic)
+    if error_code:
+        with pytest.raises(QualityRejected) as caught:
+            revisar(guardian, perfil_feminino, source_text=source, candidate_text=candidate)
+        assert caught.value.review.approved_text == candidate
+    else:
+        result = revisar(guardian, perfil_feminino, source_text=source, candidate_text=candidate)
+        assert result.approved_text == "Antes. Expliquei a cirurgia. Depois."
+    raw = guardian.report_path.read_text(encoding="utf-8")
+    report = json.loads(raw.splitlines()[0])
+    summaries = report["rejected_patches" if error_code else "accepted_patches"]
+    assert len(summaries) == 1
+    assert summaries[0]["anchor_error"] == error_code
+    if error_code:
+        assert report["status"] == "rejected"
+        assert report["accepted_patches"] == []
+        assert summaries[0]["start"] == -1
+    assert original not in raw
+    assert candidate not in raw
+    assert source not in raw
+    assert "Preservar a sequência da fonte." not in raw
+
+
+def test_diagnostico_de_ancora_so_emite_enum_conhecido():
+    patch = patch_para("trecho privado", anchor_error="segredo_interno_nao_emitir")
+    summary = ScriptGuardian._patch_summary(patch)
+    assert summary["anchor_error"] is None
+    assert "segredo_interno_nao_emitir" not in json.dumps(summary)
+
+
 def test_referencias_factuais_copiam_unidades_unicode_sem_regenerar(tmp_path):
     source = "I (28M) traded a Pokémon card.\r\n" + "X" * 410 + " Never a credit card! 🃏"
     contexts = []

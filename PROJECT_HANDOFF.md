@@ -2,6 +2,13 @@
 
 ## Continuação atual — 2026-10-05
 
+Atualização 2026-10-06: credencial limitada local funcionando. Cópia reconciliada
+conserva84IDs/7pendentes; verify37407149313/af2f6f4 passou no Actions,955testes/
+17.90s e restoreLinux/5arquivos/11blobs. Nenhuma geração/publicação/bootstrap
+production/main. Sonda sintética ES única recebeu2fatos sem429; não comprova
+lote. Status é a autoridade atual, inclusive para o diagnóstico dos reparosPT.
+Registros abaixo são antecedentes; tokenlocalausente foi resolvido.
+
 Retomada: run37379031931/ac74819 falhou na geração; PT tradução aprovada,
 naturalização rejeitada por sequência de evento e ES revisão HTTP429.
 Infra/testes/estado passaram, publicação pulada e checkpoint final sem mídia

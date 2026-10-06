@@ -1,5 +1,40 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Credencial e restauração real — 2026-10-06
+
+Credencial limitada local configurada e acesso ao destino privado aprovado
+comprovado, sem expor token ou alterar o Secret existente. A cópia reconciliada
+conserva 30 histórias, 91 partes, 84 IDs confirmados e sete vídeos pendentes
+(PT: 3, EN: 2, ES: 2). Inventário e digest aprovados continuam idênticos.
+
+Cópia privada completa no namespace `validation-reconciliation-20261006`:
+11 blobs de mídia, 488.459.531 bytes. O
+[run verify 37407149313](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37407149313)
+em `af2f6f4` passou: **955 testes em 17,90s**, restore e verificação no runner
+Linux, cinco arquivos de controle e 11 blobs íntegros. Geração, publicação e
+checkpoint final foram pulados. LanguageTool foi encerrado na limpeza normal.
+Foco local de recuperação: 133 testes, dez avisos, 40,91s.
+
+Isso comprova transporte e recuperação da cópia legada entre Windows e Actions,
+não a qualidade editorial dos vídeos legados nem geração nova. Namespace
+production continua sem head; main, caches, original e IDs externos intactos.
+A decisão foi provar esta etapa independente em cópia isolada antes de ativar
+produção; nenhum bootstrap production foi antecipado.
+
+Uma única consulta sintética ES às 03:08 UTC recebeu resposta JSON com dois
+fatos, sem repetir HTTP429. É disponibilidade nessa amostra curta, não prova
+de contexto longo ou orçamento para um lote. Continuam pendentes: investigar
+reparos PT, geração completa PT/EN/ES, inspeção da nova mídia, bootstrap
+reconciliado, integração main e rodada normal. Agentes permanecem posteriores.
+Os registros abaixo são antecedentes; a ausência local do token foi resolvida.
+
+Diagnóstico estreito de ancoragem distingue trecho ausente no chunk de offset
+incorreto por enum sanitizado; ambos continuam rejeitados. Schema, parser,
+prompts, modelos, chaves, cadência e gates não mudaram. TDD e foco de 225 testes
+passaram; suíte **959 passed**, 33 avisos legados, 83,07s; compile/diff check
+passaram. Revisão independente: 225 testes, nenhum Critical/Important/Minor.
+Não identifica retroativamente o ramo do reparo PT antigo nem libera main.
+
 ## Retomada verificada — 2026-10-05 / 06 UTC
 
 Run `37379031931`/`ac74819` terminou failure em 2026-10-05 22:15:58 UTC.
