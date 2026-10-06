@@ -18,6 +18,7 @@ from stages.narrator_profile import NarratorProfile
 from stages.contextual_glossary import ContextualGlossary
 from stages.language_tool import LanguageToolClient
 from utils import environment as env, telemetry
+from utils.groq_client import sanitize_groq_diagnostic
 from utils.text_chunks import split_lossless
 
 
@@ -95,6 +96,7 @@ class SemanticFailure:
     generation_schema_errors: tuple[dict, ...] = ()
     generation_schema_truncated: bool = False
     source_reference_error: str | None = None
+    transport_diagnostic: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -353,7 +355,8 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
                            rate_limit_type=rate_limit_type, retry_after_seconds=retry_after,
                            generation_schema_status=schema_diagnostic[0],
                            generation_schema_errors=schema_diagnostic[1],
-                           generation_schema_truncated=schema_diagnostic[2])
+                           generation_schema_truncated=schema_diagnostic[2],
+                           transport_diagnostic=sanitize_groq_diagnostic(getattr(exc, "groq_diagnostic", None)))
 
 
 def _retry_wait(exc, default):

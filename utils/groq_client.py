@@ -17,6 +17,8 @@ volume-alvo cabe no free tier.
 from __future__ import annotations
 
 import logging
+import json
+import math
 import re
 import time
 import threading
@@ -32,6 +34,96 @@ logger = logging.getLogger(__name__)
 _NEXT_REQUEST_AT: dict[str, float] = {}
 _CADENCE_LOCK = threading.Lock()
 _TOKEN_RESET_RE = re.compile(r"(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?")
+
+_DIAGNOSTIC_INTS = (
+    "payload_bytes", "payload_chars", "completion_cap", "legacy_cap",
+    "limit_tpm", "remaining_tpm", "limit_rpd", "remaining_rpd",
+    "prompt", "completion", "total", "http_status",
+)
+_DIAGNOSTIC_SECONDS = ("reset_tpm_seconds", "reset_rpd_seconds", "retry_after_seconds")
+_DIAGNOSTIC_DURATION = re.compile(
+    r"(?:(\d+(?:\.\d+)?)d)?(?:(\d+(?:\.\d+)?)h)?"
+    r"(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?")
+
+
+def sanitize_groq_diagnostic(value):
+    """Só números limitados: nunca transportar corpo, cabeçalhos livres ou nomes."""
+    if not isinstance(value, dict):
+        return None
+    diagnostic = {}
+    for key in _DIAGNOSTIC_INTS:
+        item = value.get(key)
+        valid = type(item) is int and 0 <= item <= 10**9
+        if key == "http_status":
+            valid = valid and 100 <= item <= 599
+        diagnostic[key] = item if valid else None
+    for key in _DIAGNOSTIC_SECONDS:
+        item = value.get(key)
+        diagnostic[key] = (item if type(item) in {int, float} and 0 <= item <= 604800
+                           and math.isfinite(item) else None)
+    return diagnostic
+
+
+def _header_number(headers, name, *, seconds=False):
+    value = headers.get(name, "") if headers else ""
+    pattern = r"[0-9]{1,7}(?:\.[0-9]{1,9})?" if seconds else r"[0-9]{1,10}"
+    if isinstance(value, str) and re.fullmatch(pattern, value):
+        number = float(value) if seconds else int(value)
+        if number <= (604800 if seconds else 10**9):
+            return number
+    return None
+
+
+def _diagnostic_reset(headers, name):
+    value = headers.get(name, "") if headers else ""
+    match = _DIAGNOSTIC_DURATION.fullmatch(value) if isinstance(value, str) and len(value) <= 64 else None
+    if match and any(match.groups()):
+        seconds = sum(float(part or 0) * unit for part, unit in zip(match.groups(), (86400, 3600, 60, 1)))
+        if math.isfinite(seconds) and 0 <= seconds <= 604800:
+            return seconds
+    return None
+
+
+def _emit_http_diagnostic(response=None, *, request=None, usage=None, exc=None):
+    """Observação best-effort; não modifica a requisição, o retorno ou o retry."""
+    try:
+        headers = getattr(response, "headers", None)
+        diagnostic = {
+            "http_status": getattr(response, "status_code", None),
+            "limit_tpm": _header_number(headers, "x-ratelimit-limit-tokens"),
+            "remaining_tpm": _header_number(headers, "x-ratelimit-remaining-tokens"),
+            "limit_rpd": _header_number(headers, "x-ratelimit-limit-requests"),
+            "remaining_rpd": _header_number(headers, "x-ratelimit-remaining-requests"),
+            "reset_tpm_seconds": _diagnostic_reset(headers, "x-ratelimit-reset-tokens"),
+            "reset_rpd_seconds": _diagnostic_reset(headers, "x-ratelimit-reset-requests"),
+            "retry_after_seconds": _header_number(headers, "retry-after", seconds=True),
+            "prompt": getattr(usage, "prompt_tokens", None),
+            "completion": getattr(usage, "completion_tokens", None),
+            "total": getattr(usage, "total_tokens", None),
+        }
+        request = request if request is not None else getattr(response, "request", None)
+        try:
+            # Não chamar read(): corpos ainda não carregados/streams permanecem intactos.
+            body = getattr(request, "content", None)
+            if isinstance(body, bytes):
+                diagnostic["payload_bytes"] = len(body)
+                if len(body) <= 1048576:
+                    text = body.decode("utf-8")
+                    diagnostic["payload_chars"] = len(text)
+                    payload = json.loads(text)
+                    if isinstance(payload, dict):
+                        diagnostic["completion_cap"] = payload.get("max_completion_tokens")
+                        diagnostic["legacy_cap"] = payload.get("max_tokens")
+        except (ValueError, AttributeError, RuntimeError):
+            pass
+        diagnostic = sanitize_groq_diagnostic(diagnostic)
+        if exc is not None:
+            # Somente esta tentativa: não há estado global de último diagnóstico.
+            exc.groq_diagnostic = diagnostic
+        logger.info("Diagnóstico HTTP Groq: %s", json.dumps(diagnostic, allow_nan=False))
+    except Exception:
+        # Diagnóstico não pode mascarar o resultado nem a exceção original.
+        pass
 
 
 def _token_reset_seconds(headers) -> float:
@@ -63,10 +155,16 @@ def _paced_create(inner, stage, model, args, kwargs):
             if raw_api is not None and not kwargs.get("stream"):
                 raw = raw_api.create(*args, **kwargs)
                 headers = raw.headers
-                return raw.parse()
-            return inner.create(*args, **kwargs)
+                result = raw.parse()
+                _emit_http_diagnostic(getattr(raw, "http_response", None), usage=getattr(result, "usage", None))
+                return result
+            result = inner.create(*args, **kwargs)
+            _emit_http_diagnostic(usage=None if kwargs.get("stream") else getattr(result, "usage", None))
+            return result
         except Exception as exc:
-            headers = getattr(getattr(exc, "response", None), "headers", None)
+            response = getattr(exc, "response", None)
+            headers = getattr(response, "headers", None)
+            _emit_http_diagnostic(response, request=getattr(exc, "request", None), exc=exc)
             raise
         finally:
             _NEXT_REQUEST_AT[model] = time.monotonic() + _token_reset_seconds(headers)

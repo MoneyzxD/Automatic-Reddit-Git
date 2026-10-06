@@ -43,6 +43,14 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Continuação2026-10-06: diagnóstico numérico do HTTP real implementado e revisado;
+976 testes locais passaram. Próximo gate é validar a captura e a geração no
+Actions, sem upload, mantendo o namespace atual. Não inferir TPM/TPD somente
+pelos gráficos. [Status](RELIABILITY_STATUS.md) detalha prova e limites.
+Avaliação de substituir Groq pelo Plus concluída: ver
+[OPENAI_PLUS_FEASIBILITY](OPENAI_PLUS_FEASIBILITY.md); elegibilidade/capacidade
+e runner efêmero não comprovados, nenhuma migração/API paga configurada.
+
 Run37408357221/1947aee4: 959testes18.93s/LT/restore/save passaram; adaptaçãoEN
 interrompida por HTTP429/chunk após3tentativas. Sem subtipo/Retry-After ou mídia.
 Consulta curta localEN respondeu200/TPM8000; não comprova igualdade com Secret

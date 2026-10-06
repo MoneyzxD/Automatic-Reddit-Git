@@ -2,6 +2,24 @@
 
 ## Validação real atual — 2026-10-06
 
+Instrumentação autorizada após capturas Usage/Limits do operador: o consumo
+Qwen mostrado não demonstra cota diária esgotada; o subtipo do último 429
+continua desconhecido. Captura nova mede bytes/caracteres do HTTP real do SDK,
+tetos explícitos de saída, limites/restantes/reset numéricos e consumo em sucesso.
+Falha carrega apenas números allowlisted no relatório; nenhum texto/chave/header
+livre. Modelo, payload enviado, gates, retries e cadência permanecem iguais.
+Guardião registra cada tentativa (SDK retry desativado); estágios legados veem
+somente o desfecho do SDK e streaming permanece sem consumo pelo diagnóstico.
+
+Prova local: 9 testes RED pela captura ausente; overflow adversarial reproduzido
+e corrigido; 262 testes focados passaram e revisão independente ficou sem
+achados pendentes. Suíte completa pós-ajuste: 976 testes, 33 avisos legados.
+Ainda falta prova dos metadados e geração real no Actions; esses testes não
+declaram causa da recusa nem aceitam mídia/main. Avaliação do Plus concluída em
+[OPENAI_PLUS_FEASIBILITY](OPENAI_PLUS_FEASIBILITY.md): alternativa condicional,
+não migração implementada. Retomar validação isolada no namespace existente
+`validation-reliability-20261006-anchors`, preservando produção e históricos.
+
 [Run 37408357221](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37408357221)
 em `1947aee4` terminou **failure em 4m36s**. Os **959 testes passaram em
 18,93s**, LanguageTool e restore isolado passaram. A geração interrompeu na
