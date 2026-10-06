@@ -42,9 +42,12 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
 
 
 def assert_upload_namespace() -> None:
-    if os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true":
-        if os.getenv("PIPELINE_STATE_NAMESPACE") != "production":
-            raise StateError("Namespace de validação não pode publicar vídeos")
+    namespace = os.getenv("PIPELINE_STATE_NAMESPACE", "")
+    required = os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true"
+    # Um namespace explícito de teste/inventário nunca autoriza upload, mesmo
+    # sem a flag de persistência. Local legado sem namespace segue compatível.
+    if namespace != "production" and (namespace or required):
+        raise StateError("Namespace de validação não pode publicar vídeos")
 
 
 def _flag(name: str) -> bool:

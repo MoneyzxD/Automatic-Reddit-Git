@@ -43,6 +43,15 @@ pendências de reconciliação; nenhum candidato foi importado.
 
 ## 2. Validar geração, reconciliar e liberar confiabilidade — em andamento
 
+Retomada atual: run37379031931 terminou failure, sem mídia/upload; PT tradução
+aprovada, naturalização rejeitada por evento e ES revisão HTTP429. Consulta
+sintética única posterior ainda recebeu429; subtipo/espera desconhecidos.
+Revisão completa da branch encontrou três bugs de código, corrigidos com
+RED/GREEN: comandos TikTok cruzavam YouTube/ignoravampt; snapshot recusava
+filenames editoriais; namespace de teste podia publicar sem flag required.
+955 testes locais e revisão pós-delta passaram. Serviços/mídia/bootstrap/main
+ainda não aprovados; autoridade de retomada é a primeira seção do status.
+
 Próxima candidata isolada usa Qwen3.8 fixo no guardião, mantendo contratos,
 gates e chaves. 896 testes e revisão independente passaram; sonda longa pelo
 código real teve três avisos gramaticais, sem falha JSON registrada. Isso não
@@ -178,3 +187,13 @@ preservados, sem duplicação de uploads.
 Começar após confiabilidade e diagnóstico operacional. Crescimento segue a
 proposta já preparada no checkout de produção; esta lista não autoriza mudança
 editorial nem implementação antecipada desses agentes.
+
+## Pendências legadas TikTok — antes de reabilitar o kit
+
+TikTok continua desabilitado. Revisão confirmou problemas distintos que não
+causam a falha atual de geração YouTube: `/status` rotula resumo/contadores
+YouTube como TikTok; `/fail` promete reenvio mas grava failed, fora da seleção
+pending; notify_job consulta fila YouTube, não `get_pending_tiktok`; comandos
+para ID ausente confirmam uma alteração inexistente. Corrigir com filas
+isoladas antes de reabilitar, sem tocar IDs/agendamentos YouTube. Esta anotação
+não habilita TikTok, não descarta kits nem altera política de publicação.

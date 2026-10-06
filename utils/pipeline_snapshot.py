@@ -19,6 +19,15 @@ MAX_CONTROL_BYTES = 100 * 1024 * 1024
 MAX_MEDIA_BYTES = 1024 * 1024 * 1024
 LANGUAGES = ("pt", "pt-br", "en", "es")
 _ID = r"[A-Za-z0-9_-]+"
+# O organizer preserva letras Unicode no slug. Só o basename editorial pode
+# usá-las; IDs/diretórios de recuperação continuam no contrato ASCII anterior.
+_EXPORT_NAME = r"[\w-]+"
+_EXPORT_METADATA = rf"data/exports/(?:pt|pt-br|en|es)/(?:{_ID}/)*{_EXPORT_NAME}\.json"
+_CREDENTIAL_FIELDS = {
+    "token", "access_token", "refresh_token", "id_token", "token_uri",
+    "client_secret", "client_id", "api_key", "private_key", "private_key_id",
+    "credentials", "installed", "web",
+}
 _HASH = r"[a-f0-9]{64}"
 _STAGES = r"(?:adaptation|translation|naturalization|title|opening_hook|closing_hook|injected_hook|prepared|(?:split_part|metadata|pre_tts)_part[1-3])"
 _DB_PATH_FIELDS = ("audio_path", "subtitle_path", "video_path", "thumbnail_path", "metadata_path", "export_path")
@@ -56,6 +65,10 @@ def safe_member_name(name: str) -> PurePosixPath:
 
 def _allowed_control(name: str) -> bool:
     safe_member_name(name)
+    # Palavras do título não determinam o tipo do JSON. O sidecar exportado
+    # precisa de vínculo à mídia e conteúdo editorial validado antes do aceite.
+    if re.fullmatch(_EXPORT_METADATA, name):
+        return True
     if re.search(r"token|credentials|\.env", name, re.IGNORECASE):
         return False
     return bool(name == "db/pipeline.db"
@@ -63,13 +76,25 @@ def _allowed_control(name: str) -> bool:
                 or re.fullmatch(rf"data/recovery/{_ID}/source\.json", name)
                 or re.fullmatch(rf"data/recovery/{_ID}/(?:pt|en|es)/{_STAGES}\.json", name)
                 or re.fullmatch(rf"data/scripts/profiles/{_ID}_narrator_profile\.json", name)
-                or re.fullmatch(rf"data/scripts/(?:pt|en|es)/{_ID}(?:_meta\.json|\.txt)", name)
-                or re.fullmatch(rf"data/exports/(?:pt|pt-br|en|es)/(?:{_ID}/)*{_ID}\.json", name))
+                or re.fullmatch(rf"data/scripts/(?:pt|en|es)/{_ID}(?:_meta\.json|\.txt)", name))
+
+
+def _contains_credential_fields(value) -> bool:
+    pending = [value]
+    while pending:
+        node = pending.pop()
+        if isinstance(node, dict):
+            if any(key.casefold() in _CREDENTIAL_FIELDS for key in node):
+                return True
+            pending.extend(node.values())
+        elif isinstance(node, list):
+            pending.extend(node)
+    return False
 
 
 def _allowed_media(name: str) -> bool:
     safe_member_name(name)
-    return bool(re.fullmatch(rf"data/(?:exports|videos|thumbnails)/(?:pt|pt-br|en|es)/(?:{_ID}/)*{_ID}\.(?:mp4|jpg)", name))
+    return bool(re.fullmatch(rf"data/(?:exports|videos|thumbnails)/(?:pt|pt-br|en|es)/(?:{_ID}/)*{_EXPORT_NAME}\.(?:mp4|jpg)", name))
 
 
 def _under(base: Path, path: Path) -> Path:
@@ -187,6 +212,7 @@ def _validate_control(directory: Path, manifest: dict) -> None:
     queue_mapping = {}
     referenced = set()
     batches = {}
+    editorial_sidecars = {}
     for lang in LANGUAGES:
         name = f"data/queue/{lang}.json"
         data = json.loads((directory / name).read_text(encoding="utf-8"))
@@ -203,6 +229,9 @@ def _validate_control(directory: Path, manifest: dict) -> None:
                         raise SnapshotError("Mídia pendente não recuperável")
                     if value in media_paths:
                         referenced.add(value)
+                        if field == "video_path" and value.startswith("data/exports/"):
+                            editorial_sidecars[str(PurePosixPath(value).with_suffix(".json"))] = (
+                                item["metadata"].get("title", item.get("title")))
                 mapping[item["id"]][field] = value
             if item.get("generation_key"):
                 story_id = item.get("story_id")
@@ -216,6 +245,14 @@ def _validate_control(directory: Path, manifest: dict) -> None:
         queue_mapping[name] = mapping
     if queue_mapping != manifest["queue_paths"] or set(media_paths) != referenced:
         raise SnapshotError("Mappings da fila divergentes do manifesto")
+    for name in manifest["files"]:
+        if re.fullmatch(_EXPORT_METADATA, name):
+            data = json.loads((directory / name).read_text(encoding="utf-8"))
+            if (name not in editorial_sidecars or not isinstance(data, dict)
+                    or not isinstance(data.get("title"), str) or not data["title"].strip()
+                    or data["title"] != editorial_sidecars[name]
+                    or _contains_credential_fields(data)):
+                raise SnapshotError("Sidecar sem vínculo editorial válido ou contém credenciais")
     for items in batches.values():
         if (len({item["generation_key"] for item in items}) != 1
                 or len({item["total"] for item in items}) != 1

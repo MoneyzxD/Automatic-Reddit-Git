@@ -1,5 +1,62 @@
+import asyncio
+from copy import deepcopy
+from types import SimpleNamespace
+
 import pytest
 from scheduler.notifier import TikTokNotifier, build_kit_message
+from scheduler.notifier import handle_telegram_command
+from scheduler import queue as queue_module
+
+
+class MensagemOperador:
+    def __init__(self, text):
+        self.text = text
+        self.respostas = []
+
+    async def reply_text(self, text, **kwargs):
+        self.respostas.append(text)
+
+
+@pytest.mark.parametrize("language", ["pt", "pt-br", "en", "es"])
+@pytest.mark.parametrize("youtube_status", ["pending", "uploading", "uploaded"])
+@pytest.mark.parametrize("command,status", [
+    ("/ok", "uploaded"), ("/fail", "failed"), ("/skip", "cancelled"),
+])
+def test_comando_tiktok_preserva_estado_youtube(
+    tmp_path, monkeypatch, language, youtube_status, command, status,
+):
+    # Regressão: confirmar o kit manual não pode confirmar/reiniciar o YouTube.
+    monkeypatch.setattr(queue_module, "_QUEUE_DIR_PATHS", [tmp_path])
+    monkeypatch.delenv("PIPELINE_STATE_REQUIRED", raising=False)
+    video = tmp_path / "kit.mp4"
+    video.write_bytes(b"video isolado")
+    item_id = queue_module.enqueue(language, video, None, {}, "História")
+    monkeypatch.setenv("PIPELINE_STATE_REQUIRED", "true")
+    if youtube_status == "uploaded":
+        queue_module.update_status(
+            language, item_id, "youtube", "uploaded", video_id="id-confirmado",
+            url="https://www.youtube.com/watch?v=id-confirmado",
+            publish_at="2026-10-07T12:00:00Z",
+            thumbnail={"status": "failed", "error": "403"},
+        )
+    elif youtube_status == "uploading":
+        queue_module.update_status(language, item_id, "youtube", "uploading")
+    before = deepcopy(queue_module.get_item(language, item_id))
+    count_before = queue_module.count_uploads_today(language)
+    last_before = queue_module.get_last_upload_time(language)
+    message = MensagemOperador(f"{command} {item_id}")
+
+    asyncio.run(handle_telegram_command(SimpleNamespace(message=message), None))
+
+    after = queue_module.get_item(language, item_id)
+    assert after["platforms"]["tiktok"]["status"] == status
+    assert after["platforms"]["youtube"] == before["platforms"]["youtube"]
+    assert after["schedule"] == before["schedule"]
+    assert queue_module.count_uploads_today(language) == count_before
+    assert queue_module.get_last_upload_time(language) == last_before
+    if youtube_status == "pending":
+        assert item_id in {item["id"] for item in queue_module.get_pending(language)}
+    assert message.respostas
 
 
 def test_build_kit_message_contains_title():

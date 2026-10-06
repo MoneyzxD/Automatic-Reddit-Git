@@ -48,6 +48,41 @@ def test_callback_vem_antes_da_thumbnail(youtube_fake):
     assert ctx.events == ["checkpoint", "thumbnail"]
 
 
+@pytest.mark.parametrize("required", [None, "false", "true"])
+@pytest.mark.parametrize("namespace", ["validation-review", "legacy-inventory"])
+def test_namespace_nao_produtivo_bloqueia_upload_sem_depender_da_flag(
+    youtube_fake, monkeypatch, required, namespace,
+):
+    ctx = youtube_fake
+    monkeypatch.setenv("PIPELINE_STATE_NAMESPACE", namespace)
+    if required is None:
+        monkeypatch.delenv("PIPELINE_STATE_REQUIRED", raising=False)
+    else:
+        monkeypatch.setenv("PIPELINE_STATE_REQUIRED", required)
+    prior = (ctx.root / "data/queue/pt.json").read_bytes()
+
+    with pytest.raises(StateError):
+        ctx.wrapper.upload_item(ctx.item, publish_at="2030-01-01T12:00:00Z")
+
+    assert (ctx.root / "data/queue/pt.json").read_bytes() == prior
+    assert ctx.video.exists()
+    assert ctx.events == []
+    ctx.service.videos.assert_not_called()
+
+
+@pytest.mark.parametrize("required", [None, "false"])
+def test_upload_local_legado_sem_namespace_continua_permitido(youtube_fake, monkeypatch, required):
+    ctx = youtube_fake
+    monkeypatch.delenv("PIPELINE_STATE_NAMESPACE", raising=False)
+    if required is None:
+        monkeypatch.delenv("PIPELINE_STATE_REQUIRED", raising=False)
+    else:
+        monkeypatch.setenv("PIPELINE_STATE_REQUIRED", required)
+    result = ctx.wrapper.upload_item(ctx.item, publish_at="2030-01-01T12:00:00Z")
+    assert result["youtube"]["status"] == "uploaded"
+    assert queue.get_item("pt", ctx.item_id)["platforms"]["youtube"]["video_id"] == "vid1"
+
+
 @pytest.mark.parametrize("exception", [StateError, OSError])
 def test_callback_falho_nao_e_engolido_apos_video_aceito(youtube_fake, exception):
     ctx = youtube_fake

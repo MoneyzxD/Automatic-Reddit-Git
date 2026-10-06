@@ -2,6 +2,20 @@
 
 ## Continuação atual — 2026-10-05
 
+Retomada: run37379031931/ac74819 falhou na geração; PT tradução aprovada,
+naturalização rejeitada por sequência de evento e ES revisão HTTP429.
+Infra/testes/estado passaram, publicação pulada e checkpoint final sem mídia
+preservado. Consulta sintética ES única em 2026-10-06 repetiu HTTP429, sem
+subtipo/Retry-After. Sem novo dispatch, monitor ativo ou liberação main.
+Revisão completa identificou três bugs corrigidos na branch: comandos TikTok
+isolados de YouTube, filenames editoriais recuperáveis com proteção de
+credenciais e upload bloqueado em namespace de teste independentemente de flag.
+955 testes/33 avisos/89.36s, compile/diff e revisão pós-delta passaram. Ainda
+não é prova de roteiro/mídia completos. Fonte/perfil/histórico conservados;
+tokenfine local continua ausente. Consulte a seção inicial de
+[RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md) e o ledger antes de continuar.
+Main/bootstrap/rodada normal/agentes aguardam os gates reais. Antecedentes abaixo.
+
 Próxima versão isolada configura Qwen3.8 fixo só no guardião, com schema/gates/
 chaves/cadência intactos. Suíte 896 passed/33 avisos/51.37s, compile/diff e
 revisão independente passaram. Sonda longa pelo código real retornou três

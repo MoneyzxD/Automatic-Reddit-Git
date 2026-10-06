@@ -99,6 +99,93 @@ def test_snapshot_restaura_fila_e_midia_em_outra_raiz(snapshot_fixture, tmp_path
         assert conn.execute("SELECT status FROM story_languages").fetchone() == ("exported",)
 
 
+@pytest.mark.parametrize("title,slug", [
+    ("Søren mentiu", "søren_mentiu"),
+    ("Łukasz mentiu", "łukasz_mentiu"),
+    ("家族秘密 mentiu", "家族秘密_mentiu"),
+    ("My brother stole my tokens", "brother_stole_tokens"),
+    ("My brother stole my credentials", "brother_stole_credentials"),
+])
+@pytest.mark.parametrize("batch", [True, False])
+def test_snapshot_restaura_nome_real_do_organizer(snapshot_fixture, tmp_path, title, slug, batch):
+    from stages.organizer import FileOrganizer
+    from utils.pipeline_snapshot import restore_snapshot
+    base, _ = snapshot_fixture
+    export = base / "data/exports/pt"
+    meta_path = export / "a.json"
+    original = queue.get_pending("pt")[0]
+    # Só a fila desta fixture temporária: o organizer vai criar o único batch.
+    data = queue._load_queue("pt")
+    data["items"] = []
+    queue._save_queue("pt", data)
+    meta = {**original["metadata"], "title": title}
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    organizer = FileOrganizer({"base_dir": str(base)})
+    paths = organizer.organize_batch([{
+        "language": "pt", "story_id": "s1", "part": 1, "total": 1,
+        "story_title": title, "video_path": export / "a.mp4",
+        "thumbnail_path": export / "a.jpg", "metadata_path": meta_path,
+    }], generation_key="b" * 64)
+    if not batch:
+        # O layout plano já usado pelo pipeline também precisa ser recuperável.
+        item = queue.get_pending("pt")[0]
+        for field, ext in [("video_path", "mp4"), ("thumbnail_path", "jpg")]:
+            source = Path(item[field])
+            destination = export / source.name
+            source.rename(destination)
+            item[field] = str(destination)
+            paths[0][ext] = str(destination)
+        Path(paths[0]["json"]).rename(Path(paths[0]["mp4"]).with_suffix(".json"))
+        data = queue._load_queue("pt")
+        data["items"] = [item]
+        queue._save_queue("pt", data)
+    assert Path(paths[0]["mp4"]).name.startswith(slug + "_")
+
+    snapshot = build(snapshot_fixture)
+    destination = tmp_path / "restored"
+    restore_snapshot(snapshot, destination)
+    restore_snapshot(snapshot, destination)
+
+    data = json.loads((destination / "data/queue/pt.json").read_text(encoding="utf-8"))
+    assert len(data["items"]) == 1
+    item = next(item for item in data["items"] if item["title"] == title)
+    video = Path(item["video_path"])
+    assert video.name == Path(paths[0]["mp4"]).name
+    assert video.is_relative_to(destination)
+    assert video.read_bytes() == b"video"
+    assert Path(item["thumbnail_path"]).read_bytes() == b"image"
+    assert json.loads(video.with_suffix(".json").read_text(encoding="utf-8"))["title"] == title
+
+
+@pytest.mark.parametrize("credential", [
+    {"access_token": "SYNTHETIC_SECRET"},
+    {"refresh_token": "SYNTHETIC_SECRET"},
+    {"installed": {"client_secret": "SYNTHETIC_SECRET"}},
+    {"youtube": {"private_key": "SYNTHETIC_SECRET"}},
+])
+def test_sidecar_editorial_nao_aceita_credenciais(snapshot_fixture, credential):
+    from utils.pipeline_snapshot import SnapshotError
+    base, _ = snapshot_fixture
+    metadata = {"title": "Source", **credential}
+    (base / "data/exports/pt/a.json").write_text(json.dumps(metadata), encoding="utf-8")
+    with pytest.raises(SnapshotError):
+        build(snapshot_fixture)
+
+
+def test_sidecar_sem_video_associado_bloqueia_restore(snapshot_fixture, tmp_path):
+    from utils.pipeline_snapshot import restore_snapshot, SnapshotError
+    snapshot = build(snapshot_fixture)
+    name = "data/exports/pt/tokens_20261005_pt.json"
+    raw = b'{"title":"Source"}'
+    member = tarfile.TarInfo(name)
+    member.size = len(raw)
+    snapshot = repack(snapshot, extra=(member, raw))
+    target = tmp_path / "restored"
+    with pytest.raises(SnapshotError):
+        restore_snapshot(snapshot, target)
+    assert not (target / "data/state/ready.json").exists()
+
+
 def test_snapshot_apos_limpeza_preserva_id_sem_midia(snapshot_fixture, tmp_path):
     from utils.pipeline_snapshot import restore_snapshot
     base, _ = snapshot_fixture

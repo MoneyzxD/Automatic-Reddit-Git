@@ -374,7 +374,7 @@ class TikTokNotifier:
 
 async def handle_telegram_command(update, context) -> None:
     """
-    Processa comandos enviados pelo operador após postagem manual.
+    Processa comandos de postagem manual no TikTok, sem alterar o YouTube.
 
     Comandos:
         /ok <video_id>    — marca como publicado
@@ -424,7 +424,6 @@ async def handle_telegram_command(update, context) -> None:
 
     if command == "/ok":
         if language:
-            queue_module.update_status(language, video_id, "youtube", "uploaded")
             queue_module.update_status(language, video_id, "tiktok",  "uploaded")
         await update.message.reply_text(
             f"✅ Marcado como publicado: `{video_id}`",
@@ -434,7 +433,6 @@ async def handle_telegram_command(update, context) -> None:
 
     elif command == "/fail":
         if language:
-            queue_module.update_status(language, video_id, "youtube", "failed")
             queue_module.update_status(language, video_id, "tiktok",  "failed")
         await update.message.reply_text(
             f"🔄 Reagendado para próxima janela: `{video_id}`",
@@ -444,7 +442,6 @@ async def handle_telegram_command(update, context) -> None:
 
     elif command == "/skip":
         if language:
-            queue_module.update_status(language, video_id, "youtube", "cancelled")
             queue_module.update_status(language, video_id, "tiktok",  "cancelled")
         await update.message.reply_text(
             f"⏭️ Item descartado: `{video_id}`",
@@ -465,7 +462,7 @@ def _find_language_for_item(video_id: str, queue_module) -> Optional[str]:
     Busca o idioma de um item pelo video_id em todas as filas.
     Retorna None se não encontrado.
     """
-    for lang in ["pt-br", "en", "es"]:
+    for lang in ["pt", "pt-br", "en", "es"]:
         try:
             queue = queue_module._load_queue(lang)
             for item in queue.get("items", []):

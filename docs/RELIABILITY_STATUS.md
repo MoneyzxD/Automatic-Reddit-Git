@@ -1,5 +1,46 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Retomada verificada — 2026-10-05 / 06 UTC
+
+Run `37379031931`/`ac74819` terminou failure em 2026-10-05 22:15:58 UTC.
+Testes, LanguageTool e restore/save privados passaram; publicação foi pulada.
+Tradução PT aprovada após 13 chamadas semânticas; naturalização PT rejeitada
+por alteração na sequência da cena do mercado, além de avisos/omissões.
+Tradução ES ficou unavailable: HTTP429/global, três tentativas, subtipo e
+Retry-After não informados. Nenhuma falha JSON registrada nesta amostra.
+Isso não comprova recuperação completa, estabilidade universal ou cota diária.
+
+Checkpoint final `complete-14` capturado em cópia privada, SHA-256 do payload
+conferido. Nove arquivos de controle, incluindo adaptação EN e tradução PT,
+sem mídia. API de artifacts confirma somente logs; nenhum MP4/JPG novo.
+Consulta sintética única ES em 2026-10-06 também recebeu HTTP429, sem subtipo
+ou Retry-After. Não redisparar o lote nem trocar chave/modelo para contornar isso.
+Não existe monitor de dispatch ativo; sessões antigas não sobrevivem à retomada.
+
+Revisão independente completa de `23f7f9c..ac74819`: três achados Important
+reproduzidos e corrigidos, só na branch isolada:
+
+- Comandos do kit TikTok não alteram mais YouTube; lookup encontra `pt`.
+- Snapshot aceita basenames Unicode do organizer. JSON editorial com palavra
+  tokens/credentials exige MP4 associado à fila/manifesto, título compatível
+  e ausência de campos OAuth/credenciais, inclusive aninhados. IDs, diretórios,
+  hashes, travessia, links e colisões continuam protegidos.
+- Namespace explícito não-production bloqueia upload mesmo sem flag required;
+  o modo local legado sem namespace permanece compatível.
+
+RED/GREEN reproduzidos; suíte fresh **955 passed**, 33 avisos de depreciação,
+89.36s. Compile/diff check passaram. Revisor pós-delta: 134 testes/26.92s,
+quatro avisos, nenhum Critical/Important novo. Aprovação técnica do delta,
+não de main/produção. Detalhes privados no ledger da worktree.
+
+Próximos gates: investigar os reparos PT rejeitados sem relaxar fidelidade,
+restabelecer serviço ES, gerar/inspecionar os três idiomas e restaurar mídia em
+outro runner. Depois bootstrap reconciliado, main e rodada normal. Terminal
+rejected não é reaberto automaticamente. Token limitado de estado ainda ausente
+no ambiente local; o Secret Actions não fornece seu valor de volta. Não usar
+a credencial ampla do gh para essa importação. Agentes permanecem posteriores.
+Os blocos abaixo são antecedentes, não instruções para repetir dispatches.
+
 ## Próxima validação: guardião Qwen fixo — 2026-10-05
 
 Branch isolada passa a configurar `qwen/qwen3.8-27b` somente para o guardião.
