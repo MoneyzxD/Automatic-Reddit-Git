@@ -2,6 +2,16 @@
 
 Ordem definida pelo operador em 2026-10-04.
 
+Continuação em 2026-10-06: captura real localizou unavailable de naturalização
+PT (HTTP429; subtipo não comprovado), após aprovações EN/adaptação e PT/tradução.
+Sonda sintética encontrou JSON válido parcial (`finish_reason=length`);
+correção de conclusão/teto/esforço Qwen passou na suíte de 1.047 testes.
+Detalhes e limites no [status](RELIABILITY_STATUS.md). Nova validação isolada
+precisa atravessar todos os gates atuais, sem reutilizar aprovações anteriores
+como evidência da correção. Isso não libera main nem comprova geração completa.
+Avaliação [Plus/SIWC](OPENAI_PLUS_FEASIBILITY.md) permanece condicional, sem
+migração/OAuth implementados; não é dependência para resolver o backlog Groq.
+
 ## 1. Investigar falhas anteriores — evidência histórica limitada
 
 Logs preservados dos runs 37128480329 e 37209564422: ambos interromperam a

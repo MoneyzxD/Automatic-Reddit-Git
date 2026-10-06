@@ -165,6 +165,8 @@ script_quality:
   max_repair_attempts: 2
   semantic_max_attempts: 3
   semantic_timeout_seconds: 60
+  # Teto configurável só do JSON do guardião; length nunca autoriza aprovação.
+  semantic_max_completion_tokens: 2048
   semantic_retry_wait_seconds: 15
   semantic_max_retry_wait_seconds: 120
   languagetool_enabled: true

@@ -1,6 +1,39 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
-## Validação real atual — 2026-10-06
+## Conclusão parcial detectada — 2026-10-06
+
+[Run 37479460583](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37479460583)
+em `b8c9da9` terminou failure após 16m42s. Adaptação EN e tradução PT foram
+aprovadas; naturalização PT ficou unavailable por HTTP429/chunk/três tentativas.
+Diagnóstico novo foi preservado: payload 21.917 bytes/21.559 caracteres,
+sem teto explícito de saída, TPM 8.000/restante 8.000, RPD 1.000/restante 991.
+Subtipo/Retry-After ausentes. Isso não demonstra RPM/TPD/OTPM disponíveis nem
+comprova que o tamanho seja a causa. ES e mídia não foram alcançados; upload
+pulado. Estado isolado íntegro: sequência 13, nove controles, zero mídia.
+
+Sonda única confirmou outro defeito, separado do 429: extração factual PT
+retornou JSON válido com `finish_reason=length`, que o guardião não verificava.
+Fonte foi conferida offline como exatamente a fixture pública TEST_STORY_MALE;
+nenhuma história privada do Reddit foi usada na sonda. A comparação na mesma
+chave/modelo, saída limitada a 2.048 e `reasoning_effort=none`, terminou em
+`stop`, com 993 tokens de saída em vez de 2.048. Contagem/JSON não comprovam
+cobertura factual nem qualidade editorial; não é replay do 429 do Actions.
+
+Correção na branch: só `stop` com conteúdo permite continuar aos parsers/gates;
+JSON válido parcial também falha. `incomplete_response` encerra imediatamente,
+sem repetir sob o mesmo teto. Retry de HTTP429/transporte/schema é preservado.
+Teto de JSON configurável `semantic_max_completion_tokens: 2048`, somente do
+guardião; geração do roteiro inteiro mantém seu orçamento anterior. `none`
+explícito só no Qwen ativo; modelo/chave, schema, fontes e gates não alternam.
+É um limite deliberado, não garantia de caber na cota ou atender qualquer história.
+
+RED independente: 45 falhas/26 passes; foco 331 passes; suíte fresh **1.047
+passes**, 33 avisos legados. A próxima prova deve executar os gates atuais desde
+o início em namespace novo isolado, preservando o anterior: aprovações obtidas
+antes da checagem de conclusão não demonstram aceite desta correção. Production,
+main, mídia, rodada normal e agentes continuam pendentes do backlog.
+
+## Instrumentação anterior — 2026-10-06
 
 Instrumentação autorizada após capturas Usage/Limits do operador: o consumo
 Qwen mostrado não demonstra cota diária esgotada; o subtipo do último 429
@@ -14,11 +47,11 @@ somente o desfecho do SDK e streaming permanece sem consumo pelo diagnóstico.
 Prova local: 9 testes RED pela captura ausente; overflow adversarial reproduzido
 e corrigido; 262 testes focados passaram e revisão independente ficou sem
 achados pendentes. Suíte completa pós-ajuste: 976 testes, 33 avisos legados.
-Ainda falta prova dos metadados e geração real no Actions; esses testes não
+A captura acima comprovou os metadados no Actions; esses testes não
 declaram causa da recusa nem aceitam mídia/main. Avaliação do Plus concluída em
 [OPENAI_PLUS_FEASIBILITY](OPENAI_PLUS_FEASIBILITY.md): alternativa condicional,
-não migração implementada. Retomar validação isolada no namespace existente
-`validation-reliability-20261006-anchors`, preservando produção e históricos.
+não migração implementada. O namespace `validation-reliability-20261006-anchors`
+foi preservado; a próxima validação segue a decisão de conclusão descrita acima.
 
 [Run 37408357221](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37408357221)
 em `1947aee4` terminou **failure em 4m36s**. Os **959 testes passaram em

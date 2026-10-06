@@ -209,6 +209,16 @@ locais.
 | Tempo de processamento por história não é métrica relevante | Workflow é batch + publicação agendada pro dia seguinte, não tempo real |
 | 100% ferramentas gratuitas, sem exceção | Restrição dura do operador — nunca proponha alternativa paga, mesmo de custo irrisório |
 
+Exceção estreita em validação de confiabilidade (2026-10-06): o JSON de revisão
+pontual do guardião tem teto **configurável** `semantic_max_completion_tokens`
+(2.048 nesta prova), não o orçamento de geração de um roteiro inteiro. Resposta
+`length` nunca é aceita, mesmo parseável; torna indisponível sem retry sob o
+mesmo teto. Qwen da revisão usa `none` explicitamente; os demais modelos/etapas
+mantêm seu esforço. Essa mudança não garante suficiência para qualquer tamanho
+nem identifica o subtipo do 429. História maior pode exigir ajuste medido do
+orçamento/divisão lossless antes de passar os mesmos gates, nunca truncamento
+de fonte/fatos para publicar. Veja [evidência](docs/RELIABILITY_STATUS.md).
+
 ## Correções ao CLAUDE.md anterior (agora refletidas no AGENTS.md)
 
 Coisas que o `CLAUDE.md` antigo dizia e que não batem mais com o código real:

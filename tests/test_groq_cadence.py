@@ -76,7 +76,8 @@ def test_sdk_serializa_contrato_estrito_do_guardiao_no_corpo_http(clock, monkeyp
         mode=mode, language="pt", candidate_text="Texto sintético.", source_chunk="Fonte sintética.")
     request = calls[0][1]
     assert request["model"] == (model or "openai/gpt-oss-20b")
-    assert request["reasoning_effort"] == "low"
+    assert request["reasoning_effort"] == ("none" if model == "qwen/qwen3.8-27b" else "low")
+    assert request["max_completion_tokens"] == 2048
     assert request["response_format"]["type"] == "json_schema"
     contract = request["response_format"]["json_schema"]
     assert contract["strict"] is True

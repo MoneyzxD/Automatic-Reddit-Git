@@ -642,7 +642,7 @@ def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfi
         calls.append(kwargs)
         context = json.loads(kwargs["messages"][1]["content"])
         raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
 
     def tracked(key, stage, **kwargs):
         clients.append((key, stage))
@@ -668,7 +668,7 @@ def test_exemplo_de_revisao_enviado_ao_modelo_inclui_campos_obrigatorios(monkeyp
 
     def create(**kwargs):
         requests.append(kwargs)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"), finish_reason="stop")])
 
     monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
     monkeypatch.setattr(groq_client, "tracked_groq", lambda *args, **kwargs:
@@ -698,7 +698,7 @@ def test_rejeicao_json_validate_failed_prevenida_pelo_schema(tmp_path, perfil_fe
             raise exc
         context = json.loads(kwargs["messages"][1]["content"])
         raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
 
     monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
     monkeypatch.setattr(groq_client, "tracked_groq", lambda *args, **kwargs:
@@ -718,7 +718,7 @@ def test_contrato_estrito_do_provider_preserva_fatos_e_patches(monkeypatch, mode
 
     def create(**kwargs):
         calls.append(kwargs)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"), finish_reason="stop")])
 
     monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
     monkeypatch.setattr(groq_client, "tracked_groq", lambda *args, **kwargs:
