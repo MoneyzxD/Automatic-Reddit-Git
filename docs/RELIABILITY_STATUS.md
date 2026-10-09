@@ -2,6 +2,29 @@
 
 ## Retomada prioritária de publicação — 2026-10-09
 
+Validação isolada [37960605093](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37960605093)
+em `4814663`: preparo FFmpeg passou em 35s; LT/testes/restore passaram.
+Geração falhou por HTTP429 na revisão da adaptação EN/chunk/três tentativas,
+antes de mídia e upload. Payload final 20.716 bytes, teto de saída 2.048;
+TPM/RPD restantes não identificam sozinhos o limite responsável. Falha de
+geração e OAuth vencido são bloqueios separados.
+
+Delta candidato compacta o contexto HTTP sem remover fatos: citações já no
+source_chunk usam referências de offsets lossless; citações externas continuam
+literais. Fonte, candidato, perfil, schema de saída, gates, modelo/chave e retry
+não mudam. Teste sintético independente reconstruiu as citações e mediu
+15.626 → 11.876 caracteres de contexto. Suíte local: 1.064 passes/33 avisos;
+revisão independente sem achados. Sondas longas receberam 429 e depois 200;
+isso não prova causa do 429, compreensão editorial das referências nem vídeo
+completo. A versão só será aceita após geração/inspeção/restore reais.
+
+Captura privada [37962565002](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37962565002)
+do cache exato de hoje (`37953540179`) passou; archive e entradas conferidos
+por SHA. As três filas são byte-identical à captura de 04/10: 84 IDs conhecidos,
+sete itens sem ID. DB atual conserva apenas sete histórias/zero partes; não
+substitui o candidato reconciliado de 30 histórias/91 partes. Comparar também
+os registros seen antes da importação. Nenhum head production criado.
+
 [Run 37953540179](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37953540179)
 agendado em main/30a0a0c falhou na revisão da adaptação EN após três chamadas;
 HTTP original não foi preservado pela versão antiga. Publicação foi pulada.

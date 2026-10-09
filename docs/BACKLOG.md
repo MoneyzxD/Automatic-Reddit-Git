@@ -9,6 +9,13 @@ invalid_grant; renovação interativa solicitada, sem mudar datas ficticiamente.
 Completar geração/inspeção/restore isolados, importar a reconciliação aprovada
 e integrar main para confirmar uma rodada normal. Ver [status](RELIABILITY_STATUS.md).
 
+Prova09/10: preparo FFmpeg recuperado no Actions; geração37960605093 ainda
+HTTP429/adaptaçãoEN e sem mídia. Contexto HTTP lossless compactado/revisado,
+1.064 testes locais; sondas longas alternaram429/200, sem aceite editorial.
+Próxima prova é geração completa isolada, não afrouxar gates nem alternar chaves.
+Captura37962565002 conserva84IDs/7pendentes; conferir seen recentes contra
+candidato reconciliado antes de production. Renovação OAuth aguarda operador.
+
 Continuação em 2026-10-06: captura real localizou unavailable de naturalização
 PT (HTTP429; subtipo não comprovado), após aprovações EN/adaptação e PT/tradução.
 Sonda sintética encontrou JSON válido parcial (`finish_reason=length`);
