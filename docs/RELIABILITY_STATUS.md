@@ -1,5 +1,29 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Retomada prioritária de publicação — 2026-10-09
+
+[Run 37953540179](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37953540179)
+agendado em main/30a0a0c falhou na revisão da adaptação EN após três chamadas;
+HTTP original não foi preservado pela versão antiga. Publicação foi pulada.
+Os runs agendados de 06–09/10 ainda usam main anterior, não a branch de reparo.
+Não atribuir essas falhas ao OAuth nem inferir 429 sem diagnóstico.
+
+Refresh dos três tokens locais foi conferido com o Google, sem salvar arquivos:
+PT/EN/ES retornaram invalid_grant. Secrets YOUTUBE_TOKEN_* não atualizados desde
+30/09; valores não acessados. Operador orientado a renovar pelo script da raiz
+com --all --github --repo MoneyzxD/Automatic-Reddit-Git, confirmando cada canal.
+Status OAuth só pode mudar após renovação efetiva, nunca pela data da investigação.
+
+Validação 37486166670/28ff32b cancelada em 06/10 após cerca de dez minutos
+na preparação FFmpeg, antes de Python/LT/restore/geração. Não identifica qual
+comando interno parou. Correção estreita limita comandos e step, registra fase
+e código, mantém FFmpeg/DejaVu e não mata APT ativo. Teste de fonte ausente também
+impede preparação verde sem DejaVu. Testes de shell são isolados, não instalação
+real. Próximo teste reutiliza validation-reliability-20261006-completion, que
+não chegou a receber estado/gates nesse run; sem upload de histórias de teste.
+Histórico reconciliado e 84 IDs permanecem preservados. Production sem checkpoint
+completo, main não integrado e retorno à publicação ainda não comprovado.
+
 ## Conclusão parcial detectada — 2026-10-06
 
 [Run 37479460583](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37479460583)

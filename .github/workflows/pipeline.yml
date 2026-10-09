@@ -94,29 +94,44 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Instalar FFmpeg
+        timeout-minutes: 8
         run: |
-          # A imagem do runner as vezes sobe com o apt-daily/unattended-upgrade
-          # rodando em segundo plano segurando o lock do dpkg — sem isto o
-          # apt-get install fica esperando o lock indefinidamente (visto
-          # travado 1h+ num run real, antes ate do Python ser configurado).
-          sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
-          sudo systemctl kill --kill-who=all apt-daily.service 2>/dev/null || true
-          timeout 60 bash -c 'while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done' || true
+          set -Eeuo pipefail
+          phase=timer
+          trap 'code=$?; echo "ERRO preparação FFmpeg: fase=$phase codigo=$code" >&2; exit "$code"' ERR
+          echo "Preparação FFmpeg: fase=$phase"
+          # Não matar o APT ativo: o lock tem limite próprio abaixo. Parar
+          # timers é opcional, mas também não pode prender toda a preparação.
+          if ! timeout --kill-after=5s 20s sudo -n systemctl stop apt-daily.timer apt-daily-upgrade.timer; then
+            echo "AVISO: timers APT não foram parados; instalação ainda exige lock limitado."
+          fi
           # Repositorio do Google Chrome vem pre-configurado na imagem do
           # runner mas a gente nao usa — as vezes o indice dele da "Hash
           # Sum mismatch" (falha do lado do Google) e derruba o apt-get
           # update inteiro por causa de uma fonte que nao precisamos.
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          ffmpeg -version | head -1
+          phase=chrome
+          echo "Preparação FFmpeg: fase=$phase"
+          timeout --kill-after=5s 10s sudo -n rm -f /etc/apt/sources.list.d/google-chrome.list
+          apt_options=(-o DPkg::Lock::Timeout=60 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 -o Dpkg::Use-Pty=0)
+          phase=update
+          echo "Preparação FFmpeg: fase=$phase"
+          timeout --kill-after=10s 120s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" update
           # Sem isto, stages/thumbnail.py nao acha nenhuma fonte TTF da
           # lista de candidatos e cai pro fonte bitmap padrao do Pillow —
           # minuscula, e o calculo de quebra de linha (feito pro tamanho
           # da TTF pedida) fica todo errado: texto sai tremido e vazando
           # pra fora do card (visto num run real, hook de 2 frases).
-          sudo apt-get install -y -qq fonts-dejavu-core
-          fc-list | grep -i dejavu | head -3
+          phase=install
+          echo "Preparação FFmpeg: fase=$phase"
+          timeout --kill-after=10s 180s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y ffmpeg fonts-dejavu-core
+          phase=ffmpeg
+          echo "Preparação FFmpeg: fase=$phase"
+          timeout --kill-after=5s 10s ffmpeg -version | sed -n '1p'
+          phase=fonts
+          echo "Preparação FFmpeg: fase=$phase"
+          fonts=$(timeout --kill-after=5s 10s fc-list | sed -n '/[Dd]eja[Vv]u/p')
+          [[ -n "$fonts" ]]
+          printf '%s\n' "$fonts"
 
       - name: Configurar Python
         uses: actions/setup-python@v5

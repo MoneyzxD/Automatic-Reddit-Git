@@ -2,6 +2,13 @@
 
 Ordem definida pelo operador em 2026-10-04.
 
+Prioridade reafirmada em 2026-10-09: voltar a publicar, antes de agentes ou
+migração de provedor. Main agendado continua na versão antiga e falhou na
+adaptação EN antes do upload. Três refresh tokens locais recusados com
+invalid_grant; renovação interativa solicitada, sem mudar datas ficticiamente.
+Completar geração/inspeção/restore isolados, importar a reconciliação aprovada
+e integrar main para confirmar uma rodada normal. Ver [status](RELIABILITY_STATUS.md).
+
 Continuação em 2026-10-06: captura real localizou unavailable de naturalização
 PT (HTTP429; subtipo não comprovado), após aprovações EN/adaptação e PT/tradução.
 Sonda sintética encontrou JSON válido parcial (`finish_reason=length`);
