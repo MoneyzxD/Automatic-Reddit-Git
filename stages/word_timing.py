@@ -65,11 +65,11 @@ _whisper_model = None
 
 def _seconds_to_ass(t: float) -> str:
     """Converte segundos para formato ASS: H:MM:SS.cc"""
-    t  = max(0.0, t)
-    h  = int(t // 3600)
-    m  = int((t % 3600) // 60)
-    s  = int(t % 60)
-    cs = int(round((t % 1) * 100))
+    # Arredonda antes de separar campos: nunca emitir SS.100 no ASS.
+    centiseconds = int(round(max(0.0, t) * 100))
+    seconds, cs = divmod(centiseconds, 100)
+    h, remainder = divmod(seconds, 3600)
+    m, s = divmod(remainder, 60)
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
@@ -429,7 +429,7 @@ def generate_ass(word_boundaries: list, output_path: Path, skip_before: float = 
     bounce = _bounce_tag()
     lines  = [ASS_HEADER]
 
-    for wb in word_boundaries:
+    for index, wb in enumerate(word_boundaries):
         if float(wb.get("start", 0.0)) < skip_before:
             continue
 
@@ -442,6 +442,11 @@ def generate_ass(word_boundaries: list, output_path: Path, skip_before: float = 
         start    = float(wb["start"])
         duration = max(0.20, float(wb["duration"]))
         end      = start + max(duration, 0.35)
+        # O piso visual não pode manter duas palavras na mesma posição.
+        if index + 1 < len(word_boundaries):
+            end = min(end, float(word_boundaries[index + 1]["start"]))
+        if round(end * 100) <= round(start * 100):
+            continue
 
         lines.append(
             f"Dialogue: 0,{_seconds_to_ass(start)},{_seconds_to_ass(end)},"
