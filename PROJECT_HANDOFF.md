@@ -1,5 +1,29 @@
 # PROJECT_HANDOFF.md
 
+## Retomada prioritária — 2026-10-09
+
+Produção ainda não liberada. Fonte de status: [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md).
+Main30a0a0c continua falhando antes do upload; HTTP antigo não permite atribuir
+todos os incidentes à mesma causa. Refresh local dos três tokens YouTube
+confirmado invalid_grant; operador deve renovar pelo script da raiz com
+`--all --github --repo MoneyzxD/Automatic-Reddit-Git`. Não usar --github-only
+com os tokens expirados, nem mudar datas de OAuth antes da renovação real.
+
+Branchpipeline-reliability/2def796 contém preparoFFmpeg limitado/com diagnóstico
+(provado no runner) e contexto semântico compactado sem perda de evidências
+(1.064 testes/revisão independente; não prova editorial completa).
+Run37965391481 isolado/test-story/PTENES/no-upload ainda em execução em17:39UTC:
+EN/adaptação e PT/tradução/naturalização aprovadas; zero mídia. Monitor28534,
+namespacevalidation-reliability-20261006-completion. Conferir seu resultado
+antes de qualquer novo dispatch; não publicar histórias de teste.
+
+Captura privada37962565002 do cache exato37953540179 preserva84IDs/7semID;
+filas idênticas04/10, DB recente7histórias/0partes. Todos sete IDs seen atuais
+já estão no candidato reconciliado30histórias/91partes, cujo digest permanece
+igual. Não importar DB recente vazio de partes, apagar cache/IDs ou bootstrap
+às cegas. Geração/inspeção/verify reais, bootstrap aprovado, main e rodada
+normal ainda pendentes. Agentes/Plus ficam depois da recuperação operacional.
+
 ## Continuação atual — 2026-10-05
 
 Atualização mais recente: run 37408357221/1947aee4 falhou na adaptação EN por

@@ -2,6 +2,17 @@
 
 ## Retomada prioritária de publicação — 2026-10-09
 
+Teste atual [37965391481](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37965391481),
+branch `2def796`, PT/EN/ES sintéticos e sem upload, reutiliza somente o namespace
+isolado de conclusão. Em 17:39 UTC: preparo/LT/testes/restore passaram;
+checkpoint sequência10 conserva EN/adaptação e PT/tradução/naturalização
+aprovadas, zero mídia. Ainda em execução: não declarar geração completa,
+restore de mídia, bootstrap production ou publicação resolvidos.
+Tokens locais ainda datados30/09; renovação interativa pelo operador pendente.
+Os cinco seen novos desde a captura04/10 já constam no candidato reconciliado;
+nenhum dos sete IDs atuais falta no DB de30histórias. Inventário/digest aprovados
+não alterados. Main permanece na versão anterior.
+
 Validação isolada [37960605093](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37960605093)
 em `4814663`: preparo FFmpeg passou em 35s; LT/testes/restore passaram.
 Geração falhou por HTTP429 na revisão da adaptação EN/chunk/três tentativas,
