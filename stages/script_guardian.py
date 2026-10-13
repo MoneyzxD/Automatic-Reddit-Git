@@ -126,6 +126,19 @@ class QualityUnavailable(QualityGateError):
     pass
 
 
+def _anchor_semantic_patch(text, patch, offset=0, scope="chunk"):
+    """Posição do modelo não substitui evidência literal única no bloco recebido."""
+    first = text.find(patch.original)
+    if first < 0:
+        return replace(patch, start=-1, anchor_error=f"{scope}_original_missing")
+    if (patch.start is not None and
+            text[patch.start:patch.start + len(patch.original)] == patch.original):
+        return replace(patch, start=patch.start + offset)
+    if text.find(patch.original, first + 1) < 0:
+        return replace(patch, start=first + offset)
+    return replace(patch, start=-1, anchor_error=f"{scope}_offset_mismatch")
+
+
 def parse_semantic_review(raw: str | None) -> ReviewOutcome:
     """Converte a resposta sem inferir tipos nem aprovar achados críticos."""
     unavailable = ReviewOutcome("unavailable", (), (), 0, raw if isinstance(raw, str) else "")
@@ -474,6 +487,8 @@ class _GroqReviewer:
                 "sem repetição, em ordem e contíguos; nunca pule uma unidade entre duas selecionadas. "
                 "Não retorne source_quote: o código copia a evidência original das unidades. "
                 "value deve respeitar o contexto, atribuição e negações da fonte, sem inferir fatos. "
+                "Estados físicos, aparência e relacionamentos não são declarações de gênero. "
+                "Registre o evento e seu sujeito literal, sem inventar identidade a partir deles. "
                 "Se houver retry_feedback, corrija o defeito indicado sem mudar a fonte."
             )
         else:
@@ -483,7 +498,13 @@ class _GroqReviewer:
                 "relações, valores, negações, eventos, atribuição, continuidade e desfecho. "
                 "O perfil é imutável. Verifique quem é o sujeito real: jamais aplique o gênero "
                 "do narrador a outro personagem, mesmo se uma revisão anterior fez isso. "
+                "Concordância não autoriza mudar os fatos: se a fonte diz que quem narra está "
+                "grávido, preserve esse evento e seu sujeito, ajustando só a flexão ao perfil. "
+                "Não transfira a gravidez para outra pessoa nem invente parentesco para justificá-la. "
                 "Verifique novamente todo texto recebido, inclusive correções anteriores. "
+                "language_tool_findings traz achados gramaticais no candidato atual: "
+                "ofereça reparos pontuais mesmo quando o LanguageTool não tiver sugestões. "
+                "As sugestões são hipóteses: confirme a gramática no contexto antes de usá-las. "
                 "No modo global procure contradições e omissões entre os blocos. "
                 "As source_quote literais têm autoridade sobre value: rejeite resumos de "
                 "fatos que contradigam suas citações, mesmo se o candidato repetir o resumo. "
@@ -496,10 +517,15 @@ class _GroqReviewer:
                 "cobertura de todos os fatos. Títulos, hooks, metadados e partes/pre_tts "
                 "são recortes deliberados: não exija que repitam a história inteira. "
                 "Não reescreva o roteiro inteiro; ofereça só substituições pontuais exatas. "
+                "Emita somente problemas verificados. Compare fonte e candidato antes de apontar "
+                "divergência; paráfrases equivalentes e trechos corretos não são achados. "
+                "reason deve ser uma explicação breve da diferença concreta, sem perguntas, "
+                "raciocínio exploratório ou elogios a trechos corretos. "
                 "Todos os campos de cada issue são obrigatórios, inclusive reason e start. "
                 "reason deve explicar o achado; nunca omita o motivo. "
-                "start é offset Python relativo ao candidate_text recebido: envie um inteiro "
-                "quando souber a posição, ou null quando não precisar dela; nunca omita start. "
+                "Prefira start:null e um original literal único; amplie o contexto exato "
+                "quando o trecho se repetir. Não estime posições numéricas. start, se "
+                "conhecido, é offset Python no candidate_text recebido; nunca omita o campo. "
                 f"Categorias permitidas: {', '.join(REVIEW_CATEGORIES)}. "
                 'Retorne somente JSON estrito: {"approved":true,"issues":[{"original":'
                 '"trecho exato","replacement":"correção pontual ou vazio",'
@@ -774,35 +800,36 @@ class ScriptGuardian:
         position = candidate_chunk.start / candidate_length * source_chunks[-1].end
         return next(c.text for c in source_chunks if c.end > position)
 
-    def _semantic_pass(self, source_text, text, language, stage, profile, factual_context):
+    def _semantic_pass(self, source_text, text, language, stage, profile, factual_context,
+                       language_tool_findings=()):
         issues, patches = [], []
         source_chunks = split_lossless(source_text, self.chunk_chars)
         for chunk in split_lossless(text, self.chunk_chars):
+            findings = [{**finding, "start": finding["start"] - chunk.start,
+                         "end": finding["end"] - chunk.start}
+                        for finding in language_tool_findings
+                        if chunk.start <= finding["start"] and finding["end"] <= chunk.end]
             outcome = self._request(
                 mode="chunk", source_text=source_text, language=language, stage=stage,
                 profile=asdict(profile), candidate_text=chunk.text, factual_context=factual_context,
                 source_chunk=self._relevant_source(source_chunks, chunk, len(text)),
+                **({"language_tool_findings": findings} if findings else {}),
             )
             issues.extend(outcome.issues)
             for patch in outcome.patches:
-                if patch.original not in chunk.text:
-                    patches.append(replace(patch, start=-1, anchor_error="chunk_original_missing"))
-                elif (patch.start is not None and
-                        chunk.text[patch.start:patch.start + len(patch.original)] != patch.original):
-                    # Um offset do modelo nunca pode escapar do bloco que ele revisou.
-                    patches.append(replace(patch, start=-1, anchor_error="chunk_offset_mismatch"))
-                else:
-                    patches.append(replace(patch, start=patch.start + chunk.start)
-                                   if patch.start is not None else patch)
+                patches.append(_anchor_semantic_patch(chunk.text, patch, chunk.start))
             if outcome.status == "rejected" and not outcome.issues:
                 issues.append(ReviewIssue("factual", "critical", "Revisão recusada sem justificativa"))
         outcome = self._request(
             mode="global", source_text=source_text, language=language, stage=stage,
             profile=asdict(profile), candidate_text=text, factual_context=factual_context,
             source_chunk=source_text if len(source_text) <= self.chunk_chars else "",
+            **({"language_tool_findings": list(language_tool_findings)}
+               if language_tool_findings else {}),
         )
         issues.extend(outcome.issues)
-        patches.extend(outcome.patches)
+        patches.extend(_anchor_semantic_patch(text, patch, scope="global")
+                       for patch in outcome.patches)
         if outcome.status == "rejected" and not outcome.issues:
             issues.append(ReviewIssue("factual", "critical", "Revisão global recusada sem justificativa"))
         return list(dict.fromkeys(issues)), list(dict.fromkeys(patches))
@@ -832,7 +859,7 @@ class ScriptGuardian:
                 glossary_patches = list(self.glossary.findings(source_text, text, language))
                 issues.extend(ReviewIssue(p.category, p.severity, p.reason, p.original,
                                           p.subject, p.source_quote, "glossary") for p in glossary_patches)
-                lt_patches = []
+                lt_patches, lt_findings = [], []
                 if self.config.get("languagetool_enabled", True):
                     try:
                         findings = self.languagetool.check(text, language)
@@ -845,13 +872,17 @@ class ScriptGuardian:
                         category, severity = ("style", "warning") if style else ("grammar", "critical")
                         issues.append(ReviewIssue(category, severity, finding.message,
                                                   finding.original, origin="languagetool"))
+                        if not style:
+                            lt_findings.append({"original": finding.original, "message": finding.message,
+                                                "start": finding.start, "end": finding.end,
+                                                "replacements": finding.replacements})
                         # Estilo só avisa; sugestão mecânica não reescreve a narrativa.
                         if finding.replacements and not style:
                             lt_patches.append(TextPatch(finding.original, finding.replacements[0], category,
                                                         severity, "text", finding.message, "", finding.start))
                 factual_context = self._collect_facts(source_text, language)
                 semantic_issues, semantic_patches = self._semantic_pass(
-                    source_text, text, language, stage, profile, factual_context)
+                    source_text, text, language, stage, profile, factual_context, lt_findings)
                 issues.extend(semantic_issues)
                 if attempt < self.max_repairs:
                     result = validate_and_apply_patches(text, glossary_patches + semantic_patches + lt_patches,
@@ -901,4 +932,5 @@ class ScriptGuardian:
                 "original_chars": len(patch.original), "replacement_chars": len(patch.replacement),
                 "anchor_error": patch.anchor_error if patch.anchor_error in {
                     "chunk_original_missing", "chunk_offset_mismatch",
+                    "global_original_missing", "global_offset_mismatch",
                 } else None}

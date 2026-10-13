@@ -403,8 +403,8 @@ TEST_STORY = TEST_STORY_MALE      # 1 parte  (~4-5 min) — narrador masculino, 
 # ── EXPANSAO DE SIGLAS REDDIT ─────────────────────────────────────────────────
 
 REDDIT_AGE_GENDER_EN = [
-    (r"\((\d+)F\)",  "{1}-year-old woman"),
-    (r"\((\d+)M\)",  "{1}-year-old man"),
+    (r"\((\d+)F\)",  "({1}-year-old woman)"),
+    (r"\((\d+)M\)",  "({1}-year-old man)"),
     (r"\b(\d+)F\b",  "{1}-year-old woman"),
     (r"\b(\d+)M\b",  "{1}-year-old man"),
 ]
@@ -736,8 +736,11 @@ def run_pipeline(
             return
         recovery = db.recovery_record(story_id)
         if recovery:
+            # Retomada usa a fonte imutável, mesmo após mudanças na expansão.
+            source_hash = recovery["source_sha256"]
             restored = load_source(BASE_DIR, story_id, source_hash)
             story, expanded_source = restored["story"], restored["expanded_source"]
+            story_title = story.get("title", story_id)
         else:
             save_source(BASE_DIR, story, source_hash, expanded_source=expanded_source)
         db.register_story(story, languages, source_hash)

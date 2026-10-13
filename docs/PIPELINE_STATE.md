@@ -3,6 +3,13 @@
 Status: integrado em main; bootstrap e publicação recuperada confirmados em 13/10.
 Teste unitário/fake HTTP não comprova persistência no GitHub nem upload real.
 
+Normal38425392437 terminou por cancelamento assistido após oito estados EN/ES
+rejeitados, sem mídia nova. Snapshot final production/seq47 mantém91IDs, nenhuma
+pendência de upload e nenhuma linguagem processing/pending/unavailable. Fontes,
+perfis e etapas aprovadas permanecem preservados; rejeitados não são retomáveis.
+Mudanças na expansão de abreviações só afetam fontes novas: retomadas usam hash e
+texto expandido persistidos, sem recalcular a identidade pela regra nova.
+
 ## Autoridade e pré-requisitos
 
 O snapshot privado contém backup SQLite, filas explícitas, fonte/perfil e

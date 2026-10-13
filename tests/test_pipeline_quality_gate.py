@@ -164,6 +164,53 @@ def pipeline(monkeypatch, tmp_path):
     return state
 
 
+@pytest.mark.parametrize("status", ["pending", "unavailable"])
+def test_retomada_preserva_expansao_legada_hash_perfil_e_etapa_aprovada(pipeline, monkeypatch, status):
+    import hashlib
+    from stages.adapter import StoryAdapter
+    from stages.narrator_profile import NarratorProfileResolver, save_profile, load_profile, source_sha256
+    from utils.db import PipelineDB
+    from utils.pipeline_recovery import save_source, save_approved_step, load_approved_step
+
+    story = main.TEST_STORY
+    legacy_source = story["text"].replace("(28F)", "28-year-old woman")
+    legacy_hash = source_sha256(story["title"], legacy_source)
+    assert legacy_hash != source_sha256(story["title"], main.expand_age_gender_en(story["text"]))
+    source_path = save_source(pipeline.root, story, legacy_hash, expanded_source=legacy_source)
+    resolver = NarratorProfileResolver({}, semantic_enabled=False)
+    profile = resolver.resolve(story_id=story["id"], title=story["title"], original_text=legacy_source)
+    profile_path = save_profile(profile, pipeline.root)
+    database = PipelineDB(pipeline.root / "db" / "pipeline.db")
+    database.register_story(story, ["pt"], legacy_hash)
+    database.set_language_status(story["id"], "pt", "processing", profile_id=profile.profile_id)
+    if status == "unavailable":
+        database.set_language_status(story["id"], "pt", status)
+    else:
+        # Pending com perfil travado representa um idioma ainda não iniciado.
+        database.register_story(story, ["es"], legacy_hash)
+        database.set_language_status(story["id"], "pt", "unavailable")
+    language = "es" if status == "pending" else "pt"
+    cached = {"source_sha256": legacy_hash, "profile_id": profile.profile_id,
+              "input_sha256": hashlib.sha256(legacy_source.encode("utf-8")).hexdigest(),
+              "text": legacy_source, "factual_context": ""}
+    save_approved_step(pipeline.root, story["id"], "en", "adaptation", cached)
+    original_source, original_profile = source_path.read_bytes(), profile_path.read_bytes()
+    adapt = Mock(side_effect=AssertionError("Etapa aprovada não deve ser refeita"))
+    monkeypatch.setattr(StoryAdapter, "adapt", adapt)
+
+    main.run_pipeline(pipeline.config, [language])
+
+    adapt.assert_not_called()
+    assert pipeline.audios and {lang for _, lang, _ in pipeline.audios} == {language}
+    assert database.recovery_record(story["id"]) == {
+        "source_sha256": legacy_hash, "profile_id": profile.profile_id}
+    assert source_path.read_bytes() == original_source
+    assert profile_path.read_bytes() == original_profile
+    assert load_profile(story["id"], pipeline.root, legacy_hash, resolver.resolver_version) == profile
+    assert load_approved_step(pipeline.root, story["id"], "en", "adaptation", legacy_hash,
+                              profile.profile_id) == cached
+
+
 def test_gates_derivados_usam_roteiro_sem_serializar_ledger_como_fonte(pipeline, monkeypatch):
     from stages import naturalizer, script_guardian
 

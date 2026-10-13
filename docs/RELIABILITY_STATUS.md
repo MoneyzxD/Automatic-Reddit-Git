@@ -9,10 +9,37 @@ os sete IDs processados e horários; quatro públicos na conferência. Head fina
 production, sequência26, conserva 91 IDs confirmados e nenhuma fila de upload
 pendente. Thumbnail403 EN/ES não causou reenvio; sua mídia permanece preservada.
 Run normal [38425392437](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38425392437)
-restaurou o estado pós-upload e está em geração para completar a meta3/idioma.
-Seu resultado ainda precisa ser conferido. Workflow/cron/variável de automação
+restaurou o estado pós-upload, mas quatro fontes terminaram rejeitadas EN/ES,
+sem nova mídia. Cancelado de forma assistida após oito estados rejeitados e
+nenhum processamento ativo; save/logs finais passaram. Head production/seq47
+mantém91IDs/zero pendências, fontes/perfis/passos aprovados intactos. O cron
+pendente foi cancelado antes para não repetir a falha com código antigo; uma
+nova rodada normal deve usar main atual, não rerun antigo. Workflow/cron/variável de automação
 ativos. Checkout local atualizado, documentos do operador preservados; stash
 de proteção mantido, sem exclusão.
+
+### Diagnóstico da geração normal e reparo pontual
+
+Logs/quarentena reais mostraram patches úteis descartados por offsets numéricos
+incorretos, gramática sem sugestão do LT que não chegava ao modelo, e expansão
+de idade removendo a aposição parentética. Também houve falsas divergências
+semânticas de datas equivalentes e inferência indevida de parentesco/gênero
+pela gravidez. Google registrou TooManyRequests e o fallback MyMemory retornou
+erros de flexão/sujeito; não há prova de qual limite do Google foi atingido.
+
+O reparo resolve offsets pelo original literal único no texto recebido, mantendo
+rejeição de ambiguidades e o aplicador estrito. LT fornece achados não estilísticos
+ao modelo por chunk/global; há rechecagem após qualquer patch. Parênteses são
+preservados em fontes novas e a recuperação usa hash/fonte/perfil antigos sem
+renormalizar sidecars. Prompts exigem diferença concreta e preservação do sujeito;
+factual warning/info continuam bloqueando. Modelo, chave, cotas e retries iguais.
+Revisão independente encontrou e corrigiu a incompatibilidade de retomada, com
+RED2/GREEN2 e preservação de bytes/cache; 416 testes focados e a suíte completa
+de1.114 testes/35 avisos legados passaram, assim como compile/diff check. Confirmação
+real pós-reparo permanece pendente, inclusive títulos inteiros e provedor de voz.
+Nenhuma história rejeitada foi reaberta nem dado do incidente enviado à tradução
+externa local: a reprodução adicional não foi autorizada e não é necessária aos
+testes isolados. A geração/publicação diária ainda não está comprovada como normal.
 
 Main/0ad6654 corrige outra violação concreta de gênero: o helper de timing
 fazia fallback gTTS mesmo com a permissão externa desligada. Retorna falha ao

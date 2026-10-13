@@ -208,7 +208,7 @@ def guardian_fake(tmp_path, semantic=None, lt=None, **config):
 
 @pytest.mark.parametrize("original,start,error_code", [
     ("Citei a clínica.", None, "chunk_original_missing"),
-    ("Citei a cirurgia.", 1, "chunk_offset_mismatch"),
+    ("Citei a cirurgia.", 1, None),
     ("Citei a cirurgia.", 7, None),
 ])
 def test_ancora_de_patch_tem_diagnostico_sem_vazar_texto(
@@ -366,6 +366,92 @@ def revisar(guardian, perfil, **kwargs):
         "language": "pt", "stage": "translation", "story_id": "s1", "profile": perfil,
         **kwargs,
     })
+
+
+@pytest.mark.parametrize("mode", ["chunk", "global"])
+def test_offset_semantico_errado_resolve_somente_trecho_literal_unico(
+    tmp_path, perfil_feminino, mode,
+):
+    candidate = "Depois. Agora sou faxineiro. Fim."
+    correction = resposta(False, [achado(original="Agora sou faxineiro",
+        replacement="Agora sou faxineira", start=1, source_quote="I am a cleaner.")])
+    semantic = FakeSemanticReviewer([
+        correction if mode == "chunk" else resposta(True, []),
+        correction if mode == "global" else resposta(True, []),
+    ])
+    result = revisar(guardian_fake(tmp_path, semantic), perfil_feminino,
+                     candidate_text=candidate)
+    assert result.status == "approved"
+    assert result.approved_text == "Depois. Agora sou faxineira. Fim."
+    assert result.attempts == 2
+    assert perfil_feminino.narration_gender == "female"
+
+
+@pytest.mark.parametrize("mode", ["chunk", "global"])
+def test_offset_errado_nao_escolhe_entre_ocorrencias_ambiguas(
+    tmp_path, perfil_feminino, mode,
+):
+    candidate = "faxineiro. Depois, faxineiro. Fim."
+    correction = resposta(False, [achado(original="faxineiro",
+        replacement="faxineira", start=1, source_quote="I am a cleaner.")])
+    semantic = FakeSemanticReviewer([
+        correction if mode == "chunk" else resposta(True, []),
+        correction if mode == "global" else resposta(True, []),
+    ])
+    with pytest.raises(QualityRejected) as caught:
+        revisar(guardian_fake(tmp_path, semantic), perfil_feminino,
+                candidate_text=candidate)
+    assert caught.value.review.approved_text == candidate
+    assert caught.value.review.patches == ()
+
+
+def test_erro_gramatical_sem_sugestao_recebe_reparo_semantico_e_rechecagem(
+    tmp_path, perfil_feminino,
+):
+    candidate = "I 44-year-old woman have two children."
+    finding = LanguageIssue("MISSING_VERB", "GRAMMAR", "A verb may be missing.",
+                            (), 0, 19, "I 44-year-old woman")
+
+    class WithGrammarFeedback(FakeSemanticReviewer):
+        def review(self, **context):
+            if context["mode"] == "facts":
+                return super().review(**context)
+            if context["candidate_text"] == candidate and any(
+                item["original"] == "I 44-year-old woman" and item["start"] == 0
+                for item in context.get("language_tool_findings", ())
+            ):
+                return resposta(False, [achado(original="I 44-year-old woman",
+                    replacement="I, a 44-year-old woman,", category="grammar",
+                    source_quote="", subject="narrator", start=None)])
+            return resposta(True, [])
+
+    lt = FakeLanguageTool([(finding,), ()])
+    result = revisar(guardian_fake(tmp_path, WithGrammarFeedback(), lt), perfil_feminino,
+                     source_text="I (44F) have two children.", candidate_text=candidate,
+                     language="en", stage="adaptation")
+    assert result.status == "approved"
+    assert result.approved_text == "I, a 44-year-old woman, have two children."
+    assert result.attempts == 2
+
+
+def test_feedback_lt_localiza_repeticoes_e_reserva_achado_transversal_ao_global(tmp_path, perfil_feminino):
+    semantic = FakeSemanticReviewer()
+    guardian = guardian_fake(tmp_path, semantic, chunk_chars=5)
+    findings = [
+        dict(original="A", message="primeiro", start=0, end=1, replacements=[]),
+        dict(original="A", message="segundo", start=5, end=6, replacements=[]),
+        dict(original="DEAB", message="transversal", start=3, end=7, replacements=[]),
+    ]
+    guardian._semantic_pass("Original.", "ABCDEABCDE", "en", "adaptation",
+                            perfil_feminino, "", language_tool_findings=findings)
+    chunks = [call for call in semantic.calls if call.mode == "chunk"]
+    assert len(chunks) == 2
+    assert chunks[0].language_tool_findings == [findings[0]]
+    assert chunks[1].language_tool_findings == [{**findings[1], "start": 0, "end": 1}]
+    assert all(call.candidate_text == "ABCDE" for call in chunks)
+    global_call = next(call for call in semantic.calls if call.mode == "global")
+    assert global_call.language_tool_findings == findings
+    assert findings[1]["start"] == 5
 
 
 def test_guardiao_revisa_semantica_depois_do_patch(tmp_path, perfil_feminino):

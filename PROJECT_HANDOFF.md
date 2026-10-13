@@ -11,14 +11,24 @@ confirmados e nenhuma pendência de upload. Os 84 IDs anteriores foram mantidos.
 EN/ES continuam com thumbnail403, com mídia preservada para ajuste sem reenvio.
 
 Run normal [38425392437](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38425392437)
-restaurou esse estado em outro runner e está completando a meta3/idioma.
-Verificar seu resultado antes de declarar a rodada normal concluída. Cron09UTC,
+restaurou esse estado, mas não gerou mídia: quatro fontes foram rejeitadas nos
+oito estados EN/ES. Cancelamento assistido após esse limite terminal preservou
+o checkpoint final production/seq47, os 91 IDs e zero pendências de upload.
+Não confundir a publicação recuperada com geração normal resolvida. Cron09UTC,
 workflow ativo e PIPELINE_AUTOMATION_ENABLED=true conferidos. OAuth09/10 segue
 Testing com renovação manual; não gerar novamente os tokens antes de necessário.
 Main/0ad6654 também impede gTTS interno de ignorar a permissão de fallback:
 VoiceGenerator controla exclusivamente as alternativas e o gênero. 1.104 testes
 passaram; detalhes/evidência atual em [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md).
 Operação, incluindo publish somente, em [PIPELINE_STATE](docs/PIPELINE_STATE.md).
+
+Reparo seguinte corrige ancoragem de patches semânticos com offsets estimados
+quando o trecho literal é único; ambiguidades continuam bloqueadas. Achados
+gramaticais do LT sem sugestões chegam à revisão semântica, sem enfraquecer gates.
+Expansões novas preservam parênteses de idade; retomadas conservam fonte/hash,
+perfil e etapas antigas. Falhas falsas de fidelidade/gênero recebem instruções
+mais precisas, não uma aprovação automática. Ainda exige rodada real verde antes
+dos agentes de crescimento/manutenção.
 
 Antecedentes abaixo são históricos e não substituem esta seção.
 

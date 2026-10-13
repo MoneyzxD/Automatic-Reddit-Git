@@ -66,9 +66,9 @@ _IDENTITY = re.compile(
     r"\bI(?:\s+am|['’]m)\s+(?:a\s+)?(?:\d{1,3}[- ]year[- ]old\s+)?"
     r"(?P<gender>man|woman|male|female)\b", re.IGNORECASE,
 )
-# A expansao de (28M)/(28F) preserva a aposicao sem inserir o verbo "am".
+# A expansão preserva a aposição, inclusive parênteses, sem inserir "am".
 _EXPANDED_AGE = re.compile(
-    r"\b(?:I|me)\s*(?:,\s*)?\d{1,3}-year-old\s+"
+    r"\b(?:I|me)\s*(?:,\s*)?\(?\s*\d{1,3}-year-old\s+"
     r"(?P<gender>man|woman)\b", re.IGNORECASE,
 )
 _SEMANTIC_IDENTITY = re.compile(

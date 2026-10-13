@@ -15,6 +15,14 @@ def male_profile(story_id="test_001"):
     )
 
 
+@pytest.mark.parametrize("source,expected", [
+    ("I (44F) have two children.", "I (44-year-old woman) have two children."),
+    ("My spouse (28M) works here.", "My spouse (28-year-old man) works here."),
+])
+def test_expansao_preserva_aposicao_parentetica_sem_apagar_verbo(source, expected):
+    assert main.expand_age_gender_en(source) == expected
+
+
 def test_resolve_historia_uma_vez_e_propaga_mesmo_perfil():
     resolver = Mock()
     resolver.resolver_version = "1"
@@ -139,7 +147,7 @@ def test_pipeline_resolve_antes_da_adaptacao_e_preserva_perfil(monkeypatch, tmp_
     main.run_pipeline({}, ["pt", "en", "es"], dry_run=dry_run, test_story=True)
     factory.assert_called_once_with({}, semantic_enabled=not dry_run)
     resolver.resolve.assert_called_once_with(
-        story_id="test_001", title="My husband", original_text="I 28-year-old man live with my husband.")
+        story_id="test_001", title="My husband", original_text="I (28-year-old man) live with my husband.")
     correction.detect.assert_not_called()
     assert {p["language"] for p in parts} == {"pt", "en", "es"}
     assert {p["narrator_profile_id"] for p in parts} == {"profile-123"}
