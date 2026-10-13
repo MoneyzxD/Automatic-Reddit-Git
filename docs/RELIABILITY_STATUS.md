@@ -2,6 +2,14 @@
 
 ## Retomada em 13/10 — resultado dos testes e publicação da fila
 
+Rodada vigente: [38447177562](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38447177562),
+main/c3fbf5a, após o prazo738s informado pelo Groq. Restore e testes passaram;
+seq58 confirma retomada de1wyx2wj EN/ES com fonte/perfil masculino preservados
+e91IDs. Geração em andamento, sem mídia/upload novos; não disparar outro
+gravador nem declarar operação diária resolvida enquanto esse resultado não
+for conferido. Teto de espera agora900s/três tentativas, sem trocar chave/modelo.
+Suíte local1.116 passou. Agentes e calibração de siglas aguardam esse gate.
+
 Publicação recuperada confirmada no
 [38344600714](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38344600714):
 sete vídeos enviados, zero falhas de upload (PT3/EN2/ES2). Owner API confirmou
