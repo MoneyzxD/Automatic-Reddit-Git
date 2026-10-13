@@ -87,3 +87,37 @@ def test_batch_valida_todas_as_partes_antes_de_gerar(monkeypatch, tmp_path):
 def test_config_incompleta_nao_escolhe_voz_de_outro_idioma():
     with pytest.raises(ValueError):
         VoiceGenerator(CONFIG)._select_voice("en", "male")
+
+
+@pytest.mark.parametrize("gender,expected", [
+    ("male", ["pt-m-1", "pt-m-2"]),
+    ("female", ["pt-f-1", "pt-f-2"]),
+])
+def test_falha_edge_real_na_camada_de_timing_nao_ignora_permissao_gtts(
+    gender, expected, monkeypatch, tmp_path,
+):
+    from stages import word_timing
+
+    voices = []
+    gtts_calls = []
+
+    def failed_edge(text, voice, rate, path):
+        voices.append(voice)
+        return False
+
+    def unexpected_gtts(text, language, path):
+        gtts_calls.append(language)
+        path.write_bytes(b"audio-sintetico")
+        return True
+
+    # Mantém a orquestração real; substitui somente serviços externos lentos.
+    monkeypatch.setattr("stages.voice.generate_audio_with_timestamps", word_timing.generate_audio_with_timestamps)
+    monkeypatch.setattr(word_timing, "generate_edge_tts_audio", failed_edge)
+    monkeypatch.setattr(word_timing, "_gtts_fallback", unexpected_gtts)
+    monkeypatch.setattr(word_timing, "extract_word_timestamps_whisper", lambda *a, **kw: [])
+    monkeypatch.setattr(word_timing, "_get_audio_duration", lambda path: 60.0)
+
+    voice = VoiceGenerator(CONFIG)
+    assert voice.generate("Preciso de ajuda", "pt", tmp_path / "voz.mp3", narrator_gender=gender) is False
+    assert voices == expected
+    assert gtts_calls == []

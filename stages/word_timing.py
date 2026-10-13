@@ -7,7 +7,7 @@ usando faster-whisper com CUDA.
 Arquitetura:
     PRIMARIO:  edge-tts v7.x  -> voz natural PT-BR/ES/EN
     TIMING:    faster-whisper -> timestamps reais por palavra (CUDA)
-    FALLBACK1: gTTS           -> se edge-tts falhar
+    VOZ:       VoiceGenerator controla alternativas e permissão de gTTS
     FALLBACK2: estimativa     -> se whisper tambem falhar
 
 Estilo ASS:
@@ -339,20 +339,16 @@ def generate_audio_with_timestamps(
     Fluxo:
         1. edge-tts v7.x  -> gera audio natural
         2. faster-whisper -> timestamps reais por palavra (CUDA)
-        3. Se edge-tts falhar -> gTTS como fallback de audio
+        3. Se edge-tts falhar -> retorna falha ao controlador de voz
         4. Se whisper falhar  -> estimativa por silabas
 
     Retorna: (sucesso_audio: bool, word_boundaries: list)
     """
     audio_ok = generate_edge_tts_audio(text, voice, rate, audio_path)
 
-    # Fallback de audio: gTTS
     if not audio_ok:
-        logger.warning("edge-tts falhou — tentando gTTS como fallback")
-        audio_ok = _gtts_fallback(text, language, audio_path)
-
-    if not audio_ok:
-        logger.error("Geracao de audio falhou completamente")
+        # Só VoiceGenerator conhece o gênero travado e a permissão explícita.
+        logger.error("edge-tts falhou; alternativa de voz deve respeitar genero e permissao")
         return False, []
 
     # Timestamps reais via Whisper
