@@ -26,6 +26,14 @@ Mantenha um único gravador. O token amplo do
 `gh` e `GITHUB_TOKEN` não são substitutos implícitos dessa credencial.
 OAuth YouTube continua separado, com renovação manual enquanto Testing.
 
+Para escoar mídia já aprovada sem depender de geração nova, o disparo manual
+em `main` aceita `state_action=publish`, `apenas_gerar=false`,
+`historia_teste=false`, `dry_run=false` e namespace vazio. Ele restaura
+`production`, executa somente `publish.py` e confirma o checkpoint final.
+O grupo de concorrência, a conferência de upload incerto, a meta diária e as
+janelas continuam os mesmos. Preview, branch de validação e falha de restore
+bloqueiam esse modo. O cron normal continua responsável por completar a meta.
+
 ## Bootstrap de produção: importação assistida
 
 Antes do bootstrap, quando o candidato existe apenas no cache do Actions,

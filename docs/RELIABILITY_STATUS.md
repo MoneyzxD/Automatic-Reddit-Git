@@ -1,5 +1,46 @@
 # Confiabilidade — evidência operacional 2026-10-04
 
+## Retomada em 13/10 — resultado dos testes e publicação da fila
+
+Os tokens PT/EN/ES foram renovados em 09/10; Secrets confirmados e refresh/owner
+API conferidos novamente em 13/10. Os 84 IDs históricos continuam preservados;
+nenhum dos sete títulos pendentes aparece nos canais. A fila capturada do cache
+exato de 12/10 (`38290710493`) é byte-identical à captura anterior. Há um registro
+seen adicional a preservar, sem partes novas, além das 30 histórias reconciliadas.
+
+Validação [37965391481](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37965391481)
+exportou dois MP4 PT e dois EN. ES foi corretamente rejeitado: hook dizia
+“soy la mala” apesar do perfil masculino. `4c7408f` neutraliza exemplos fixos
+de gênero nos prompts; [38300138532](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38300138532)
+aprovou todas as etapas ES e exportou duas partes de 138,1s/147,6s, 1080x1920.
+Nenhum desses vídeos sintéticos foi enviado ao YouTube.
+
+[38299591239](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38299591239)
+restaurou PT/EN em outro runner: 37 arquivos de controle e seis blobs de mídia.
+[38343404467](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38343404467)
+verificou separadamente o namespace ES. A suíte atual passou em 13/10:
+1.084 testes, 33 avisos legados; compile/diff check e revisão do delta passaram.
+
+`61894b0` acrescenta `state_action=publish`: envio apenas da fila pronta,
+exclusivo de main/production com restore obrigatório e opções de teste desligadas.
+Esse modo evita que uma falha de geração impeça o escoamento da mídia já aprovada.
+O cron/meta continuam ativos e inalterados. Bootstrap assistido de produção e
+restauração em outra raiz foram confirmados: 31 histórias/91 partes, 84 IDs
+preservados, sete pendentes e 11 blobs de mídia. A identidade run0 identifica
+essa operação assistida, anterior aos workflows novos. Envio efetivo pendente:
+não declarar publicação resolvida antes de confirmar os IDs.
+
+Inspeção visual pelo watch conferiu cards/legendas nos MP4 em 2s e 30s; não houve
+transcrição nem avaliação auditiva. Encontrou sobreposição ASS corrigida em
+`2566e8d` (prova FFmpeg local) e hook EN cortado em “everyone thinks I”. O segundo
+defeito vem dos cortes de caracteres em titler/metadata e foi corrigido sem
+truncar candidatos: hook limitado a 100, #shorts opcional quando couber, fallback
+integral ou falha explícita. 1.102 testes/33 avisos e revisão independente passaram.
+Ainda falta observar essa correção na rodada normal; não confundir aprovação
+semântica com prova de frase completa ou mídia perfeita.
+
+Os parágrafos abaixo preservam os antecedentes, não o estado atual de OAuth.
+
 ## Retomada prioritária de publicação — 2026-10-09
 
 Teste atual [37965391481](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37965391481),
