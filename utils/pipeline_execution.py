@@ -8,11 +8,14 @@ from utils.pipeline_state import StateError
 
 def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = "normal",
                       validation_namespace: str = "", dry_run: bool = False,
-                      only_generate: bool = False, test_story: bool = False) -> dict:
+                      only_generate: bool = False, test_story: bool = False,
+                      gemini_catalog_only: bool = False) -> dict:
     if event not in {"workflow_dispatch", "schedule"} or not re.fullmatch(r"[0-9]+", run_id):
         raise StateError("Evento ou identidade de execução inválidos")
     if state_action not in {"normal", "publish", "bootstrap", "verify", "inventory"}:
         raise StateError("Ação de estado inválida")
+    if gemini_catalog_only and (state_action != "normal" or not only_generate or dry_run):
+        raise StateError("Consulta Gemini exige execução normal isolada, sem geração/publicação")
     if validation_namespace and not re.fullmatch(r"validation-[a-z0-9-]{1,80}", validation_namespace):
         raise StateError("Namespace de validação inválido")
     if any(type(flag) is not bool for flag in (dry_run, only_generate, test_story)):
@@ -66,7 +69,8 @@ def main() -> int:
         result = resolve_execution(event=os.getenv("GITHUB_EVENT_NAME", ""), ref=os.getenv("GITHUB_REF", ""),
                     run_id=os.getenv("GITHUB_RUN_ID", ""), state_action=os.getenv("INPUT_STATE_ACTION") or "normal",
                     validation_namespace=os.getenv("INPUT_VALIDATION_NAMESPACE", ""), dry_run=_flag("INPUT_DRY_RUN"),
-                    only_generate=_flag("INPUT_ONLY_GENERATE"), test_story=_flag("INPUT_TEST_STORY"))
+                    only_generate=_flag("INPUT_ONLY_GENERATE"), test_story=_flag("INPUT_TEST_STORY"),
+                    gemini_catalog_only=_flag("INPUT_GEMINI_CATALOG_ONLY"))
         languages = list(dict.fromkeys(os.getenv("INPUT_LANGUAGES", "pt en es").split()))
         if not languages or any(language not in {"pt", "pt-br", "en", "es"} for language in languages):
             raise StateError("Idiomas inválidos")

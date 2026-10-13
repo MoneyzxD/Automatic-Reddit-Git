@@ -255,3 +255,60 @@ def test_workflow_gemini_usa_secret_so_na_geracao_e_producao_continua_groq():
     execution = resolve_execution(event="workflow_dispatch", ref="refs/heads/gemini-provider",
                                   run_id="123", only_generate=True, test_story=True)
     assert execution["namespace"] == "validation-123" and execution["publish"] is False
+
+
+def test_catalogo_mostra_somente_modelos_publicos_aptos_a_geracao(monkeypatch):
+    from scripts.check_gemini import check_catalog
+    from utils import gemini_client
+    calls = []
+    def get(url, **options):
+        calls.append((url, options))
+        return SimpleNamespace(status_code=200, close=lambda: None, json=lambda: {"models": [
+            {"name": "models/gemini-2.5-flash", "supportedGenerationMethods": ["generateContent"]},
+            {"name": "models/gemini-embedding", "supportedGenerationMethods": ["embedContent"]},
+            {"name": "NAO_LOGAR\nPRIVADO", "supportedGenerationMethods": ["generateContent"]}]})
+    monkeypatch.setattr(gemini_client.requests, "get", get)
+    assert check_catalog() == ["gemini-2.5-flash"]
+    assert calls[0][0] == "https://generativelanguage.googleapis.com/v1beta/models"
+    assert calls[0][1]["headers"]["x-goog-api-key"] == "segredo-sintetico"
+    assert calls[0][1]["allow_redirects"] is False
+
+
+def test_catalogo_http_falho_nao_vaza_corpo(monkeypatch):
+    from scripts.check_gemini import check_catalog
+    from utils import gemini_client
+    monkeypatch.setattr(gemini_client.requests, "get", lambda *a, **k:
+                        SimpleNamespace(status_code=403, json=lambda: {"error": "PRIVADO"}, close=lambda: None))
+    with pytest.raises(gemini_client.GeminiError) as caught:
+        check_catalog()
+    assert caught.value.status_code == 403 and "PRIVADO" not in str(caught.value)
+
+
+def test_catalogo_nao_pode_publicar_mesmo_com_modo_publish(monkeypatch, tmp_path):
+    from utils.pipeline_execution import main
+    for name, value in {"GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
+                        "GITHUB_RUN_ID": "123", "GITHUB_OUTPUT": str(tmp_path / "output"),
+                        "INPUT_STATE_ACTION": "publish", "INPUT_GEMINI_CATALOG_ONLY": "true",
+                        "INPUT_ONLY_GENERATE": "false", "INPUT_TEST_STORY": "false",
+                        "INPUT_DRY_RUN": "false"}.items():
+        monkeypatch.setenv(name, value)
+    assert main() == 2
+    assert not (tmp_path / "output").exists()
+
+
+@pytest.mark.parametrize("options", [{"state_action": "verify"}, {"state_action": "bootstrap"},
+                                    {"only_generate": False}, {"dry_run": True}])
+def test_catalogo_bloqueia_modos_incompativeis(options):
+    from utils.pipeline_execution import resolve_execution
+    from utils.pipeline_state import StateError
+    kwargs = {"event": "workflow_dispatch", "ref": "refs/heads/gemini-provider", "run_id": "123",
+              "only_generate": True, "gemini_catalog_only": True, **options}
+    with pytest.raises(StateError):
+        resolve_execution(**kwargs)
+
+
+def test_catalogo_valido_resolve_so_namespace_de_validacao():
+    from utils.pipeline_execution import resolve_execution
+    result = resolve_execution(event="workflow_dispatch", ref="refs/heads/main", run_id="123",
+                               gemini_catalog_only=True, only_generate=True)
+    assert result["namespace"] == "validation-123" and not result["publish"]

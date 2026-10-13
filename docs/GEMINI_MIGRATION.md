@@ -71,3 +71,19 @@ O único achado menor era o alerta genérico recomendar diagnóstico Groq mesmo
 com Gemini; o texto foi corrigido para o provedor configurado. Qualidade real,
 cotas/faturamento da conta, inspeção de mídia/restore e liberação de produção
 continuam pendentes. Checkpoints antigos não são prova do novo provedor.
+
+## Execução real iniciada
+
+Commit d614352 na branch gemini-provider. Run
+[38479275207](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38479275207)
+iniciado com llm_provider=gemini, PT/EN/ES, história sintética, apenas geração e
+namespace validation-gemini-20261013. Main/production não foram alterados.
+Terminou failure na adaptação EN: HTTP404 no modelo configurado, uma tentativa
+do guardião, zero mídia; upload foi pulado. Isso não comprova erro de cota nem
+autoriza substituir produção. Consulta autenticada de catálogo foi adicionada
+para confirmar modelos disponíveis antes de outra geração; somente nomes públicos
+de modelos aptos a generateContent são exibidos, sem corpos de erro/credenciais.
+Revisão do delta reproduziu uma combinação publish+catalog-only que pulava a
+verificação tardia; o resolver inicial agora rejeita essa combinação e qualquer
+consulta fora de normal/apenas-gerar/validation. Regressão RED/GREEN antes do
+disparo de catálogo, sem qualquer upload executado.
