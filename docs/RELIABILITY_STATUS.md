@@ -41,6 +41,21 @@ Nenhuma história rejeitada foi reaberta nem dado do incidente enviado à tradu�
 externa local: a reprodução adicional não foi autorizada e não é necessária aos
 testes isolados. A geração/publicação diária ainda não está comprovada como normal.
 
+`f955d6d` integrado em main e no checkout local. Run normal
+[38441271214](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38441271214),
+sem dados de teste, restaurou production e iniciou a geração. Primeiro perfil
+travado da fonte1wo7cko conserva91IDs no seq49; resultado ainda pendente.
+Seq51 registrou rejeição de adaptação dessa fonte em EN/ES, sem mídia; lote
+continua tentando outra fonte. Motivo concreto depende dos logs/quarentena
+novos, ainda indisponíveis pelo CLI enquanto o job estiver em execução.
+
+Logs do operador de12/10/run38290710493 confirmam unavailable da adaptação
+EN/1wrq1wk, três chamadas semânticas, 26 achados LT e zero patches. LT6.6 ativo;
+main retornou2 antes de mídia/upload. HTTP original ausente: não atribuir cota,
+OAuth ou erro JSON específico. Os logs13/10 fornecidos têm SHA idêntico aos já
+analisados, não um incidente adicional. Arquivos test_male/improvement_log
+incluem histórico/testes e não são evidência de publicação sintética.
+
 Main/0ad6654 corrige outra violação concreta de gênero: o helper de timing
 fazia fallback gTTS mesmo com a permissão externa desligada. Retorna falha ao
 VoiceGenerator, que conserva o gênero em voz alternativa e exige autorização

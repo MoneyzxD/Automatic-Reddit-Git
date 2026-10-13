@@ -2,6 +2,32 @@
 
 Ordem definida pelo operador em 2026-10-04.
 
+## Prioridade atual — 2026-10-13
+
+OAuth renovado09/10, reconciliação/bootstrap/importação e sete uploads reais
+confirmados (PT3/EN2/ES2); 91IDs conservados. Esses pontos não estão mais
+pendentes. Main/f955d6d inclui os reparos de estado, render, títulos, voz e
+guardião. Não usar os antecedentes abaixo como checklist atual de renovação.
+
+Normal38425392437 não gerou mídia: oito estados rejeitados, cancelamento
+assistido/finalseq47 conservando fontes/perfis/passos. O diagnóstico concreto
+e as correções pontuais estão em [status](RELIABILITY_STATUS.md). Suíte1.114
+passou; normal38441271214 testa o código novo com produção restaurada e upload
+habilitado, ainda sem aceite final. Agentes aguardam essa prova operacional.
+
+Logs fornecidos do run38290710493/12Oct: adaptação EN/1wrq1wk unavailable,
+três chamadas semânticas, 26 achados LT, zero patches; main código2 antes de
+mídia/upload. LT6.6 iniciou sem erro fatal. Não há HTTP original no artefato,
+logo cota/token/JSON específico não são causas comprovadas. Traces test_male
+e improvement_log históricos não comprovam geração/upload de teste em produção.
+Log13Oct fornecido é SHA-idêntico à captura já investigada de38425392437.
+
+Depois da geração normal, medir o custo da filtragem: no run38425392437 ela
+levou5min38s para659 histórias e se repete a cada tentativa. Não otimizar por
+suposição nem mudar critérios/score/dedupe para acelerar durante o incidente.
+
+## Antecedentes históricos — até 09/10
+
 Prioridade reafirmada em 2026-10-09: voltar a publicar, antes de agentes ou
 migração de provedor. Main agendado continua na versão antiga e falhou na
 adaptação EN antes do upload. Três refresh tokens locais recusados com
