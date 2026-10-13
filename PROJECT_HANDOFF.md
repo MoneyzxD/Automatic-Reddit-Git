@@ -1,5 +1,27 @@
 # PROJECT_HANDOFF.md
 
+## Publicação restabelecida — 2026-10-13
+
+Confiabilidade integrada em main. Run
+[38344600714](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38344600714)
+terminou success: sete vídeos recuperados enviados, zero falhas de upload
+(PT3/EN2/ES2). Owner API conferiu todos os IDs processados nos canais corretos
+e os publishAt; quatro já estavam públicos. Checkpoint final preserva 91 IDs
+confirmados e nenhuma pendência de upload. Os 84 IDs anteriores foram mantidos.
+EN/ES continuam com thumbnail403, com mídia preservada para ajuste sem reenvio.
+
+Run normal [38425392437](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38425392437)
+restaurou esse estado em outro runner e está completando a meta3/idioma.
+Verificar seu resultado antes de declarar a rodada normal concluída. Cron09UTC,
+workflow ativo e PIPELINE_AUTOMATION_ENABLED=true conferidos. OAuth09/10 segue
+Testing com renovação manual; não gerar novamente os tokens antes de necessário.
+Main/0ad6654 também impede gTTS interno de ignorar a permissão de fallback:
+VoiceGenerator controla exclusivamente as alternativas e o gênero. 1.104 testes
+passaram; detalhes/evidência atual em [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md).
+Operação, incluindo publish somente, em [PIPELINE_STATE](docs/PIPELINE_STATE.md).
+
+Antecedentes abaixo são históricos e não substituem esta seção.
+
 ## Retomada prioritária — 2026-10-09
 
 Produção ainda não liberada. Fonte de status: [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md).

@@ -1,6 +1,6 @@
 # Recuperação privada do pipeline
 
-Status: código na branch `pipeline-reliability`, ainda sem liberação de produção.
+Status: integrado em main; bootstrap e publicação recuperada confirmados em 13/10.
 Teste unitário/fake HTTP não comprova persistência no GitHub nem upload real.
 
 ## Autoridade e pré-requisitos

@@ -2,6 +2,23 @@
 
 ## Retomada em 13/10 — resultado dos testes e publicação da fila
 
+Publicação recuperada confirmada no
+[38344600714](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38344600714):
+sete vídeos enviados, zero falhas de upload (PT3/EN2/ES2). Owner API confirmou
+os sete IDs processados e horários; quatro públicos na conferência. Head final
+production, sequência26, conserva 91 IDs confirmados e nenhuma fila de upload
+pendente. Thumbnail403 EN/ES não causou reenvio; sua mídia permanece preservada.
+Run normal [38425392437](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38425392437)
+restaurou o estado pós-upload e está em geração para completar a meta3/idioma.
+Seu resultado ainda precisa ser conferido. Workflow/cron/variável de automação
+ativos. Checkout local atualizado, documentos do operador preservados; stash
+de proteção mantido, sem exclusão.
+
+Main/0ad6654 corrige outra violação concreta de gênero: o helper de timing
+fazia fallback gTTS mesmo com a permissão externa desligada. Retorna falha ao
+VoiceGenerator, que conserva o gênero em voz alternativa e exige autorização
+explícita para gTTS. RED2/GREEN18 e suíte1.104 passes/33avisos; revisão sem achados.
+
 Os tokens PT/EN/ES foram renovados em 09/10; Secrets confirmados e refresh/owner
 API conferidos novamente em 13/10. Os 84 IDs históricos continuam preservados;
 nenhum dos sete títulos pendentes aparece nos canais. A fila capturada do cache
