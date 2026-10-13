@@ -22,7 +22,7 @@ def workflow():
 
 def test_workflow_restauracao_antecede_geracao_e_publicacao():
     data = workflow()
-    assert set(data["on"]["workflow_dispatch"]["inputs"]["state_action"]["options"]) == {"normal", "bootstrap", "verify", "inventory"}
+    assert set(data["on"]["workflow_dispatch"]["inputs"]["state_action"]["options"]) == {"normal", "publish", "bootstrap", "verify", "inventory"}
     steps = data["jobs"]["gerar-e-publicar"]["steps"]
     ids = [step.get("id") for step in steps]
     assert ids.index("state_restore") < ids.index("generate") < ids.index("publish")
@@ -33,6 +33,28 @@ def test_workflow_restauracao_antecede_geracao_e_publicacao():
     final = steps[ids.index("state_save")]
     assert "always()" in final["if"] and "steps.state_restore.outcome == 'success'" in final["if"]
     assert "save-if-ready" in final["run"]
+
+
+def test_workflow_publicar_somente_preserva_serializacao_restore_e_checkpoint():
+    data = workflow()
+    group = data["concurrency"]["group"]
+    assert "inputs.state_action == 'publish'" in group
+    assert group.index("inputs.state_action == 'publish'") < group.index("inputs.apenas_gerar")
+    assert data["concurrency"]["cancel-in-progress"] == "false"
+    steps = {step["id"]: step for step in data["jobs"]["gerar-e-publicar"]["steps"] if "id" in step}
+    assert steps["state_restore"]["if"] == "${{ steps.execution.outputs.required == 'true' }}"
+    assert steps["generate"]["if"] == "${{ steps.execution.outputs.generate == 'true' }}"
+    publish = steps["publish"]
+    # Sem always(): falha anterior continua impedindo publicação, inclusive no modo normal.
+    assert publish["if"] == "${{ steps.execution.outputs.publish == 'true' }}"
+    assert publish["env"]["PIPELINE_STATE_REQUIRED"] == "true"
+    assert publish["run"].strip() == "python publish.py --lang $PIPELINE_LANGUAGES"
+    final = steps["state_save"]
+    assert final["if"] == (
+        "${{ always() && steps.state_restore.outcome == 'success' && "
+        "(steps.execution.outputs.state_action == 'normal' || steps.execution.outputs.state_action == 'publish') "
+        "&& steps.execution.outputs.required == 'true' }}"
+    )
 
 
 def test_workflow_isola_namespace_cache_secrets_e_artifacts():
@@ -73,6 +95,25 @@ def test_resolucao_de_modo(options, expected):
     from utils.pipeline_execution import resolve_execution
     result = resolve_execution(event="workflow_dispatch", ref="refs/heads/main", run_id="123", **options)
     assert (result["namespace"], result["generate"], result["publish"], result["state_operation"]) == expected
+
+
+@pytest.mark.parametrize("options", [
+    {}, {"event": "schedule"}, {"ref": "refs/heads/feature"},
+    {"dry_run": True}, {"only_generate": True}, {"test_story": True},
+    {"validation_namespace": "validation-test"},
+])
+def test_publicar_somente_exige_dispatch_main_sem_opcoes_de_teste(options):
+    from utils.pipeline_execution import resolve_execution
+    values = dict(event="workflow_dispatch", ref="refs/heads/main", run_id="123", state_action="publish")
+    values.update(options)
+    if options:
+        with pytest.raises(StateError):
+            resolve_execution(**values)
+    else:
+        assert resolve_execution(**values) == {
+            "namespace": "production", "state_action": "publish", "state_operation": "restore",
+            "generate": False, "publish": True, "dry_run": False, "test_story": False, "required": True,
+        }
 
 
 @pytest.mark.parametrize("options", [

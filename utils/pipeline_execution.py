@@ -11,7 +11,7 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
                       only_generate: bool = False, test_story: bool = False) -> dict:
     if event not in {"workflow_dispatch", "schedule"} or not re.fullmatch(r"[0-9]+", run_id):
         raise StateError("Evento ou identidade de execução inválidos")
-    if state_action not in {"normal", "bootstrap", "verify", "inventory"}:
+    if state_action not in {"normal", "publish", "bootstrap", "verify", "inventory"}:
         raise StateError("Ação de estado inválida")
     if validation_namespace and not re.fullmatch(r"validation-[a-z0-9-]{1,80}", validation_namespace):
         raise StateError("Namespace de validação inválido")
@@ -24,7 +24,11 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
     preview = dry_run or only_generate or test_story
     if state_action == "inventory" and (validation_namespace or dry_run):
         raise StateError("Inventário legado não aceita namespace de teste/dry-run")
-    if state_action != "normal":
+    if state_action == "publish":
+        if event != "workflow_dispatch" or ref != "refs/heads/main" or validation_namespace or preview:
+            raise StateError("Publicar somente exige disparo manual em main/production, sem opções de teste")
+        namespace, operation = "production", "restore"
+    elif state_action != "normal":
         if dry_run:
             raise StateError("Bootstrap/verify não aceitam dry-run")
         namespace = validation_namespace or "production"
@@ -37,7 +41,7 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
             raise StateError("Publicação permitida somente em main/production")
         namespace, operation = "production", "restore"
     return {"namespace": namespace, "state_action": state_action, "state_operation": operation,
-            "generate": state_action == "normal", "publish": state_action == "normal" and not preview,
+            "generate": state_action == "normal", "publish": state_action in {"normal", "publish"} and not preview,
             "dry_run": dry_run, "test_story": test_story, "required": not dry_run and state_action != "inventory"}
 
 
