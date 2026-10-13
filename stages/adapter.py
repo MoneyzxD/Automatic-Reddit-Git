@@ -101,9 +101,9 @@ class StoryAdapter:
 
     def _adapt_chunk_via_groq(self, chunk: str, index: int, total: int) -> str | None:
         from utils import environment as env
-        from utils.groq_client import tracked_groq
+        from utils.llm_client import tracked_llm
 
-        client = tracked_groq(env.groq_api_key("en") or self.groq_key, "adapter")
+        client = tracked_llm(env.llm_api_key("en", self.groq_key), "adapter")
         prompt = ADAPTER_PROMPT_GROQ.format(
             title=self._current_title, text=chunk, index=index, total=total,
         )
@@ -130,9 +130,9 @@ class StoryAdapter:
         # Adapter so processa o texto original em ingles (antes da traducao)
         # — usa a chave do "en" pra separar seu consumo do dos outros
         # idiomas, com fallback pra chave generica.
-        groq_key = env.groq_api_key("en") or self.groq_key
+        groq_key = env.llm_api_key("en", self.groq_key)
         if not groq_key:
-            logger.debug("Groq ignorado no adapter — GROQ_API_KEY nao definida")
+            logger.debug("LLM remoto ignorado no adapter — chave não definida")
             return None
 
         title = story.get("title", "")
@@ -145,20 +145,20 @@ class StoryAdapter:
                        for i, chunk in enumerate(chunks)]
             if chunks and all(results):
                 result = "".join(results).strip()
-                logger.info("Script adaptado via Groq")
+                logger.info("Script adaptado via %s", env.llm_provider())
                 return {
                     "title":       title,
                     "hook":        "",
                     "body":        result,
                     "full_script": result,
                     "language":    "en",
-                    "adapted_by":  "groq",
+                    "adapted_by":  env.llm_provider(),
                 }
 
         except ImportError:
-            logger.debug("groq nao instalado")
+            logger.debug("Cliente de IA indisponível")
         except Exception as e:
-            logger.warning("Groq falhou no adapter: %s", e)
+            logger.warning("LLM remoto falhou no adapter: %s", e)
 
         return None
 
@@ -169,12 +169,12 @@ class StoryAdapter:
         Ordem: Groq → regras.
         """
         from utils import environment as env
-        if self.llm_enabled and (env.groq_api_key("en") or self.groq_key):
+        if self.llm_enabled and env.llm_api_key("en", self.groq_key):
             result = self._groq_adapt(story)
             if result:
                 return result
 
         from utils import telemetry
-        telemetry.record_fallback("adapter", "en", "Groq e Ollama indisponiveis")
+        telemetry.record_fallback("adapter", "en", "LLM remoto indisponível")
         logger.info("Script adaptado via regras (fallback)")
         return self._build_clean_script(story)

@@ -20,6 +20,12 @@ on:
         required: true
         default: "pt"
         type: string
+      llm_provider:
+        description: "Provedor de IA fixo para esta execução"
+        required: true
+        default: groq
+        type: choice
+        options: [groq, gemini]
       dry_run:
         description: "Simular sem gerar nem publicar"
         required: false
@@ -290,6 +296,9 @@ jobs:
           PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
           DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           PIPELINE_ENV: runner
+          PIPELINE_LLM_PROVIDER: ${{ inputs.llm_provider || vars.PIPELINE_LLM_PROVIDER || 'groq' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           # Uma chave gratuita do Groq POR IDIOMA — cada idioma tem seu
           # proprio orcamento de tokens (por minuto e por dia), em vez de

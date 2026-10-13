@@ -227,7 +227,6 @@ def format_fallback_alert() -> str:
             f"A qualidade do conteudo esta degradada (regras/templates em vez de LLM).\n\n"
             f"Estagios afetados:\n" + "\n".join(linhas) +
             (f"\n\nPrimeiro motivo: {motivo}" if motivo else "") +
-            "\n\nCausa comum: modelo descontinuado pela Groq (404) ou rate limit.\n"
-            "Verifique os modelos disponiveis com:\n"
-            "python -c \"from groq import Groq; print([m.id for m in Groq().models.list().data])\""
+            "\n\nCausa comum: modelo indisponível ou rate limit no provedor configurado.\n"
+            "Confira PIPELINE_LLM_PROVIDER e os limites do projeto desse provedor."
         )

@@ -703,12 +703,12 @@ class TitleGenerator:
     def _groq_title(self, original_title: str, story_summary: str,
                     language: str, hook_type: str = "short") -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key:
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "titler")
+            from utils.llm_client import tracked_llm
+            client = tracked_llm(groq_key, "titler")
 
             base_prompt = TITLE_PROMPTS.get(language, TITLE_PROMPTS["en"]).format(
                 original_title=original_title,
@@ -731,17 +731,17 @@ class TitleGenerator:
                 max_tokens=400,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
-                logger.warning("Groq interrompeu o titulo por limite de tokens (%s)", language)
+                logger.warning("LLM remoto interrompeu o título por limite de tokens (%s)", language)
                 return None
             title = self._clean_title(
                 resp.choices[0].message.content.strip(),
                 language=language,
             )
             if title and len(title) > 3:
-                logger.info("Titulo gerado via Groq (%s, tipo=%s): %s", language, hook_type, title)
+                logger.info("Título gerado via %s (%s, tipo=%s): %s", env.llm_provider(), language, hook_type, title)
                 return title
         except Exception as e:
-            logger.warning("Groq falhou para titulo (%s): %s", language, e)
+            logger.warning("LLM remoto falhou para título (%s): %s", language, e)
         return None
 
     # ── GROQ — HOOK ───────────────────────────────────────────────────────────
@@ -749,12 +749,12 @@ class TitleGenerator:
     def _groq_hook(self, original_title: str, story_summary: str,
                    language: str) -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key:
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "titler")
+            from utils.llm_client import tracked_llm
+            client = tracked_llm(groq_key, "titler")
 
             prompt = HOOK_PROMPTS.get(language, HOOK_PROMPTS["en"]).format(
                 original_title=original_title,
@@ -775,7 +775,7 @@ class TitleGenerator:
                 max_tokens=400,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
-                logger.warning("Groq interrompeu o hook por limite de tokens (%s)", language)
+                logger.warning("LLM remoto interrompeu o hook por limite de tokens (%s)", language)
                 return None
             hook = self._clean_title(
                 resp.choices[0].message.content.strip(),
@@ -784,10 +784,10 @@ class TitleGenerator:
                 language=language,
             )
             if hook and len(hook) > 3:
-                logger.info("Hook gerado via Groq (%s): %s", language, hook)
+                logger.info("Hook gerado via %s (%s): %s", env.llm_provider(), language, hook)
                 return hook
         except Exception as e:
-            logger.warning("Groq falhou para hook (%s): %s", language, e)
+            logger.warning("LLM remoto falhou para hook (%s): %s", language, e)
         return None
 
     # ── GROQ — ENCERRAMENTO (CTA) ─────────────────────────────────────────────
@@ -795,12 +795,12 @@ class TitleGenerator:
     def _groq_closing(self, original_title: str, story_summary: str,
                       language: str) -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key:
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "titler")
+            from utils.llm_client import tracked_llm
+            client = tracked_llm(groq_key, "titler")
 
             prompt = CLOSING_HOOK_PROMPTS.get(language, CLOSING_HOOK_PROMPTS["en"]).format(
                 original_title=original_title,
@@ -821,7 +821,7 @@ class TitleGenerator:
                 max_tokens=400,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
-                logger.warning("Groq interrompeu o encerramento por limite de tokens (%s)", language)
+                logger.warning("LLM remoto interrompeu o encerramento por limite de tokens (%s)", language)
                 return None
             closing = self._clean_title(
                 resp.choices[0].message.content.strip(),
@@ -830,10 +830,10 @@ class TitleGenerator:
                 language=language,
             )
             if closing and len(closing) > 3:
-                logger.info("Encerramento gerado via Groq (%s): %s", language, closing)
+                logger.info("Encerramento gerado via %s (%s): %s", env.llm_provider(), language, closing)
                 return closing
         except Exception as e:
-            logger.warning("Groq falhou para encerramento (%s): %s", language, e)
+            logger.warning("LLM remoto falhou para encerramento (%s): %s", language, e)
         return None
 
     # ── OLLAMA — TÍTULO ───────────────────────────────────────────────────────

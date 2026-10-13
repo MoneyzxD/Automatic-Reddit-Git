@@ -355,7 +355,9 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
                     rate_limit_type = declared.pop()
         if isinstance(error, dict) and "code" in error:
             known = {"json_validate_failed": "invalid_json", "context_length_exceeded": "context_limit",
-                     "model_not_found": "provider_error", "invalid_api_key": "authentication"}
+                     "model_not_found": "provider_error", "invalid_api_key": "authentication",
+                     "resource_exhausted": "rate_limit", "incomplete_response": "incomplete_response",
+                     "invalid_json": "invalid_json"}
             raw_code = error["code"]
             provider_code = raw_code if isinstance(raw_code, str) and raw_code in known else "other"
             code = known.get(provider_code, code)
@@ -468,10 +470,10 @@ class _GroqReviewer:
             raise ValueError("Teto de saída semântica inválido")
 
     def review(self, **context):
-        from utils.groq_client import tracked_groq
-        key = env.groq_api_key(context["language"])
+        from utils.llm_client import tracked_llm
+        key = env.llm_api_key(context["language"])
         if not key:
-            raise _ReviewUnavailable("Chave Groq não configurada para o idioma",
+            raise _ReviewUnavailable("Chave do provedor de IA não configurada",
                                      SemanticFailure("authentication", None, context["mode"], 1, 0))
         if context["mode"] == "facts":
             instruction = (
@@ -550,7 +552,7 @@ class _GroqReviewer:
         # uma sonda real terminou em length mesmo com JSON parseável. GPT-OSS e
         # demais etapas mantêm seu esforço anterior; nenhuma chave/modelo alterna.
         effort = {"reasoning_effort": "none"} if model == "qwen/qwen3.8-27b" else {}
-        response = tracked_groq(key, "script_guardian", sdk_max_retries=0, retry_rate_limit=False,
+        response = tracked_llm(key, "script_guardian", sdk_max_retries=0, retry_rate_limit=False,
                                 timeout=self.config["semantic_timeout_seconds"]).chat.completions.create(
             model=model, temperature=0,
             max_completion_tokens=self.completion_cap, **effort,
@@ -671,6 +673,8 @@ class ScriptGuardian:
             except Exception as exc:
                 failure = _provider_failure(exc, mode, attempt, context_chars,
                                             model=self.config.get("groq_model", "openai/gpt-oss-20b"))
+                if failure.code == "incomplete_response":
+                    break
                 invalid_generation = (failure.http_status == 400
                                       and failure.provider_code == "json_validate_failed")
                 if invalid_generation:

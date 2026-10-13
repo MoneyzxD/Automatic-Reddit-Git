@@ -317,13 +317,13 @@ class ScriptNaturalizer:
 
     def _groq_rewrite(self, text: str, language: str, narrator_gender: str) -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key:
-            logger.debug("Groq ignorado — GROQ_API_KEY nao definida")
+            logger.debug("LLM remoto ignorado — chave não definida")
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "naturalizer")
+            from utils.llm_client import tracked_llm
+            client = tracked_llm(groq_key, "naturalizer")
             prompt = self._build_prompt(language, narrator_gender)
             resp   = client.chat.completions.create(
                 model=self.groq_model,
@@ -348,14 +348,14 @@ class ScriptNaturalizer:
             result = re.sub(r"\n?```$",        "", result).strip()
             if result:
                 logger.info(
-                    "Naturalizacao concluida via Groq (%s, genero=%s)",
-                    language, narrator_gender,
+                    "Naturalização concluída via %s (%s, gênero=%s)",
+                    env.llm_provider(), language, narrator_gender,
                 )
                 return result
         except ImportError:
-            logger.debug("groq nao instalado: pip install groq")
+            logger.debug("Cliente de IA indisponível")
         except Exception as e:
-            logger.warning("Groq falhou (%s): %s", language, e)
+            logger.warning("LLM remoto falhou (%s): %s", language, e)
         return None
 
     def _ollama_rewrite(self, text: str, language: str, narrator_gender: str) -> str | None:
@@ -454,7 +454,7 @@ class ScriptNaturalizer:
     def _rule_based_rewrite(self, text: str, language: str) -> str:
         text = self._apply_known_fixes(text, language)
         from utils import telemetry
-        telemetry.record_fallback("naturalizer", language, "Groq e Ollama indisponiveis")
+        telemetry.record_fallback("naturalizer", language, "LLM remoto e Ollama indisponíveis")
         logger.info("Naturalizacao via regras (%s)", language)
         return text
 
