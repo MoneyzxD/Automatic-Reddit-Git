@@ -2,13 +2,17 @@
 
 ## Retomada em 13/10 — resultado dos testes e publicação da fila
 
-Rodada vigente: [38447177562](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38447177562),
-main/c3fbf5a, após o prazo738s informado pelo Groq. Restore e testes passaram;
-seq58 confirma retomada de1wyx2wj EN/ES com fonte/perfil masculino preservados
-e91IDs. Geração em andamento, sem mídia/upload novos; não disparar outro
-gravador nem declarar operação diária resolvida enquanto esse resultado não
-for conferido. Teto de espera agora900s/três tentativas, sem trocar chave/modelo.
-Suíte local1.116 passou. Agentes e calibração de siglas aguardam esse gate.
+Última rodada: [38447177562](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38447177562),
+main/c3fbf5a, terminou failure após retomar1wyx2wj sem repetir extração.
+Restore/testes/finalsave passaram; seq61 preserva91IDs, fonte/perfil masculino,
+dez rejeitados e dois unavailable retomáveis, sem processing nem mídia nova.
+A espera configurada900s funcionou: a mesma chamada aguardou534s e depois26s,
+mas a terceira tentativa ainda recebeu429 sem tipo/prazo declarado. Não
+atribuir o último erro ao mesmo subtipoTPD sem evidência. Publicação pulada.
+Nenhum job anterior ativo; não insistir em novos runs sem esclarecer o limite
+atual da organização da chaveEN. Solicitação de Usage/Limits/organizações ao
+operador pendente. Automação09UTC/meta3 permanece habilitada, sem prova de
+rodada normal verde. Suíte local1.116 passou; agentes continuam aguardando.
 
 Publicação recuperada confirmada no
 [38344600714](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38344600714):

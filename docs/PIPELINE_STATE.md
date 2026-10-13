@@ -10,6 +10,13 @@ perfis e etapas aprovadas permanecem preservados; rejeitados não são retomáve
 Mudanças na expansão de abreviações só afetam fontes novas: retomadas usam hash e
 texto expandido persistidos, sem recalcular a identidade pela regra nova.
 
+Head mais recente conferido: production/38447177562/seq61, 91IDs, nenhuma
+fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES unavailable por429,
+fonte/perfil masculino preservados. A retomada real carregou a mesma identidade
+e dispensou extração; não resetar nem reabrir os dez estados rejected. Geração
+normal continua sem aceite; aguardar diagnóstico da cota e retomar somente os
+estados elegíveis. O próximo cron segue09UTC, automação habilitada.
+
 ## Autoridade e pré-requisitos
 
 O snapshot privado contém backup SQLite, filas explícitas, fonte/perfil e

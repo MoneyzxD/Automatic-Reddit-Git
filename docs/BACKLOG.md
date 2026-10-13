@@ -26,6 +26,14 @@ Qualidade ainda exige investigar correções de siglas sugeridas por LT
 (AITAH→AITCH, FAFO→FAO) e justificativas semânticas contraditórias da fonte1wo7cko.
 Não suprimir achados críticos nem promover novas exceções sem prova/revisão.
 
+Retomada38447177562/c3fbf5a também falhou: respeitou534s+26s na mesma chamada,
+terceiro429 sem tipo/prazo. Finalseq61 conserva fonte/perfil/91IDs e dois
+unavailable; nenhum processing/upload novo. Solicitar Usage/Limits atualizados
+da organização da chaveEN e confirmar se as chaves têm organizações diferentes
+antes de novos testes ou aumento adicional de esperas. O status público do
+Groq não anuncia incidente na conferência13Oct19UTC, mas isso não comprova
+disponibilidade da cota desta organização. Não trocar modelo/chave por limite.
+
 Logs fornecidos do run38290710493/12Oct: adaptação EN/1wrq1wk unavailable,
 três chamadas semânticas, 26 achados LT, zero patches; main código2 antes de
 mídia/upload. LT6.6 iniciou sem erro fatal. Não há HTTP original no artefato,
