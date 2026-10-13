@@ -340,7 +340,9 @@ class MetadataGenerator:
 
     def _build_youtube_block(self, hook: str, full_description: str,
                               hashtags: list, language: str) -> dict:
-        yt_title = f"{hook} #shorts"[:100]
+        if len(hook) > 100:
+            raise ValueError("Titulo do YouTube excede 100 caracteres; nao pode ser truncado")
+        yt_title = f"{hook} #shorts" if len(hook) + len(" #shorts") <= 100 else hook
 
         yt_tags = BASE_TAGS.get(language, BASE_TAGS["en"]).copy()
         yt_tags += [h.lstrip("#") for h in hashtags if h.startswith("#")]

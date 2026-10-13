@@ -179,7 +179,7 @@ HOOK_PROMPTS = {
         "conflito de forma direta — sem inventar detalhes que não estão na história. Não "
         "existe uma frase-modelo pra isso; cada história pede uma solução diferente.\n\n"
         "REGRAS OBRIGATÓRIAS:\n"
-        "- Máximo 120 caracteres\n"
+        "- Máximo 100 caracteres, incluindo espaços e pontuação; reescreva mais curto se necessário\n"
         "- O perfil NARRADOR, quando fornecido, determina a concordância da primeira pessoa "
         "(male = masculino; female = feminino). Não altere o gênero dos outros personagens.\n"
         "- Os exemplos orientam apenas o estilo, não o gênero nem os fatos da história. "
@@ -231,7 +231,7 @@ HOOK_PROMPTS = {
         "✅ 'What made my 79-year-old grandmother lose her patience in front of the whole family.'\n"
         "✅ 'What did you learn after cutting off your parents?'\n\n"
         "MANDATORY RULES:\n"
-        "- Maximum 120 characters\n"
+        "- Maximum 100 characters, including spaces and punctuation; rewrite more briefly if needed\n"
         "- NO subreddit acronyms (AITA, TIFU etc)\n"
         "- NO invented facts not in the story\n"
         "- No quotes, ellipsis or emojis\n"
@@ -284,7 +284,7 @@ HOOK_PROMPTS = {
         "— sin inventar detalles que no esten en la historia. No hay una frase-modelo fija; "
         "cada historia pide una solucion distinta.\n\n"
         "REGLAS OBLIGATORIAS:\n"
-        "- Máximo 120 caracteres\n"
+        "- Máximo 100 caracteres, incluidos espacios y puntuación; reescribe más breve si es necesario\n"
         "- El perfil NARRADOR, cuando se proporciona, determina la concordancia de la primera persona "
         "(male = masculino; female = femenino). No cambies el género de los demás personajes.\n"
         "- Los ejemplos solo orientan el estilo, no el género ni los hechos de la historia. "
@@ -593,7 +593,7 @@ class TitleGenerator:
         """
         story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
         if not self.enabled:
-            return self._rule_based_title(original_title)
+            return self._rule_based_title(original_title, max_len=100)
 
         logger.info("Gerando hook de engajamento (%s)", language)
 
@@ -606,7 +606,7 @@ class TitleGenerator:
         from utils import telemetry
         telemetry.record_fallback("titler.hook", language, "todos os LLMs falharam")
         logger.warning("Todos LLMs falharam para hook — usando titulo como fallback")
-        return self._rule_based_title(original_title)
+        return self._rule_based_title(original_title, max_len=100)
 
     # ── HOOK DE ENCERRAMENTO (CTA para o fim do video / ultima parte) ────────
 
@@ -648,13 +648,11 @@ class TitleGenerator:
         title = re.sub(r"\.{2,}$",         "", title).strip()
         title = re.sub(r"!+$",             "", title).strip()
         title = re.sub(r"^\d+[\.\)]\s*",   "", title).strip()
-        title = title.split("\n")[0].strip()
 
-        # Nunca deixar passar estrutura "frase: subtitulo" — deve ser UMA frase.
-        # O modelo insiste nesse formato mesmo com regra no prompt, entao aqui
-        # e uma trava deterministica: corta tudo a partir do primeiro ':'.
-        if ":" in title:
-            title = title.split(":", 1)[0].strip()
+        # Cortar no separador pode remover a conclusão ou parte essencial da frase.
+        if ":" in title or "\n" in title or "\r" in title:
+            logger.warning("Titulo rejeitado por conter separador ou varias linhas (%s)", language)
+            return ""
 
         # Hifen/travessao entre oracoes produz o efeito de duas frases
         # coladas. O prompt pede reescrita; esta trava cobre saidas que ainda
@@ -666,7 +664,8 @@ class TitleGenerator:
             title = self._ensure_question_mark(title)
 
         if len(title) > max_len:
-            title = title[:max_len - 3]
+            logger.warning("Titulo rejeitado por exceder %s caracteres (%s)", max_len, language)
+            return ""
 
         return title
 
@@ -780,7 +779,7 @@ class TitleGenerator:
                 return None
             hook = self._clean_title(
                 resp.choices[0].message.content.strip(),
-                max_len=120,
+                max_len=100,
                 is_hook=True,
                 language=language,
             )
@@ -885,7 +884,7 @@ class TitleGenerator:
             if resp.status_code == 200:
                 hook = self._clean_title(
                     resp.json().get("response", "").strip(),
-                    max_len=120,
+                    max_len=100,
                     is_hook=True,
                     language=language,
                 )
@@ -981,13 +980,13 @@ class TitleGenerator:
 
     # ── FALLBACK ──────────────────────────────────────────────────────────────
 
-    def _rule_based_title(self, text: str) -> str:
+    def _rule_based_title(self, text: str, max_len: int = 120) -> str:
         text  = SUBREDDIT_PREFIXES.sub("", text).strip()
-        first = re.split(r"[.!?]", text)[0].strip()
-        first = re.sub(r'^["\'"]|["\'"]$', "", first).strip()
-        if len(first) > 58:
-            first = first[:55]
-        return first if first else text[:58]
+        text = re.sub(r'^["\'"]|["\'"]$', "", text).strip()
+        # Sem resumo automático: só a frase integral pode seguir para o guardião.
+        if not text or len(text) > max_len:
+            raise ValueError(f"Titulo de fallback deve ter entre 1 e {max_len} caracteres")
+        return text
 
     def _rule_based_closing(self, language: str) -> str:
         """Fallback fixo de encerramento quando todos os LLMs falham."""

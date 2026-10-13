@@ -8,6 +8,80 @@ from stages.validator import ValidationResult, ValidatorEngine
 
 
 SEPARADOR_DE_ORACOES = re.compile(r"\s[-–—]\s")
+HOOK_LONGO_EN = (
+    "I stopped giving my son fifteen thousand dollars after learning his wife never had surgery, "
+    "and now everyone thinks I am wrong."
+)
+
+
+def test_clean_hook_longo_nao_corta_frase_do_incidente():
+    generator = TitleGenerator({})
+
+    assert generator._clean_title(HOOK_LONGO_EN, is_hook=True, language="en") == ""
+
+
+@pytest.mark.parametrize("text", ["I found out: the surgery never happened.", "I found out\nwhat really happened."])
+def test_clean_title_nao_descarta_continuacao(text):
+    assert TitleGenerator({})._clean_title(text, language="en") == ""
+
+
+@pytest.mark.parametrize("text", ["I refused to pay.", "Was I wrong to refuse?"])
+def test_clean_title_preserva_pontuacao_final(text):
+    assert TitleGenerator({})._clean_title(text, language="en") == text
+
+
+@pytest.mark.parametrize("provider", ["groq", "ollama"])
+def test_provedor_rejeita_hook_acima_do_limite_youtube_sem_nova_tentativa(provider, monkeypatch):
+    from utils import environment, groq_client
+
+    response = HOOK_LONGO_EN[:117]
+    calls = []
+    monkeypatch.setattr(environment, "groq_api_key", lambda lang: "chave-teste")
+
+    def complete(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(content=response),
+        )])
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=complete)))
+    monkeypatch.setattr(groq_client, "tracked_groq", lambda *args: client)
+
+    def post(url, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(status_code=200, json=lambda: {"response": response})
+
+    monkeypatch.setattr("requests.post", post)
+    result = getattr(TitleGenerator({}), f"_{provider}_hook")("Title", "Story", "en")
+
+    assert result is None
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_hook_fallback_longo_interrompe_sem_inventar_titulo(enabled, monkeypatch):
+    generator = TitleGenerator({"enabled": enabled})
+    monkeypatch.setattr(generator, "_groq_hook", lambda *args: None)
+    monkeypatch.setattr(generator, "_ollama_hook", lambda *args: None)
+
+    with pytest.raises(ValueError, match="100"):
+        generator.generate_hook("Story", "en", HOOK_LONGO_EN)
+
+
+def test_fallback_preserva_frase_inteira_decimal_e_interrogacao():
+    title = "Was I wrong to ask for $15.50 back?"
+
+    assert TitleGenerator({"enabled": False}).generate_hook(
+        "Story", "en", "AITA " + title,
+    ) == title
+
+
+@pytest.mark.parametrize("language", ["pt", "en", "es"])
+def test_prompt_hook_pede_limite_do_titulo_youtube(language):
+    from stages.titler import HOOK_PROMPTS
+
+    assert "100" in HOOK_PROMPTS[language]
+    assert "120" not in HOOK_PROMPTS[language]
 
 
 @pytest.mark.parametrize("provider", ["groq", "ollama"])
