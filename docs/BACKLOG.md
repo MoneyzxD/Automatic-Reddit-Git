@@ -15,6 +15,17 @@ e as correções pontuais estão em [status](RELIABILITY_STATUS.md). Suíte1.114
 passou; normal38441271214 testa o código novo com produção restaurada e upload
 habilitado, ainda sem aceite final. Agentes aguardam essa prova operacional.
 
+38441271214 terminou por HTTP429/TPD na adaptação global da segunda fonte,
+Retry-After738s acima do teto120s. Finalseq56 conserva91IDs e1wyx2wj EN/ES
+unavailable, retomáveis; fonte1wo7cko permanece rejected. Ajuste do teto por
+espera para15min mantém tentativas/gates/chave/modelo e evita repetir fases
+já feitas em memória. Conferir a retomada real antes de declarar o incidente
+resolvido. A cota pode continuar insuficiente; não insistir fora do Retry-After.
+
+Qualidade ainda exige investigar correções de siglas sugeridas por LT
+(AITAH→AITCH, FAFO→FAO) e justificativas semânticas contraditórias da fonte1wo7cko.
+Não suprimir achados críticos nem promover novas exceções sem prova/revisão.
+
 Logs fornecidos do run38290710493/12Oct: adaptação EN/1wrq1wk unavailable,
 três chamadas semânticas, 26 achados LT, zero patches; main código2 antes de
 mídia/upload. LT6.6 iniciou sem erro fatal. Não há HTTP original no artefato,

@@ -1097,6 +1097,52 @@ def test_retry_after_respeitado_sem_ler_mensagem(tmp_path, perfil_feminino, head
     assert waits == expected
 
 
+@pytest.mark.parametrize("retry_after,approved", [(738, True), (901, False)])
+def test_config_runner_respeita_tpd_do_incidente_sem_refazer_fatos_ou_chunk(
+    tmp_path, perfil_feminino, monkeypatch, retry_after, approved,
+):
+    from pathlib import Path
+    import yaml
+    import stages.script_guardian as module
+
+    config = yaml.safe_load((Path(__file__).parents[1] / "config/settings.yaml").read_text(
+        encoding="utf-8"))["script_quality"]
+    waits, contexts = [], []
+    monkeypatch.setattr(module.time, "sleep", waits.append)
+
+    class Reviewer(FakeSemanticReviewer):
+        def review(self, **context):
+            contexts.append(context)
+            if context["mode"] == "global" and sum(c["mode"] == "global" for c in contexts) == 1:
+                exc = RuntimeError("falha sintética de cota")
+                exc.status_code = 429
+                exc.body = {"error": {"message": "Rate limit reached on tokens per day (TPD)"}}
+                exc.response = SimpleNamespace(headers={"Retry-After": str(retry_after)})
+                raise exc
+            return super().review(**context)
+
+    guardian = ScriptGuardian(config, base_dir=tmp_path, languagetool=FakeLanguageTool(),
+                              semantic_reviewer=Reviewer())
+    if approved:
+        result = revisar(guardian, perfil_feminino, final_gate=True,
+                         candidate_text="Agora sou faxineira.")
+        assert result.status == "approved"
+        assert result.approved_text == "Agora sou faxineira."
+        assert not result.changed
+        assert sum(waits) == 738
+        assert all(0 < wait <= 60 for wait in waits)
+        assert [c["mode"] for c in contexts] == ["facts", "chunk", "global", "global"]
+        assert contexts[-1] == contexts[-2]
+    else:
+        with pytest.raises(QualityUnavailable) as caught:
+            revisar(guardian, perfil_feminino, final_gate=True,
+                    candidate_text="Agora sou faxineira.")
+        assert caught.value.review.semantic_failure.rate_limit_type == "TPD"
+        assert caught.value.review.semantic_failure.retry_after_seconds == 901
+        assert waits == []
+        assert [c["mode"] for c in contexts] == ["facts", "chunk", "global"]
+
+
 def test_orcamento_customizado_limita_chamadas(tmp_path, perfil_feminino):
     reviewer = FakeSemanticReviewer([None] * 10)
     with pytest.raises(QualityUnavailable) as error:

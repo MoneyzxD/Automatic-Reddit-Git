@@ -168,7 +168,9 @@ script_quality:
   # Teto configurável só do JSON do guardião; length nunca autoriza aprovação.
   semantic_max_completion_tokens: 2048
   semantic_retry_wait_seconds: 15
-  semantic_max_retry_wait_seconds: 120
+  # Até 15min por espera: honra TPD curto sem refazer fatos/chunks já revisados.
+  # Mantém 3 tentativas; esperas maiores continuam indisponíveis, sem trocar chave.
+  semantic_max_retry_wait_seconds: 900
   languagetool_enabled: true
   languagetool_required: true
   languagetool_url: http://127.0.0.1:8081/v2/check

@@ -49,6 +49,29 @@ Seq51 registrou rejeição de adaptação dessa fonte em EN/ES, sem mídia; lote
 continua tentando outra fonte. Motivo concreto depende dos logs/quarentena
 novos, ainda indisponíveis pelo CLI enquanto o job estiver em execução.
 
+O run terminou failure em18:12UTC: a segunda fonte1wyx2wj ficou unavailable
+na revisão global da adaptação, HTTP429/TPD, Retry-After738s. TPM restante8000
+e RPD restante997 não provam disponibilidade do orçamento diário de tokens.
+Save final passou; headseq56 conserva91IDs/zero upload pendente, dez rejeitados
+e dois unavailable retomáveis, nenhum processing. LT/testes/restore passaram;
+publicação pulada e zero mídia nova. Agora não há monitor/job anterior ativo.
+
+Fonte1wo7cko: LT corrigiu gramática, mas também sugeriu AITAH→AITCH e FAFO→FAO;
+o guardião final bloqueou o texto, incluindo achados de identidade/relação
+contraditórios. Não promover siglas/glossário automaticamente nem reabrir a
+fonte rejeitada. Esse caso pede calibração sustentada, não aprovação forçada.
+
+O teto120s impediu honrar a espera738 do provedor. Reparo configurável sobe o
+teto por espera para900s, mantendo três tentativas, em blocos de até60s. Esperas
+maiores continuam unavailable. Retry repete a chamada pendente no mesmo processo
+sem recolher fatos/refazer chunks; não é aumento de cota nem troca de chave/modelo.
+Não garante crédito suficiente para todo o lote e continua limitado pelo job300min.
+RED738/GREEN233 no guardião; suíte1.116 testes/35 avisos legados e revisão
+independente passaram. Prova real pós-ajuste ainda pendente. A documentação
+[Groq](https://console.groq.com/docs/rate-limits) confirma TPD separado de TPM
+e cota por organização, não por chave; organizações das três chaves aguardam
+confirmação do operador, sem presumir orçamentos independentes nem fazer rotação.
+
 Logs do operador de12/10/run38290710493 confirmam unavailable da adaptação
 EN/1wrq1wk, três chamadas semânticas, 26 achados LT e zero patches. LT6.6 ativo;
 main retornou2 antes de mídia/upload. HTTP original ausente: não atribuir cota,
