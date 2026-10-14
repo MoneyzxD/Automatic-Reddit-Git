@@ -27,7 +27,8 @@ em responseJsonSchema. Só uma resposta STOP com texto final pode ser consumida.
 Resposta bloqueada, truncada, vazia ou inválida não aprova conteúdo. O perfil,
 evidências literais, rechecagem LanguageTool e quarentena continuam obrigatórios.
 O guardião controla as três tentativas; o cliente não adiciona retries nesse
-caminho. Geração tem no máximo duas tentativas em 429/503, com teto de espera 30s.
+caminho. Geração tem no máximo duas tentativas em 429/503/timeout/conexão,
+com teto de espera 30s. Timeout e payload são iguais nas duas tentativas.
 Cadência padrão 13s entre chamadas/etapas/idiomas no mesmo processo não garante
 crédito diário nem coordena outros consumidores do projeto Google.
 
@@ -119,3 +120,29 @@ continuam recusados, sem devolver a fonte como português. O guardião continua
 revisando tradução contra fonte antes de naturalização/TTS. Provider/cache são
 identificados; source/hash/perfil e passos aprovados de recuperação permanecem.
 Essa revisão ainda exige prova real PT/EN/ES, sem alterar produção.
+
+O delta de tradução/HTTP503 passou 133 testes focados e a suíte completa:
+1.166 passes/68,67s. Revisão independente não encontrou Critical/Important;
+o cabeçalho desatualizado do tradutor foi corrigido. São provas locais com
+transporte falso, sem demonstrar disponibilidade ou qualidade do serviço.
+
+Commit a8c580a enviado na mesma branch. Run
+[38493851915](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38493851915)
+retoma PT/EN/ES no mesmo namespace, com modelo fixo 3.8 Flash, tradução Gemini,
+história sintética e apenas geração. Resultado ainda em acompanhamento;
+produção continua no Groq até cumprir os critérios de aceite acima.
+
+O run 38493851915 terminou failure na primeira tradução EN→PT: TimeoutError
+após 60s, uma tentativa, sem resposta candidata. Testes/LT/restore/save passaram;
+checkpoint seq21 mantém fonte/perfil/adaptação EN e zero mídia/upload.
+Não houve HTTP429 Gemini comprovado; a causa interna do timeout é desconhecida.
+
+A investigação usou [troubleshooting oficial](https://ai.google.dev/gemini-api/docs/troubleshooting):
+retries transitórios de timeout/conexão são recomendados, e Gemini 3.6+ ignora
+temperatura, com rejeição futura anunciada. O cliente agora permite um único
+retry de transporte dentro do mesmo teto de duas tentativas de geração,
+sem aumentar timeout/caps nem trocar chave/modelo. O guardião mantém uma tentativa
+interna. Temperatura permanece no 2.5 e é omitida no 3.8. Quatro regressões RED,
+287 testes focados GREEN e suíte 1.170 passes/73,19s; revisão independente sem
+Critical/Important. Uma nova validação isolada deve conferir o serviço real,
+sem considerar esses testes como aprovação de tradução ou disponibilidade.

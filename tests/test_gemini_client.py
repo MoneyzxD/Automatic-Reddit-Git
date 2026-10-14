@@ -328,6 +328,7 @@ def test_modelo_atual_validado_no_catalogo_preserva_schema_e_cap(monkeypatch):
     generation = options["json"]["generationConfig"]
     assert generation["thinkingConfig"] == {"thinkingLevel": "low"}
     assert generation["maxOutputTokens"] == 2048
+    assert "temperature" not in generation
     assert generation["responseJsonSchema"] == _semantic_response_format(
         "qwen/qwen3.8-27b", "facts")["json_schema"]["schema"]
 
@@ -403,3 +404,40 @@ def test_503_de_geracao_tem_um_retry_limitado_com_payload_identico(monkeypatch):
     monkeypatch.setattr(gemini_client, "_sleep", waits.append)
     assert create().choices[0].message.content == "Texto completo."
     assert len(calls) == 2 and calls[0] == calls[1] and waits == [15]
+
+
+@pytest.mark.parametrize("failure", ["timeout", "connection"])
+def test_falha_transitoria_de_transporte_tem_um_retry_sem_mudar_limites(monkeypatch, failure):
+    import requests
+    from utils import gemini_client
+    calls, waits = [], []
+    exception = requests.Timeout if failure == "timeout" else requests.ConnectionError
+    def post(url, **options):
+        calls.append((url, options))
+        if len(calls) == 1:
+            raise exception("CHAVE_E_URL_PRIVADAS")
+        return SimpleNamespace(status_code=200, headers={}, close=lambda: None, json=response)
+    monkeypatch.setattr(gemini_client.requests, "post", post)
+    monkeypatch.setattr(gemini_client, "_sleep", waits.append)
+    assert create(max_tokens=2048).choices[0].message.content == "Texto completo."
+    assert calls[0] == calls[1] and len(calls) == 2 and waits == [15]
+    assert calls[1][1]["timeout"] == 5
+
+
+def test_timeout_persistente_para_em_duas_tentativas_sanitizadas(monkeypatch):
+    import requests
+    calls = fake_transport(monkeypatch, error=requests.Timeout("CHAVE_E_URL_PRIVADAS"))
+    with pytest.raises(TimeoutError) as caught:
+        create()
+    assert len(calls) == 2 and "PRIVADAS" not in str(caught.value)
+
+
+def test_guardiao_continua_dono_do_retry_de_timeout(monkeypatch):
+    import requests
+    from utils.llm_client import tracked_llm
+    calls = fake_transport(monkeypatch, error=requests.Timeout("CHAVE_E_URL_PRIVADAS"))
+    with pytest.raises(TimeoutError):
+        tracked_llm(env.llm_api_key(), "script_guardian", sdk_max_retries=0,
+                    retry_rate_limit=False, timeout=5).chat.completions.create(
+                        messages=[{"role": "user", "content": "Fonte."}])
+    assert len(calls) == 1

@@ -83,7 +83,8 @@ class GeminiClient:
         cap = max_completion_tokens if max_completion_tokens is not None else max_tokens
         if cap is not None:
             config["maxOutputTokens"] = cap
-        if temperature is not None:
+        # Gemini 3.6+ ignora temperatura e anuncia futura rejeição do parâmetro.
+        if temperature is not None and self.model.startswith("gemini-2.5-"):
             config["temperature"] = temperature
         if response_format:
             kind = response_format.get("type")
@@ -110,6 +111,12 @@ class GeminiClient:
         for attempt in range(self._attempts):
             try:
                 data = self._post(payload)
+            except (TimeoutError, ConnectionError) as error:
+                if attempt + 1 == self._attempts:
+                    raise
+                logger.warning("Falha transitória Gemini (%s): %s; segunda tentativa em 15s",
+                               self._stage, type(error).__name__)
+                _sleep(15)
             except GeminiError as error:
                 wait = _retry_seconds(error.response.headers, {})
                 if error.status_code not in {429, 503} or attempt + 1 == self._attempts or (wait is not None and wait > 30):
