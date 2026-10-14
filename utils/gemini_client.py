@@ -112,7 +112,7 @@ class GeminiClient:
                 data = self._post(payload)
             except GeminiError as error:
                 wait = _retry_seconds(error.response.headers, {})
-                if error.status_code != 429 or attempt + 1 == self._attempts or (wait is not None and wait > 30):
+                if error.status_code not in {429, 503} or attempt + 1 == self._attempts or (wait is not None and wait > 30):
                     raise
                 _sleep(15 if wait is None else wait)
             else:

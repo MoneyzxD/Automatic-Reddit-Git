@@ -14,6 +14,9 @@ def gemini_env(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "segredo-sintetico")
     monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
     monkeypatch.setenv("GEMINI_MIN_INTERVAL_SECONDS", "0")
+    from utils import gemini_client
+    monkeypatch.setattr(gemini_client, "_NEXT_REQUEST_AT", {})
+    monkeypatch.setattr(gemini_client, "_sleep", lambda seconds: None)
     telemetry.reset()
 
 
@@ -327,3 +330,76 @@ def test_modelo_atual_validado_no_catalogo_preserva_schema_e_cap(monkeypatch):
     assert generation["maxOutputTokens"] == 2048
     assert generation["responseJsonSchema"] == _semantic_response_format(
         "qwen/qwen3.8-27b", "facts")["json_schema"]["schema"]
+
+
+def gemini_translator(monkeypatch):
+    from stages.translator import ScriptTranslator
+    translator = ScriptTranslator({"delay": 0, "retry_waits": [0, 0]})
+    for name in ("_translate_chunk_google", "_translate_chunk_mymemory"):
+        monkeypatch.setattr(translator, name, lambda *a: pytest.fail("Provedor legado não deve ser usado"))
+    return translator
+
+
+def test_traducao_gemini_preserva_whitespace_e_provedor(monkeypatch):
+    calls = fake_transport(monkeypatch, response("Eu trabalho aqui."))
+    result = gemini_translator(monkeypatch).translate("\nI work here.\n", "en", "pt")
+    assert result.require_text() == "\nEu trabalho aqui.\n" and result.provider == "Gemini"
+    assert len(calls) == 1
+    assert calls[0][1]["json"]["generationConfig"]["maxOutputTokens"] == 4096
+
+
+@pytest.mark.parametrize("finish", ["MAX_TOKENS", "SAFETY"])
+def test_traducao_gemini_incompleta_nunca_retorna_fonte(monkeypatch, finish):
+    fake_transport(monkeypatch, response("Eu trabalho aqui.", finish))
+    result = gemini_translator(monkeypatch).translate("I work here.", "en", "pt")
+    assert result.status == "unavailable" and result.text is None
+
+
+def test_traducao_gemini_rejeita_idioma_fonte_e_nao_muda_para_google(monkeypatch):
+    calls = fake_transport(monkeypatch, response("I work here."))
+    result = gemini_translator(monkeypatch).translate("I work here.", "en", "pt")
+    assert result.status == "rejected" and result.text is None and len(calls) == 1
+
+
+def test_traducao_gemini_preserva_sentinelas_do_glossario(monkeypatch):
+    translator = gemini_translator(monkeypatch)
+    monkeypatch.setattr(translator, "_translate_chunk_gemini", lambda chunk, *_: chunk.replace("I bought a", "Comprei uma"))
+    assert translator.translate("I bought a Pokemon card", "en", "pt").require_text() == "Comprei uma carta Pokémon"
+
+
+def test_traducao_gemini_nao_reutiliza_cache_legado(monkeypatch, tmp_path):
+    import hashlib
+    source = "This changed."
+    translator = gemini_translator(monkeypatch)
+    target = tmp_path / "pt/script_example_pt.txt"
+    target.parent.mkdir()
+    target.write_text("Isso mudou.", encoding="utf-8")
+    target.with_suffix(".cache.json").write_text(json.dumps({
+        "source_sha256": hashlib.sha256(source.encode()).hexdigest(), "source_lang": "en",
+        "target_lang": "pt", "glossary_version": translator.glossary.version}), encoding="utf-8")
+    calls = fake_transport(monkeypatch, response("Isto se alterou."))
+    result = translator.translate_all(source, "example", tmp_path, ["pt"], source_lang="en")["pt"]
+    assert result.provider == "Gemini" and result.require_text() == "Isto se alterou." and len(calls) == 1
+    assert json.loads(target.with_suffix(".cache.json").read_text(encoding="utf-8"))["translation_provider"] == "Gemini"
+
+
+def test_traducao_gemini_usa_blocos_maiores_sem_perder_fonte(monkeypatch):
+    source = "I work here. " * 500
+    calls = fake_transport(monkeypatch, response("Eu trabalho aqui."))
+    result = gemini_translator(monkeypatch).translate(source, "en", "pt")
+    assert result.status == "approved" and len(calls) == 2
+    assert "".join(chunk.source_text for chunk in result.chunks) == source
+
+
+def test_503_de_geracao_tem_um_retry_limitado_com_payload_identico(monkeypatch):
+    from utils import gemini_client
+    calls, waits = [], []
+    def post(url, **options):
+        calls.append(options["json"])
+        status = 503 if len(calls) == 1 else 200
+        return SimpleNamespace(status_code=status, headers={}, close=lambda: None,
+                               json=lambda: response() if status == 200 else {"error": {"message": "PRIVADO"}})
+    monkeypatch.setattr(gemini_client.requests, "post", post)
+    monkeypatch.setattr(gemini_client, "_sleep", waits.append)
+    assert create().choices[0].message.content == "Texto completo."
+    assert len(calls) == 2 and calls[0] == calls[1] and waits == [15]

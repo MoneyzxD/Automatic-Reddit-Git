@@ -11,7 +11,8 @@ continua groq enquanto o aceite real estiver pendente. A camada utils/llm_client
 encaminha os clientes de adaptação, perfil, correção de gênero, naturalização,
 título/hook/encerramento, metadados e validação. Métodos privados com nomes
 históricos groq são preservados para manter compatibilidade e testes existentes.
-A tradução continua usando seus provedores gratuitos existentes.
+A tradução também usa Gemini quando selecionado. A seleção Groq preserva
+Google/MyMemory. Cache legado de tradução não conta como tradução Gemini.
 
 Gemini usa REST nativo com requests já instalado. GEMINI_MODEL começa em
 gemini-3.8-flash, que tem modalidade gratuita documentada e consta no catálogo
@@ -26,7 +27,7 @@ em responseJsonSchema. Só uma resposta STOP com texto final pode ser consumida.
 Resposta bloqueada, truncada, vazia ou inválida não aprova conteúdo. O perfil,
 evidências literais, rechecagem LanguageTool e quarentena continuam obrigatórios.
 O guardião controla as três tentativas; o cliente não adiciona retries nesse
-caminho. Geração tem no máximo duas tentativas em 429, com teto de espera 30s.
+caminho. Geração tem no máximo duas tentativas em 429/503, com teto de espera 30s.
 Cadência padrão 13s entre chamadas/etapas/idiomas no mesmo processo não garante
 crédito diário nem coordena outros consumidores do projeto Google.
 
@@ -96,3 +97,25 @@ isso não explica retrospectivamente o HTTP404 nem garante acesso à inferência
 Nenhuma chamada de geração ou mídia ocorreu nesse modo. Modelo fixo candidato
 agora 3.8 Flash, com thinkingLevel=low e os mesmos caps/schema/gates; não é
 alternância por cota nem aceite para produção.
+
+Validação de geração retomada no
+[38491356526](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38491356526),
+commit a43aafb, modelo fixo Gemini 3.8 Flash. Mesma fonte/perfil/namespace de teste,
+PT/EN/ES sintéticos e sem upload. Check específico do modelo/schema e gates:
+150 testes locais passaram. Resultado real pendente; conferir esse run antes
+de novo dispatch ou de substituir main/production.
+
+O run 38491356526 terminou failure: adaptação EN aprovada com Gemini 3.8; tradução
+Google bloqueada e fallback MyMemory precisou de reparos gramaticais. O guardião
+fez revisões reais e depois recebeu HTTP503 em chunk/PT, três tentativas, contexto
+15.240 caracteres. Nenhum HTTP429 Gemini está comprovado nesse resultado.
+Zero mídia/upload; checkpoint de teste seq14 conserva adaptação e fonte/perfil.
+O 503 é indisponibilidade do serviço, não reprovação factual comprovada.
+
+Para validar o fluxo selecionado sem o tradutor Google instável, tradução Gemini
+usa blocos lossless de 4.500 caracteres, sentinelas/glossário e detector local.
+Inglês residual, marcador perdido, saída bloqueada/truncada/vazia ou indisponível
+continuam recusados, sem devolver a fonte como português. O guardião continua
+revisando tradução contra fonte antes de naturalização/TTS. Provider/cache são
+identificados; source/hash/perfil e passos aprovados de recuperação permanecem.
+Essa revisão ainda exige prova real PT/EN/ES, sem alterar produção.
