@@ -268,12 +268,12 @@ class MetadataGenerator:
     def _description_via_groq(self, title: str, story_summary: str,
                                language: str, narrator_gender: str) -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key or not self.llm_enabled:
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "metadata")
+            from utils.llm_client import tracked_llm
+            client = tracked_llm(groq_key, "metadata")
 
             gender_label = {
                 "female":  {"pt": "feminino", "en": "female",   "es": "femenino"},
@@ -299,14 +299,14 @@ class MetadataGenerator:
                 max_tokens=120,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
-                logger.warning("Groq interrompeu a descricao por limite de tokens (%s)", language)
+                logger.warning("LLM remoto interrompeu a descrição por limite de tokens (%s)", language)
                 return None
             result = resp.choices[0].message.content.strip().strip('"\'')
             if result and len(result) > 10:
-                logger.info("Descrição gerada via Groq (%s): %s", language, result[:80])
+                logger.info("Descrição gerada via %s (%s): %s", env.llm_provider(), language, result[:80])
                 return result
         except Exception as e:
-            logger.debug("Groq falhou para descrição: %s", e)
+            logger.debug("LLM remoto falhou para descrição: %s", e)
         return None
 
     def _description_via_template(self, language: str) -> str:
@@ -400,7 +400,7 @@ class MetadataGenerator:
         )
         if not description_body:
             from utils import telemetry
-            telemetry.record_fallback("metadata", language, "Groq indisponivel — descricao via template")
+            telemetry.record_fallback("metadata", language, "LLM remoto indisponível — descrição via template")
             description_body = self._description_via_template(language)
 
         # Descrição completa com CTA e hashtags

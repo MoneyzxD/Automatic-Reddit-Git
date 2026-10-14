@@ -83,3 +83,20 @@ Não corrige arbitrariamente AITCH nem reabre a adaptação já aprovada do name
 do incidente. A execução seguinte deve usar estado elegível de produção ou uma
 validação nova. Veja [PIPELINE_STATE.md](PIPELINE_STATE.md) para gerar mantendo
 produção, sem upload, e para o limite de publicação posterior pelo cron.
+
+## Retomada de produção sem upload
+
+Após 1.126 testes e revisão independente, `ebb6ca0` foi integrado em main.
+O [run38508047757](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38508047757)
+restaurou production e preservou91IDs, mas a coleta factual da adaptação EN
+recebeu429 nas três tentativas. Contexto3.738 caracteres, TPM restante8.000,
+RPD restante1.000, sem subtipo nem retry declarado. Portanto não atribuir esse
+resultado a TPD, TPM, ao tamanho da história ou ao YouTube sem nova evidência.
+Dois pedidos do adaptador tiveramHTTP200 antes da coleta. Nenhuma etapa nova
+foi aprovada, nenhuma mídia nova foi gerada e o upload foi pulado.
+
+Snapshot final production/38508047757/seq66 conserva91IDs, os dez rejeitados,
+fonte/perfil e EN/ES/PT unavailable, sem fila YouTube pendente. A automação ficou
+pausada (`PIPELINE_AUTOMATION_ENABLED=false`) para a geração assistida, evitando
+publicação futura da fila antes da autorização específica. O próximo teste usa
+Gemini somente no namespace sintético existente, após o prazo do RetryInfo.

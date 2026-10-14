@@ -178,12 +178,12 @@ class GenderDetector:
 
     def _correct_via_groq(self, text: str, gender: str, language: str) -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key:
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client       = tracked_groq(groq_key, "gender_detector")
+            from utils.llm_client import tracked_llm
+            client       = tracked_llm(groq_key, "gender_detector")
             labels       = GENDER_LABELS.get(language, GENDER_LABELS["en"])
             gender_label = labels.get(gender, gender)
             prompt       = CORRECT_PROMPT_GROQ.get(language, CORRECT_PROMPT_GROQ["en"])
@@ -199,10 +199,10 @@ class GenderDetector:
             )
             result = resp.choices[0].message.content.strip()
             if result:
-                logger.info("Correcao de genero via Groq (%s -> %s)", language, gender)
+                logger.info("Correção de gênero via %s (%s -> %s)", env.llm_provider(), language, gender)
                 return result
         except Exception as e:
-            logger.debug("Groq falhou em gender correct: %s", e)
+            logger.debug("LLM remoto falhou na correção de gênero: %s", e)
         return None
 
     def _correct_via_ollama(self, text: str, gender: str, language: str) -> str | None:

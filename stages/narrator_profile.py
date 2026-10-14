@@ -148,12 +148,12 @@ class NarratorProfileResolver:
         self.semantic_provider = semantic_provider if semantic_provider is not None else self._groq_evidence
 
     def _groq_evidence(self, chunk: TextChunk) -> list[NarratorEvidence]:
-        key = env.groq_api_key("en")
+        key = env.llm_api_key("en")
         if not key:
-            _fallback("Groq indisponível: chave não configurada")
+            _fallback("LLM remoto indisponível: chave não configurada")
             return []
-        from utils.groq_client import tracked_groq
-        client = tracked_groq(key, "narrator_profile")
+        from utils.llm_client import tracked_llm
+        client = tracked_llm(key, "narrator_profile")
         response = client.chat.completions.create(
             model=self.config.get("groq_model", "openai/gpt-oss-20b"),
             temperature=0,
@@ -182,7 +182,7 @@ class NarratorProfileResolver:
                 continue
             evidence.append(NarratorEvidence(
                 "semantic", item.get("quote"), -1, item.get("gender"),
-                item.get("confidence"), item.get("subject"), "groq",
+                item.get("confidence"), item.get("subject"), env.llm_provider(),
             ))
         return evidence
 

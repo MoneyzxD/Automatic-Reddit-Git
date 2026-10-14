@@ -587,12 +587,12 @@ class ValidatorEngine:
                    temperature: float = 0.3, max_tokens: int = 1500,
                    language: str = "") -> str | None:
         from utils import environment as env
-        groq_key = env.groq_api_key(language) or self.groq_key
+        groq_key = env.llm_api_key(language, self.groq_key)
         if not groq_key:
             return None
         try:
-            from utils.groq_client import tracked_groq
-            client = tracked_groq(groq_key, "validator")
+            from utils.llm_client import tracked_llm
+            client = tracked_llm(groq_key, "validator")
             resp = client.chat.completions.create(
                 model=self.groq_model,
                 messages=[
@@ -605,7 +605,7 @@ class ValidatorEngine:
             choice = resp.choices[0]
             if getattr(choice, "finish_reason", None) == "length":
                 logger.warning(
-                    "Resposta do Groq TRUNCADA por max_tokens=%d — o JSON/texto pode "
+                    "Resposta do LLM remoto TRUNCADA por max_tokens=%d — o JSON/texto pode "
                     "estar incompleto. Considere aumentar max_tokens para este caso.",
                     max_tokens,
                 )
@@ -620,7 +620,7 @@ class ValidatorEngine:
 
             return choice.message.content.strip()
         except Exception as e:
-            logger.warning("Groq falhou na validacao: %s", e)
+            logger.warning("LLM remoto falhou na validação: %s", e)
             return None
         finally:
             # Pausa apos toda chamada (sucesso ou falha) para nao estourar o
@@ -629,7 +629,7 @@ class ValidatorEngine:
 
     def _parse_validation_json(self, raw: str | None) -> ValidationResult:
         if not raw:
-            logger.warning("Validador sem resposta do Groq")
+            logger.warning("Validador sem resposta do LLM remoto")
             return ValidationResult(status="unavailable", approved=False, score=0, raw="")
 
         cleaned = re.sub(r"^```json\s*|```\s*$", "", raw.strip(), flags=re.MULTILINE).strip()

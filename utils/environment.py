@@ -80,6 +80,21 @@ def groq_api_key(language: str = "") -> str:
     return _env("GROQ_API_KEY")
 
 
+def llm_provider() -> str:
+    """Escolha fixa por execução; indisponibilidade não alterna o provedor."""
+    provider = _env("PIPELINE_LLM_PROVIDER", "groq").lower() or "groq"
+    if provider not in {"groq", "gemini"}:
+        raise ValueError("Provedor de LLM inválido; use groq ou gemini")
+    return provider
+
+
+def llm_api_key(language: str = "", fallback: str = "") -> str:
+    """Não mistura credenciais: Gemini nunca reutiliza uma chave Groq legada."""
+    if llm_provider() == "gemini":
+        return _env("GEMINI_API_KEY")
+    return groq_api_key(language) or fallback
+
+
 # ── REDDIT — COOKIE DE SESSAO LOGADA ────────────────────────────────────────
 #
 # Motivo: o Reddit passou a devolver 403 no endpoint JSON publico mesmo pra
