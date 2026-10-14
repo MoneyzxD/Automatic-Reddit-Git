@@ -22,7 +22,7 @@ def workflow():
 
 def test_workflow_restauracao_antecede_geracao_e_publicacao():
     data = workflow()
-    assert set(data["on"]["workflow_dispatch"]["inputs"]["state_action"]["options"]) == {"normal", "publish", "bootstrap", "verify", "inventory"}
+    assert set(data["on"]["workflow_dispatch"]["inputs"]["state_action"]["options"]) == {"normal", "generate", "publish", "bootstrap", "verify", "inventory"}
     steps = data["jobs"]["gerar-e-publicar"]["steps"]
     ids = [step.get("id") for step in steps]
     assert ids.index("state_restore") < ids.index("generate") < ids.index("publish")
@@ -52,7 +52,7 @@ def test_workflow_publicar_somente_preserva_serializacao_restore_e_checkpoint():
     final = steps["state_save"]
     assert final["if"] == (
         "${{ always() && steps.state_restore.outcome == 'success' && "
-        "(steps.execution.outputs.state_action == 'normal' || steps.execution.outputs.state_action == 'publish') "
+        "(steps.execution.outputs.state_action == 'normal' || steps.execution.outputs.state_action == 'generate' || steps.execution.outputs.state_action == 'publish') "
         "&& steps.execution.outputs.required == 'true' }}"
     )
 
@@ -114,6 +114,37 @@ def test_publicar_somente_exige_dispatch_main_sem_opcoes_de_teste(options):
             "namespace": "production", "state_action": "publish", "state_operation": "restore",
             "generate": False, "publish": True, "dry_run": False, "test_story": False, "required": True,
         }
+
+
+@pytest.mark.parametrize("only_generate", [True, False])
+def test_gerar_producao_preserva_estado_sem_permitir_publicacao(only_generate):
+    from utils.pipeline_execution import resolve_execution
+    result = resolve_execution(event="workflow_dispatch", ref="refs/heads/main", run_id="123",
+                               state_action="generate", only_generate=only_generate)
+    assert result == {"namespace": "production", "state_action": "generate", "state_operation": "restore",
+                      "generate": True, "publish": False, "dry_run": False, "test_story": False,
+                      "required": True}
+
+
+@pytest.mark.parametrize("options", [
+    {"event": "schedule"}, {"ref": "refs/heads/feature"}, {"dry_run": True},
+    {"test_story": True}, {"validation_namespace": "validation-test"},
+])
+def test_gerar_producao_rejeita_evento_branch_e_conteudo_de_teste(options):
+    from utils.pipeline_execution import resolve_execution
+    values = dict(event="workflow_dispatch", ref="refs/heads/main", run_id="123", state_action="generate")
+    values.update(options)
+    with pytest.raises(StateError):
+        resolve_execution(**values)
+
+
+def test_workflow_gerar_producao_serializa_antes_do_preview_e_salva_checkpoint():
+    data = workflow()
+    group = data["concurrency"]["group"]
+    assert group.index("inputs.state_action == 'generate'") < group.index("inputs.apenas_gerar")
+    steps = {step["id"]: step for step in data["jobs"]["gerar-e-publicar"]["steps"] if "id" in step}
+    assert "steps.execution.outputs.state_action == 'generate'" in steps["state_save"]["if"]
+    assert not any(name.startswith("YOUTUBE_TOKEN") for name in steps["generate"]["env"])
 
 
 @pytest.mark.parametrize("options", [

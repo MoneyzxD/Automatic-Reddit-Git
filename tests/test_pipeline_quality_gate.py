@@ -366,6 +366,55 @@ def test_tres_idiomas_mesmo_perfil_e_correcao_em_todos_os_destinos(pipeline):
     assert all("ERRADO" not in json.dumps(meta, ensure_ascii=False) for meta in metas)
 
 
+def test_sigla_do_incidente_nao_chega_ao_corretor_ingles(pipeline, monkeypatch):
+    from stages.script_guardian import ScriptGuardian
+    from stages.language_tool import LanguageIssue
+    original_story = main.TEST_STORY
+    monkeypatch.setattr(main, "TEST_STORY", {**original_story, "text": original_story["text"] + " AITAH?"})
+    original_init = ScriptGuardian.__init__
+    inspected = []
+    def init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        def check(text, language):
+            inspected.append((text, language))
+            if language == "en" and "AITAH" in text:
+                start = text.index("AITAH")
+                return [LanguageIssue(rule_id="MORFOLOGIK_RULE_EN_US", category="TYPOS",
+                                      message="Grafia inválida", replacements=("AITCH",),
+                                      start=start, end=start + 5, original="AITAH")]
+            return []
+        self.languagetool.check = check
+    monkeypatch.setattr(ScriptGuardian, "__init__", init)
+    main.run_pipeline(pipeline.config, ["en"], test_story=True)
+    assert inspected
+    assert not any("AITAH" in text or "AITCH" in text for text, lang in inspected if lang == "en")
+    assert pipeline.audios
+
+
+def test_retomada_expande_candidato_sem_alterar_fonte_e_perfil_legados(pipeline, monkeypatch):
+    from stages.narrator_profile import NarratorProfileResolver, save_profile, source_sha256
+    from utils.db import PipelineDB
+    from utils.pipeline_recovery import save_source
+    story = {**main.TEST_STORY, "text": main.TEST_STORY["text"] + " AITAH?"}
+    monkeypatch.setattr(main, "TEST_STORY", story)
+    legacy_source = main.expand_age_gender_en(story["text"])
+    digest = source_sha256(story["title"], legacy_source)
+    source_path = save_source(pipeline.root, story, digest, expanded_source=legacy_source)
+    profile = NarratorProfileResolver({}, semantic_enabled=False).resolve(
+        story_id=story["id"], title=story["title"], original_text=legacy_source)
+    profile_path = save_profile(profile, pipeline.root)
+    database = PipelineDB(pipeline.root / "db/pipeline.db")
+    database.register_story(story, ["en"], digest)
+    database.set_language_status(story["id"], "en", "processing", profile_id=profile.profile_id)
+    database.set_language_status(story["id"], "en", "unavailable", profile_id=profile.profile_id)
+    before = source_path.read_bytes(), profile_path.read_bytes()
+    main.run_pipeline(pipeline.config, ["en"])
+    adaptation = next(call for call in pipeline.calls if call["stage"] == "adaptation")
+    assert "AITAH" in adaptation["source_chunk"]
+    assert "AITAH" not in adaptation["candidate_text"] and "Am I in the wrong" in adaptation["candidate_text"]
+    assert (source_path.read_bytes(), profile_path.read_bytes()) == before
+
+
 @pytest.mark.parametrize("stage", ["adaptation", "translation", "naturalization", "title",
                                   "opening_hook", "closing_hook", "injected_hook", "split_part", "pre_tts"])
 def test_reprovacao_de_checkpoint_nao_publica(pipeline, stage):

@@ -428,6 +428,8 @@ REDDIT_ACRONYMS = {
         r"\bLC\b":    "contato limitado",
     },
     "en": {
+        r"\bAITA\b":  "Am I in the wrong",
+        r"\bAITAH\b": "Am I in the wrong",
         r"\bSO\b":    "partner",
         r"\bMIL\b":   "mother-in-law",
         r"\bFIL\b":   "father-in-law",
@@ -840,7 +842,10 @@ def run_pipeline(
     if not dry_run:
         save_script_trace(scripts_dir, story_id, "en", "Perfil do narrador", profile_trace, reset=True)
         try:
-            review = checkpoint(expanded_source, lambda: adapter.adapt(story_for_adapter)["full_script"], "en", "adaptation")
+            # Fontes legadas permanecem imutáveis; expandir apenas o candidato novo
+            # evita que o corretor inglês transforme AITAH em AITCH.
+            review = checkpoint(expanded_source, lambda: expand_acronyms_translated(
+                adapter.adapt(story_for_adapter)["full_script"], "en"), "en", "adaptation")
             clean_script, factual_context = review.approved_text, review.factual_context
             adapted["full_script"] = clean_script
             durable_checkpoint("adaptation_approved")

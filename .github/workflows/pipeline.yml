@@ -36,11 +36,11 @@ on:
         default: false
         type: boolean
       state_action:
-        description: "Estado: normal, publish (só fila pronta, sem opções de teste), bootstrap, verify ou inventory"
+        description: "Estado: normal, generate (produção sem upload), publish (só fila pronta), bootstrap, verify ou inventory"
         required: true
         default: normal
         type: choice
-        options: [normal, publish, bootstrap, verify, inventory]
+        options: [normal, generate, publish, bootstrap, verify, inventory]
       legacy_cache_run_id:
         description: "Run exato dos caches legados; somente inventory, sem gerar/publicar"
         required: false
@@ -65,7 +65,7 @@ on:
 concurrency:
   group: >-
     ${{ github.event_name == 'schedule' && 'pipeline-videos' ||
-        ((inputs.state_action == 'publish' || inputs.state_action == 'bootstrap' || inputs.state_action == 'verify' || inputs.state_action == 'inventory') && !inputs.validation_namespace) && 'pipeline-videos' ||
+        ((inputs.state_action == 'generate' || inputs.state_action == 'publish' || inputs.state_action == 'bootstrap' || inputs.state_action == 'verify' || inputs.state_action == 'inventory') && !inputs.validation_namespace) && 'pipeline-videos' ||
         (inputs.apenas_gerar || inputs.historia_teste || inputs.dry_run || inputs.validation_namespace) &&
         format('pipeline-videos-{0}', inputs.validation_namespace || format('validation-{0}', github.run_id)) || 'pipeline-videos' }}
   cancel-in-progress: false
@@ -353,7 +353,7 @@ jobs:
       # ── PERSISTENCIA DO ESTADO ──────────────────────────────────────────
       - name: Salvar checkpoint final somente apos restauracao confirmada
         id: state_save
-        if: ${{ always() && steps.state_restore.outcome == 'success' && (steps.execution.outputs.state_action == 'normal' || steps.execution.outputs.state_action == 'publish') && steps.execution.outputs.required == 'true' }}
+        if: ${{ always() && steps.state_restore.outcome == 'success' && (steps.execution.outputs.state_action == 'normal' || steps.execution.outputs.state_action == 'generate' || steps.execution.outputs.state_action == 'publish') && steps.execution.outputs.required == 'true' }}
         env:
           PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
           PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}

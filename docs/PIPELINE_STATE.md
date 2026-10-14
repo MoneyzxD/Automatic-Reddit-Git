@@ -9,6 +9,8 @@ pendência de upload e nenhuma linguagem processing/pending/unavailable. Fontes,
 perfis e etapas aprovadas permanecem preservados; rejeitados não são retomáveis.
 Mudanças na expansão de abreviações só afetam fontes novas: retomadas usam hash e
 texto expandido persistidos, sem recalcular a identidade pela regra nova.
+Uma adaptação ainda não aprovada expande AITA/AITAH no candidato antes da
+revisão inglesa, inclusive em retomadas; o cache já aprovado não é reescrito.
 
 Head mais recente conferido: production/38447177562/seq61, 91IDs, nenhuma
 fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES unavailable por429,
@@ -47,6 +49,40 @@ em `main` aceita `state_action=publish`, `apenas_gerar=false`,
 O grupo de concorrência, a conferência de upload incerto, a meta diária e as
 janelas continuam os mesmos. Preview, branch de validação e falha de restore
 bloqueiam esse modo. O cron normal continua responsável por completar a meta.
+
+Para retomar a geração real preservando a mesma fonte/perfil e a fila, sem
+publicar, use `state_action=generate` em `main`, `historia_teste=false`,
+`dry_run=false` e namespace vazio. Esse modo restaura `production`, gera com
+todos os gates e salva checkpoints/MP4/JPG/fila pendente no destino privado.
+`apenas_gerar` pode ficar ligado: a ação explícita define produção sem upload,
+não cria o namespace vazio de preview usado por `normal` + `apenas_gerar`.
+Tokens YouTube não são entregues à geração e `publish.py` é pulado, mesmo
+se `apenas_gerar=false`. O grupo de concorrência continua `pipeline-videos`;
+cron, dados sintéticos, dry-run e branches de validação não aceitam essa ação.
+O envio posterior da fila aprovada usa `state_action=publish`, após autorização
+de publicação. Nenhum desses modos apaga o head nem reabre conteúdo rejeitado.
+Uma execução futura normal/cron pode publicar essa fila; durante uma geração
+assistida que aguarda autorização, mantenha a automação pausada.
+
+## Incidente de sigla em 14/10/2026
+
+O run isolado `38504547891` extraiu uma fonte real, aprovou a adaptação EN,
+mas bloqueou PT na tradução e terminou por indisponibilidade semântica em ES.
+Não gerou mídia nem executou upload. O snapshot privado e a quarentena mostram
+`AITAH` na fonte, `AITCH` na adaptação aprovada e um erro crítico de ortografia
+em `AITCH` na última revisão PT. A expansão EN ausente deixou o corretor
+transformar a sigla em outra palavra, carregada para a tradução.
+
+A correção expande AITA/AITAH para `Am I in the wrong` antes da revisão.
+A regressão reproduz a sugestão AITAH→AITCH e verifica fonte/perfil imutáveis
+em retomada. Gates, modelos, chaves, número de reparos e estados rejeitados
+permanecem preservados. Esse diagnóstico não comprova a resolução de todos os
+429: ES terminou com subtipo de quota desconhecido e ainda exige execução real.
+
+O JSON do revisor elimina somente espaços estruturais; o conteúdo decodificado
+permanece idêntico. No contexto de outro incidente, isso economizou 343 tokens
+de entrada no tokenizer oficial, sem remover fonte, fatos ou perfil. Não é
+promessa de caber na quota diária nem autorização para aprovar sem revisão.
 
 ## Bootstrap de produção: importação assistida
 
