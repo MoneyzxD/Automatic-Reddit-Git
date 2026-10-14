@@ -103,8 +103,7 @@ Validação de geração retomada no
 [38491356526](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38491356526),
 commit a43aafb, modelo fixo Gemini 3.8 Flash. Mesma fonte/perfil/namespace de teste,
 PT/EN/ES sintéticos e sem upload. Check específico do modelo/schema e gates:
-150 testes locais passaram. Resultado real pendente; conferir esse run antes
-de novo dispatch ou de substituir main/production.
+150 testes locais passaram. Resultado terminal registrado abaixo.
 
 O run 38491356526 terminou failure: adaptação EN aprovada com Gemini 3.8; tradução
 Google bloqueada e fallback MyMemory precisou de reparos gramaticais. O guardião
@@ -129,8 +128,8 @@ transporte falso, sem demonstrar disponibilidade ou qualidade do serviço.
 Commit a8c580a enviado na mesma branch. Run
 [38493851915](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38493851915)
 retoma PT/EN/ES no mesmo namespace, com modelo fixo 3.8 Flash, tradução Gemini,
-história sintética e apenas geração. Resultado ainda em acompanhamento;
-produção continua no Groq até cumprir os critérios de aceite acima.
+história sintética e apenas geração. Produção continua no Groq até cumprir
+os critérios de aceite acima.
 
 O run 38493851915 terminou failure na primeira tradução EN→PT: TimeoutError
 após 60s, uma tentativa, sem resposta candidata. Testes/LT/restore/save passaram;
@@ -146,3 +145,26 @@ interna. Temperatura permanece no 2.5 e é omitida no 3.8. Quatro regressões RE
 287 testes focados GREEN e suíte 1.170 passes/73,19s; revisão independente sem
 Critical/Important. Uma nova validação isolada deve conferir o serviço real,
 sem considerar esses testes como aprovação de tradução ou disponibilidade.
+
+## Bloqueio atual e próxima retomada
+
+Run [38494779551](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38494779551),
+commit d240287, terminou failure. A tradução Gemini EN→PT respondeu STOP
+com 2.024 tokens contabilizados e passou o detector local. Isso não é aceite
+semântico: o guardião falhou na coleta factual da tradução PT com HTTP429,
+resource_exhausted, uma tentativa, contexto 4.801 caracteres e RetryInfo
+81.609 segundos (22h40m09s). O subtipo de cota não foi capturado, portanto não
+afirmar RPD/TPD/RPM; ausência de achado semântico não aprova os problemas LT.
+
+Testes/LanguageTool/restore/save passaram; publicação foi pulada. Checkpoint
+final seq28 conserva fonte/perfil/adaptação EN aprovada, zero mídia. EN/ES
+não chegaram às etapas localizadas desta rodada. Não substituir produção nem
+repetir chamadas enquanto o projeto indicar cota esgotada. Espera sugerida
+não garante disponibilidade posterior. Limites reais do projeto/modelo são
+conferidos no AI Studio; número de chaves não aumenta a cota por projeto.
+
+A integração permanece somente na branch gemini-provider. Próxima sessão:
+conferir renovação/capacidade gratuita, retomar o mesmo namespace com Gemini
+3.8 e a mesma fonte/perfil, sem publicar história sintética. Faltam gates
+PT/EN/ES, mídia/inspeção e restore em outro runner. Não apagar checkpoints,
+enfraquecer gates, rotacionar modelos/chaves por cota ou ativar cobrança.
