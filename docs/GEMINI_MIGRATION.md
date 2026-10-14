@@ -14,8 +14,9 @@ históricos groq são preservados para manter compatibilidade e testes existente
 A tradução continua usando seus provedores gratuitos existentes.
 
 Gemini usa REST nativo com requests já instalado. GEMINI_MODEL começa em
-gemini-2.5-flash, que tem modalidade gratuita documentada. Modelos fixos permitidos
-também incluem gemini-2.5-flash-lite e gemini-3.8-flash. Não há alternância por
+gemini-3.8-flash, que tem modalidade gratuita documentada e consta no catálogo
+autenticado. Modelos fixos permitidos também incluem gemini-2.5-flash e
+gemini-2.5-flash-lite. Não há alternância por
 rate limit, contratação, ativação de faturamento, grounding ou ferramenta paga.
 O projeto Google deve continuar sem faturamento: o endpoint não informa o plano
 de cobrança da chave e uma chave de projeto pago pode cobrar pelo mesmo modelo.
@@ -87,3 +88,11 @@ Revisão do delta reproduziu uma combinação publish+catalog-only que pulava a
 verificação tardia; o resolver inicial agora rejeita essa combinação e qualquer
 consulta fora de normal/apenas-gerar/validation. Regressão RED/GREEN antes do
 disparo de catálogo, sem qualquer upload executado.
+
+A consulta [38480502108](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38480502108)
+terminou success: 1.157 testes/22,47s, LanguageTool real, restore/save privados e
+GET autenticado passaram. Tanto 2.5 Flash quanto 3.8 Flash constam no catálogo;
+isso não explica retrospectivamente o HTTP404 nem garante acesso à inferência.
+Nenhuma chamada de geração ou mídia ocorreu nesse modo. Modelo fixo candidato
+agora 3.8 Flash, com thinkingLevel=low e os mesmos caps/schema/gates; não é
+alternância por cota nem aceite para produção.

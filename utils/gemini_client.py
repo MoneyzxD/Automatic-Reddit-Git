@@ -61,7 +61,7 @@ class GeminiClient:
     def __init__(self, api_key, stage, *, sdk_max_retries=None, retry_rate_limit=True, timeout=None):
         if not isinstance(api_key, str) or not api_key.strip():
             raise GeminiError("invalid_api_key", 401)
-        self.model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+        self.model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
         if self.model not in _FREE_MODELS:
             raise ValueError("Modelo Gemini sem modalidade gratuita validada")
         self.timeout = 60.0 if timeout is None else timeout

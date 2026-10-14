@@ -304,7 +304,7 @@ jobs:
           PIPELINE_ENV: runner
           PIPELINE_LLM_PROVIDER: ${{ inputs.llm_provider || vars.PIPELINE_LLM_PROVIDER || 'groq' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           PIPELINE_GEMINI_CATALOG_ONLY: ${{ inputs.gemini_catalog_only }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           # Uma chave gratuita do Groq POR IDIOMA — cada idioma tem seu

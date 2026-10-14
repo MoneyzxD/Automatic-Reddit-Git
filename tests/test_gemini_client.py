@@ -312,3 +312,18 @@ def test_catalogo_valido_resolve_so_namespace_de_validacao():
     result = resolve_execution(event="workflow_dispatch", ref="refs/heads/main", run_id="123",
                                gemini_catalog_only=True, only_generate=True)
     assert result["namespace"] == "validation-123" and not result["publish"]
+
+
+def test_modelo_atual_validado_no_catalogo_preserva_schema_e_cap(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.8-flash")
+    from stages.script_guardian import _GroqReviewer, _semantic_response_format
+    calls = fake_transport(monkeypatch, response('{"facts":[]}'))
+    _GroqReviewer({"groq_model": "qwen/qwen3.8-27b", "semantic_timeout_seconds": 5}).review(
+        language="en", mode="facts", source_chunk="I work here.")
+    url, options = calls[0]
+    assert url.endswith("/models/gemini-3.8-flash:generateContent")
+    generation = options["json"]["generationConfig"]
+    assert generation["thinkingConfig"] == {"thinkingLevel": "low"}
+    assert generation["maxOutputTokens"] == 2048
+    assert generation["responseJsonSchema"] == _semantic_response_format(
+        "qwen/qwen3.8-27b", "facts")["json_schema"]["schema"]
