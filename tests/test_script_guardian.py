@@ -760,7 +760,8 @@ def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfi
     def create(**kwargs):
         calls.append(kwargs)
         context = json.loads(kwargs["messages"][1]["content"])
-        raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
+        raw = json.dumps({"facts": []} if context["mode"] == "facts" else
+                         {"approved": True, "issues": [], "language_issues": []})
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
 
     def tracked(key, stage, **kwargs):
@@ -816,7 +817,8 @@ def test_rejeicao_json_validate_failed_prevenida_pelo_schema(tmp_path, perfil_fe
             exc.body = {"error": {"code": "json_validate_failed"}}
             raise exc
         context = json.loads(kwargs["messages"][1]["content"])
-        raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
+        raw = json.dumps({"facts": []} if context["mode"] == "facts" else
+                         {"approved": True, "issues": [], "language_issues": []})
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
 
     monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")

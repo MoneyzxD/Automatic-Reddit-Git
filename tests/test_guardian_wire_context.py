@@ -15,9 +15,13 @@ def _wire(monkeypatch, factual_context, source_chunk):
         def create(self, **kwargs):
             captured.update(kwargs)
             from types import SimpleNamespace
+            data = {"approved": True, "issues": []}
+            properties = kwargs["response_format"]["json_schema"]["schema"]["properties"]
+            if "language_issues" in properties:
+                data["language_issues"] = []
             return SimpleNamespace(choices=[SimpleNamespace(
                 finish_reason="stop", message=SimpleNamespace(
-                    content='{"approved":true,"issues":[]}'))])
+                    content=json.dumps(data)))])
 
     from types import SimpleNamespace
     monkeypatch.setattr(utils.groq_client, "tracked_groq", lambda *a, **k:

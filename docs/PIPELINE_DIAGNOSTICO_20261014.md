@@ -156,10 +156,24 @@ identificou a falha da resposta200: `nonliteral_evidence`, `missing: 1`.
 O schema anterior permitia ID vazio mesmo em achado factual; o gate bloqueou
 corretamente a resposta. Snapshotseq87 sem mídia nova; adaptação preservada.
 
-O schema com IDs agora usa duas variantes fechadas de categorias disjuntas:
+O schema com IDs inicialmente usou duas variantes fechadas de categorias disjuntas:
 grammar/style/language admitem referência vazia, as demais exigem ID válido não
 vazio. Corresponde ao critério local existente, sem retirar achados críticos.
-A composição `anyOf` é suportada pela [documentação Groq](https://console.groq.com/docs/structured-outputs).
-Rollback continua em `semantic_citation_ids: false`. O diagnóstico dessa união
-guarda apenas paths conhecidos e regras, sem valores da resposta. A mudança
-ainda precisa de prova real de aceitação do schema e conclusão dos gates.
+A [documentação Groq](https://console.groq.com/docs/structured-outputs) informa
+suporte a `anyOf`, mas isso não provou compatibilidade deste formato.
+
+O [run38665231394](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38665231394)
+terminou400 no primeiro bloco PT; facts200 e nenhuma mídia. Uma única sonda
+pública, sem história/estado/publicação, reproduziu400 com
+`discriminator_multiple_candidates`: category/severity/source_quote_id tornaram
+a união ambígua para esse backend. Não era uma resposta de história inválida.
+O código registra esse enum sem mensagem/path livres. Seq94 mantém25arquivos
+imutáveis,91IDs e dez rejeitados idênticos aseq73.
+
+O contrato foi ajustado para duas listas fechadas: `issues` contém as categorias
+factuais e exige IDs válidos não vazios; `language_issues` contém somente
+grammar/style/language e admite ID vazio. Ambas têm todos os campos obrigatórios.
+A aplicação recupera as citações e reúne as listas antes dos mesmos parsers/gates;
+categoria na lista errada bloqueia, sem reclassificação. Uma segunda sonda pública
+com esse contrato recebeu200/stop. Isso comprova aceitação do formato naquele
+pedido, sem comprovar a geração. Rollback segue `semantic_citation_ids: false`.

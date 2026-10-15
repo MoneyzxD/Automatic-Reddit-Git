@@ -284,15 +284,6 @@ def _generation_schema_diagnostic(generation, response_format):
             truncated = True
             return
         visited += 1
-        if "anyOf" in node:
-            # Subconjunto usado aqui: objetos com categorias disjuntas e fechadas.
-            variants = [variant for variant in node["anyOf"] if isinstance(value, dict)
-                        and value.get("category") in variant["properties"]["category"]["enum"]]
-            if len(variants) != 1:
-                errors.append({"path": path, "rule": "any_of"})
-            else:
-                inspect(value, variants[0], path)
-            return
         actual = ("null" if value is None else "boolean" if type(value) is bool else
                   "integer" if type(value) is int else "number" if type(value) is float else
                   "string" if isinstance(value, str) else "array" if isinstance(value, list) else "object")
@@ -379,6 +370,8 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
                 if diagnostic[0] == "valid_json":
                     schema_diagnostic = _generation_schema_diagnostic(
                         error["failed_generation"], _semantic_response_format(model, mode, quote_ids=quote_ids))
+        elif isinstance(error, dict) and error.get("schema_code") == "discriminator_multiple_candidates":
+            provider_code = "discriminator_multiple_candidates"
     return SemanticFailure(code, status, mode, attempts, context_chars, provider_code, *diagnostic,
                            rate_limit_type=rate_limit_type, retry_after_seconds=retry_after,
                            generation_schema_status=schema_diagnostic[0],
@@ -436,16 +429,16 @@ def _semantic_response_format(model: str, mode: str, *, quote_ids=None) -> dict:
         collection = "issues"
     item = {"type": "object", "properties": fields,
             "required": list(fields), "additionalProperties": False}
-    if mode != "facts" and quote_ids:
-        # Mesmas categorias do gate local; fidelidade não pode escolher ID vazio.
-        optional = ("grammar", "style", "language")
-        evidence_fields = dict(fields,
-            category={"type": "string", "enum": [c for c in REVIEW_CATEGORIES if c not in optional]},
-            source_quote_id={"type": "string", "enum": list(quote_ids)})
-        fields["category"] = {"type": "string", "enum": list(optional)}
-        item = {"anyOf": [item, {"type": "object", "properties": evidence_fields,
-                "required": list(evidence_fields), "additionalProperties": False}]}
     properties = {collection: {"type": "array", "items": item}}
+    if mode != "facts" and quote_ids:
+        # Listas separadas evitam a união ambígua recusada pelo backend Groq.
+        optional = ("grammar", "style", "language")
+        language_fields = dict(fields, category={"type": "string", "enum": list(optional)})
+        fields["category"] = {"type": "string", "enum": [c for c in REVIEW_CATEGORIES if c not in optional]}
+        fields["source_quote_id"] = {"type": "string", "enum": list(quote_ids)}
+        properties["language_issues"] = {"type": "array", "items": {
+            "type": "object", "properties": language_fields,
+            "required": list(language_fields), "additionalProperties": False}}
     if mode != "facts":
         properties["approved"] = {"type": "boolean"}
     schema = {"type": "object", "properties": properties,
@@ -512,6 +505,16 @@ def _restore_review_citations(raw, registry):
         return raw  # O parser existente mantém o erro/retry de JSON inválido.
     if not isinstance(data, dict) or not isinstance(data.get("issues"), list):
         return raw
+    if set(data) != {"approved", "issues", "language_issues"} or not isinstance(data["language_issues"], list):
+        raise _SourceReferenceError("invalid_fields")
+    optional = {"grammar", "style", "language"}
+    if (any(not isinstance(issue, dict) or not isinstance(issue.get("category"), str)
+            or issue["category"] in optional for issue in data["issues"])
+            or any(not isinstance(issue, dict) or not isinstance(issue.get("category"), str)
+                   or issue["category"] not in optional
+                   for issue in data["language_issues"])):
+        raise _SourceReferenceError("invalid_fields")
+    data["issues"].extend(data.pop("language_issues"))
     for issue in data["issues"]:
         if not isinstance(issue, dict):
             raise _SourceReferenceError("invalid_type")
@@ -639,6 +642,13 @@ class _GroqReviewer:
                 "Para fidelidade/gênero, ID não vazio é obrigatório. "
                 "Se retry_feedback indicar invalid_source_reference, corrija só a referência inválida, "
                 "sem apagar achados críticos."
+            )
+            instruction = instruction.replace(
+                '{"approved":true,"issues":[{', '{"approved":true,"issues":[],"language_issues":[{')
+            instruction += (
+                " Retorne as duas listas obrigatórias: issues para fidelidade/gênero e demais categorias "
+                "com ID válido não vazio; language_issues apenas para grammar, style e language, "
+                "que podem usar ID vazio. Sem achados em uma lista, retorne-a vazia."
             )
         model = self.config.get("groq_model", "openai/gpt-oss-20b")
         # No Qwen ativo, o low genérico do wrapper consumia a saída com raciocínio:
@@ -809,7 +819,7 @@ class ScriptGuardian:
                     missing = sorted({field for field in ("reason", "start")
                                       for error in failure.generation_schema_errors
                                       if error.get("rule") == "required" and re.fullmatch(
-                                          rf"\$\.issues\[\d+\]\.{field}", error.get("path", ""))})
+                                          rf"\$\.(?:issues|language_issues)\[\d+\]\.{field}", error.get("path", ""))})
                     if missing:
                         feedback["missing_issue_fields"] = missing
                 wait = _retry_wait(exc, wait)
