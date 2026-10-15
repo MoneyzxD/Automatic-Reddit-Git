@@ -12,13 +12,15 @@ texto expandido persistidos, sem recalcular a identidade pela regra nova.
 Uma adaptação ainda não aprovada expande AITA/AITAH no candidato antes da
 revisão inglesa, inclusive em retomadas; o cache já aprovado não é reescrito.
 
-Head mais recente conferido: production/38660290998/seq73,91IDs, nenhuma
+Head mais recente conferido: production/38662836166/seq80,91IDs, nenhuma
 fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES/PT unavailable.
 A adaptação EN foi aprovada e salva, mas a tradução PT terminou por
-nonliteral_evidence na revisão de bloco. Retomar deve reutilizar a adaptação
+nonliteral_evidence na revisão de bloco do run38660290998; o run seguinte
+terminou429/chunk, após uma resposta200 intermediária. Retomar deve reutilizar a adaptação
 aprovada, a mesma fonte/perfil e preservar os dez rejeitados. A geração completa
 ainda não tem aceite. A comparação anterior entreseq61/66 confirmou24arquivos
 imutáveis byte a byte e igualdade dos91IDs/dez rejeitados.
+Entreseq73/80 foram conferidos25arquivos imutáveis,91IDs e dez rejeitados iguais.
 
 A automação foi pausada (`PIPELINE_AUTOMATION_ENABLED=false`) na geração
 assistida para impedir publicação pelo cron antes da autorização específica.

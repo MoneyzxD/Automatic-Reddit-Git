@@ -122,3 +122,29 @@ comparação. A [sonda pública38659982743](https://github.com/MoneyzxD/Automati
 fez uma chamada sem retry, chave/modelo EN fixos, cap2.048: HTTP200, prompt19,
 completion2, total21. Texto público, sem história privada. Esse resultado não
 valida a coleta factual com schema ou a geração completa.
+
+## Retomadas com a chave conferida
+
+O [run38660290998](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38660290998)
+aprovou e persistiu a adaptação EN. A tradução PT terminou por
+`nonliteral_evidence`: dois429 e uma resposta200 consumiram as três tentativas
+do bloco. Snapshotseq73 sem mídia nova. A correção de transporte usa IDs locais
+do ledger e da fonte; a aplicação recupera a citação original e mantém os gates.
+
+O [run38662836166](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38662836166)
+passou1.152 testes no CI, incluindo o LanguageTool real, e reutilizou a adaptação
+aprovada. A coleta factual PT respondeu200. O bloco recebeu429/200/429; a última
+recusa declarou Retry-After2s, TPM restante7.799/RPD998 e nenhum subtipo conhecido.
+O relatório anterior conserva só a falha final; não afirmar por que a resposta
+intermediária foi recusada. Snapshotseq80 sem mídia nova,25arquivos imutáveis
+idênticos aseq73, mesmos91IDs/dez rejeitados.
+
+A cadência anterior esperou16,3s após o coletor e35,3s após o bloco200. O reset
+TPM do pedido anterior não garante capacidade para o próximo pedido maior.
+O modelo fixo qwen/qwen3.8-27b agora tem piso conservador de61s, preservando
+cabeçalhos com espera maior. Isso aumenta latência e só coordena o processo
+atual; não garante cota diária nem coordena consumidores externos. Nenhum
+modelo/chave alterna. Os limites de três tentativas/cap2.048 ficam iguais.
+O relatório também guarda até20falhas intermediárias sanitizadas, com contagens
+de evidência ausente/não literal; não guarda resposta, citação ou erro HTTP livre.
+Ainda falta comprovar geração completa e restauração da mídia em outro runner.

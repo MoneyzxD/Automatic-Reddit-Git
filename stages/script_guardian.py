@@ -689,6 +689,16 @@ class ScriptGuardian:
         self._semantic_calls = 0
         self._semantic_json_failures = []
         self._semantic_json_failures_truncated = False
+        self._semantic_attempt_failures = []
+        self._semantic_attempt_failures_truncated = False
+
+    def _record_attempt_failure(self, failure, evidence_errors=None):
+        # Só enums/contagens já controlados; nunca resposta, citação ou mensagem HTTP.
+        if len(self._semantic_attempt_failures) < 20:
+            self._semantic_attempt_failures.append({"call": self._semantic_calls,
+                "failure": asdict(failure), "evidence_errors": dict(evidence_errors or {})})
+        else:
+            self._semantic_attempt_failures_truncated = True
 
     def _health(self):
         if not self.config.get("enabled", True):
@@ -741,6 +751,7 @@ class ScriptGuardian:
                 raise _ReviewUnavailable("Feedback excede o limite; nenhum trecho foi truncado",
                                          SemanticFailure("context_limit", None, mode, attempt - 1, context_chars))
             self._semantic_calls += 1
+            evidence_errors = None
             wait = self.config["semantic_retry_wait_seconds"]
             try:
                 raw = self.semantic.review(mode=mode, **request_context)
@@ -751,6 +762,7 @@ class ScriptGuardian:
             except _ReviewUnavailable as exc:
                 if exc.failure:
                     exc.failure = replace(exc.failure, attempts=attempt, context_chars=context_chars)
+                    self._record_attempt_failure(exc.failure)
                 raise
             except Exception as exc:
                 registry = (_source_quote_registry(request_context)
@@ -769,6 +781,7 @@ class ScriptGuardian:
                         self._semantic_json_failures_truncated = True
                 if (failure.http_status is not None and failure.http_status not in {408, 409, 429}
                         and failure.http_status < 500 and not invalid_generation):
+                    self._record_attempt_failure(failure)
                     break
                 if invalid_generation:
                     # Descarta a geração recusada; só o diagnóstico controlado orienta o retry.
@@ -783,6 +796,7 @@ class ScriptGuardian:
                         feedback["missing_issue_fields"] = missing
                 wait = _retry_wait(exc, wait)
                 if wait > self.config["semantic_max_retry_wait_seconds"]:
+                    self._record_attempt_failure(failure)
                     break
             else:
                 failure = SemanticFailure("invalid_schema", None, mode, attempt, context_chars)
@@ -836,9 +850,11 @@ class ScriptGuardian:
                 elif data is not None:
                     outcome = parse_semantic_review(raw)
                     if outcome.status != "unavailable":
-                        if any((issue.source_quote and issue.source_quote not in source_text)
-                       or (issue.category not in {"grammar", "style", "language"} and not issue.source_quote)
-                               for issue in outcome.issues):
+                        evidence_errors = Counter(
+                            "nonliteral" if issue.source_quote else "missing" for issue in outcome.issues
+                            if (issue.source_quote and issue.source_quote not in source_text)
+                            or (issue.category not in {"grammar", "style", "language"} and not issue.source_quote))
+                        if evidence_errors:
                             failure = replace(failure, code="nonliteral_evidence")
                         else:
                             return outcome
@@ -846,6 +862,7 @@ class ScriptGuardian:
                 feedback = {"failure_code": failure.code}
                 if failure.source_reference_error:
                     feedback["source_reference_error"] = failure.source_reference_error
+            self._record_attempt_failure(failure, evidence_errors)
             if attempt < max_attempts:
                 # Esperas longas ficam limitadas em blocos; o orçamento não aumenta.
                 remaining = wait
@@ -937,6 +954,8 @@ class ScriptGuardian:
         self._semantic_calls = 0
         self._semantic_json_failures = []
         self._semantic_json_failures_truncated = False
+        self._semantic_attempt_failures = []
+        self._semantic_attempt_failures_truncated = False
         for attempt in range(self.max_repairs + 1):
             issues, accepted, rejected = [], (), ()
             unavailable_reason = None
@@ -1003,6 +1022,8 @@ class ScriptGuardian:
                 "semantic_failure": asdict(semantic_failure) if semantic_failure else None,
                 "semantic_json_failures": list(self._semantic_json_failures),
                 "semantic_json_failures_truncated": self._semantic_json_failures_truncated,
+                "semantic_attempt_failures": list(self._semantic_attempt_failures),
+                "semantic_attempt_failures_truncated": self._semantic_attempt_failures_truncated,
                 "issue_counts": dict(Counter(f"{i.category}:{i.severity}" for i in issues)),
                 "accepted_patches": [self._patch_summary(p) for p in accepted],
                 "rejected_patches": [self._patch_summary(p) for p in rejected],
