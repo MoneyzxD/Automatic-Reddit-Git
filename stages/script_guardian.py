@@ -284,6 +284,15 @@ def _generation_schema_diagnostic(generation, response_format):
             truncated = True
             return
         visited += 1
+        if "anyOf" in node:
+            # Subconjunto usado aqui: objetos com categorias disjuntas e fechadas.
+            variants = [variant for variant in node["anyOf"] if isinstance(value, dict)
+                        and value.get("category") in variant["properties"]["category"]["enum"]]
+            if len(variants) != 1:
+                errors.append({"path": path, "rule": "any_of"})
+            else:
+                inspect(value, variants[0], path)
+            return
         actual = ("null" if value is None else "boolean" if type(value) is bool else
                   "integer" if type(value) is int else "number" if type(value) is float else
                   "string" if isinstance(value, str) else "array" if isinstance(value, list) else "object")
@@ -427,6 +436,15 @@ def _semantic_response_format(model: str, mode: str, *, quote_ids=None) -> dict:
         collection = "issues"
     item = {"type": "object", "properties": fields,
             "required": list(fields), "additionalProperties": False}
+    if mode != "facts" and quote_ids:
+        # Mesmas categorias do gate local; fidelidade não pode escolher ID vazio.
+        optional = ("grammar", "style", "language")
+        evidence_fields = dict(fields,
+            category={"type": "string", "enum": [c for c in REVIEW_CATEGORIES if c not in optional]},
+            source_quote_id={"type": "string", "enum": list(quote_ids)})
+        fields["category"] = {"type": "string", "enum": list(optional)}
+        item = {"anyOf": [item, {"type": "object", "properties": evidence_fields,
+                "required": list(evidence_fields), "additionalProperties": False}]}
     properties = {collection: {"type": "array", "items": item}}
     if mode != "facts":
         properties["approved"] = {"type": "boolean"}
@@ -484,7 +502,7 @@ def _source_quote_registry(context):
     if isinstance(source, str) and source:
         # O ledger pode ser parcial: preserve evidência disponível fora dele.
         registry["s0"] = source
-    return registry
+    return registry or None
 
 
 def _restore_review_citations(raw, registry):

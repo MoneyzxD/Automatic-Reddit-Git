@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from stages.script_guardian import _GroqReviewer, ScriptGuardian, QualityUnavailable, _source_quote_registry
+from stages.script_guardian import (_GroqReviewer, ScriptGuardian, QualityUnavailable,
+    _source_quote_registry, _semantic_response_format, _generation_schema_diagnostic, REVIEW_CATEGORIES)
 from stages.narrator_profile import NarratorProfile
 
 
@@ -42,10 +43,12 @@ def test_referencia_copia_citacao_literal_e_mantem_schema_fechado(monkeypatch):
     result, captured = review(monkeypatch, [issue()])
     assert result["issues"][0]["source_quote"] == FACTS[1]["source_quote"]
     assert "source_quote_id" not in result["issues"][0]
-    fields = captured["response_format"]["json_schema"]["schema"]["properties"]["issues"]["items"]
-    assert fields["properties"]["source_quote_id"] == {"type": "string", "enum": ["", "f0", "f1", "s0"]}
-    assert "source_quote" not in fields["properties"] and fields["additionalProperties"] is False
-    assert set(fields["required"]) == set(fields["properties"])
+    variants = captured["response_format"]["json_schema"]["schema"]["properties"]["issues"]["items"]["anyOf"]
+    for fields in variants:
+        assert "source_quote" not in fields["properties"] and fields["additionalProperties"] is False
+        assert set(fields["required"]) == set(fields["properties"])
+        if "amount" in fields["properties"]["category"]["enum"]:
+            assert fields["properties"]["source_quote_id"] == {"type": "string", "enum": ["f0", "f1", "s0"]}
     assert captured["max_completion_tokens"] == 2048 and captured["reasoning_effort"] == "none"
     instruction = captured["messages"][0]["content"]
     assert "nunca source_quote_ref, IDs" not in instruction
@@ -67,6 +70,28 @@ def test_contexto_invalido_preserva_contrato_anterior_e_global_sem_fonte():
     assert _source_quote_registry({"factual_context": "inválido", "source_chunk": SOURCE}) is None
     assert _source_quote_registry({"factual_context": json.dumps(FACTS), "source_chunk": ""}) == {
         "f0": FACTS[0]["source_quote"], "f1": FACTS[1]["source_quote"]}
+    assert _source_quote_registry({"factual_context": "[]", "source_chunk": ""}) is None
+
+
+@pytest.mark.parametrize("category", REVIEW_CATEGORIES)
+@pytest.mark.parametrize("reference", ["", "s0"])
+def test_schema_exige_referencia_para_as_mesmas_categorias_do_gate(category, reference):
+    contract = _semantic_response_format("qwen/qwen3.8-27b", "chunk", quote_ids=("f0", "s0"))
+    raw = json.dumps({"approved": False, "issues": [issue(category=category, source_quote_id=reference)]})
+    status, errors, truncated = _generation_schema_diagnostic(raw, contract)
+    allowed = bool(reference) or category in {"grammar", "style", "language"}
+    assert status == ("matches_schema" if allowed else "mismatch")
+    assert bool(errors) == (not allowed) and not truncated
+
+
+def test_diagnostico_union_preserva_campos_ausentes_sem_valores_privados():
+    contract = _semantic_response_format("qwen/qwen3.8-27b", "chunk", quote_ids=("s0",))
+    item = issue(source_quote_id="s0")
+    del item["reason"]
+    item["PRIVATE_EXTRA"] = "PRIVATE_VALUE"
+    _, errors, _ = _generation_schema_diagnostic(json.dumps({"approved": False, "issues": [item]}), contract)
+    assert {"path": "$.issues[0].reason", "rule": "required"} in errors
+    assert "PRIVATE" not in json.dumps(errors)
 
 
 @pytest.mark.parametrize("changes", [

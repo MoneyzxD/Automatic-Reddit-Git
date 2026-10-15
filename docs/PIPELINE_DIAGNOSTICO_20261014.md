@@ -148,3 +148,18 @@ modelo/chave alterna. Os limites de três tentativas/cap2.048 ficam iguais.
 O relatório também guarda até20falhas intermediárias sanitizadas, com contagens
 de evidência ausente/não literal; não guarda resposta, citação ou erro HTTP livre.
 Ainda falta comprovar geração completa e restauração da mídia em outro runner.
+
+O [run38664030524](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38664030524)
+passou1.157 testes reais de CI. A pausa de61s foi respeitada, mas o bloco PT
+recebeu429/429/200; as recusas não declararam subtipo ou Retry-After. O histórico
+identificou a falha da resposta200: `nonliteral_evidence`, `missing: 1`.
+O schema anterior permitia ID vazio mesmo em achado factual; o gate bloqueou
+corretamente a resposta. Snapshotseq87 sem mídia nova; adaptação preservada.
+
+O schema com IDs agora usa duas variantes fechadas de categorias disjuntas:
+grammar/style/language admitem referência vazia, as demais exigem ID válido não
+vazio. Corresponde ao critério local existente, sem retirar achados críticos.
+A composição `anyOf` é suportada pela [documentação Groq](https://console.groq.com/docs/structured-outputs).
+Rollback continua em `semantic_citation_ids: false`. O diagnóstico dessa união
+guarda apenas paths conhecidos e regras, sem valores da resposta. A mudança
+ainda precisa de prova real de aceitação do schema e conclusão dos gates.
