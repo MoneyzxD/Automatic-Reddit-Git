@@ -202,3 +202,13 @@ adicionais só executam com o runtime LanguageTool configurado, como no Actions;
 skip local não comprova o serviço. A próxima validação limitada deve executar
 esses testes reais e retomar os idiomas, sem trocar modelo por quota, alterar
 caps/retries ou promover Gemini para produção antes do aceite completo.
+
+O [run38659167207](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659167207),
+commit23a0334, passou1.190 testes no Actions, incluindo as duas provas com
+LanguageTool6.6 real, sem skip. Tradução PT e três respostas semânticas foram
+concluídas; a segunda rodada do gate recebeu429/resource_exhausted em chunk,
+uma tentativa, contexto15.492 e RetryInfo85.047s. Snapshot final seq42 mantém
+zero mídia e PT/EN/ES unavailable; nenhuma publicação. Não repetir Gemini antes
+do prazo (aproximadamente21h de15/10, São Paulo), nem presumir qual cota terminou.
+O filtro contextual isolado recebeu aprovação para produção após essa prova;
+isso não libera a integração Gemini. A geração completa continua sem aceite.
