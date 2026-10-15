@@ -12,12 +12,13 @@ texto expandido persistidos, sem recalcular a identidade pela regra nova.
 Uma adaptação ainda não aprovada expande AITA/AITAH no candidato antes da
 revisão inglesa, inclusive em retomadas; o cache já aprovado não é reescrito.
 
-Head mais recente conferido: production/38508047757/seq66, 91IDs, nenhuma
-fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES/PT unavailable após429
-na coleta factual da adaptação EN. O subtipo dessa recusa não foi declarado.
-Comparação offline com seq61 confirmou24arquivos imutáveis byte a byte, o
-mesmo conjunto de91IDs e os mesmos dez estados rejected. Não resetar nem
-reabrir rejeitados. A geração normal ainda não tem aceite.
+Head mais recente conferido: production/38660290998/seq73,91IDs, nenhuma
+fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES/PT unavailable.
+A adaptação EN foi aprovada e salva, mas a tradução PT terminou por
+nonliteral_evidence na revisão de bloco. Retomar deve reutilizar a adaptação
+aprovada, a mesma fonte/perfil e preservar os dez rejeitados. A geração completa
+ainda não tem aceite. A comparação anterior entreseq61/66 confirmou24arquivos
+imutáveis byte a byte e igualdade dos91IDs/dez rejeitados.
 
 A automação foi pausada (`PIPELINE_AUTOMATION_ENABLED=false`) na geração
 assistida para impedir publicação pelo cron antes da autorização específica.
@@ -26,6 +27,16 @@ falsa. Testes Gemini permanecem isolados, sem upload, na branch gemini-recovery;
 isso não substitui o provedor em produção.
 
 ## Autoridade e pré-requisitos
+
+O transporte semântico pode usar `semantic_citation_ids: true`: o modelo escolhe
+um ID `fN` do ledger factual ou `s0` da fonte completa disponível na chamada,
+e o código recupera a citação original
+antes dos mesmos parsers, gates e validações de patches. IDs desconhecidos,
+campos/tipos inválidos e evidência factual ausente bloqueiam. Não altera hashes,
+perfis ou etapas aprovadas persistidas. `false` restaura o protocolo literal
+anterior; ledger ausente/não tipificado também mantém esse protocolo. O registro
+aceita ledger tipado vazio e conserva `s0` quando há fonte disponível. O orçamento
+de três tentativas e o teto de2.048 tokens não aumentam.
 
 O snapshot privado contém backup SQLite, filas explícitas, fonte/perfil e
 passos aprovados, metadados e MP4/JPG ainda necessários. A restauração verifica

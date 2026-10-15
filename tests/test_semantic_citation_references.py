@@ -1,0 +1,130 @@
+"""Citações do revisor são resolvidas localmente, nunca reescritas pelo modelo."""
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from stages.script_guardian import _GroqReviewer, ScriptGuardian, QualityUnavailable, _source_quote_registry
+from stages.narrator_profile import NarratorProfile
+
+
+SOURCE = "I didn't lend money.\r\nThen I paid 50 dollars. 🧾"
+FACTS = [{"kind": "event", "value": "No loan", "source_quote": "I didn't lend money."},
+         {"kind": "amount", "value": "Payment of 50 dollars", "source_quote": "Then I paid 50 dollars. 🧾"}]
+
+
+def review(monkeypatch, issues, **config):
+    import utils.groq_client
+    captured = {}
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
+            content=json.dumps({"approved": not issues, "issues": issues})))])
+    monkeypatch.setenv("GROQ_API_KEY_PT", "chave-falsa-sem-rede")
+    monkeypatch.setattr(utils.groq_client, "tracked_groq", lambda *a, **k: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    context = dict(mode="chunk", language="pt", stage="translation", source_chunk=SOURCE,
+                   candidate_text="Não emprestei dinheiro. Depois paguei 50 reais.",
+                   factual_context=json.dumps(FACTS), profile={"narration_gender": "female"})
+    before = json.dumps(context, sort_keys=True)
+    result = _GroqReviewer({"semantic_timeout_seconds": 30, "groq_model": "qwen/qwen3.8-27b", **config}).review(**context)
+    assert json.dumps(context, sort_keys=True) == before
+    return json.loads(result), captured
+
+
+def issue(**overrides):
+    return {"original": "50 reais", "replacement": "50 dólares", "category": "amount",
+            "severity": "critical", "subject": "narrator", "reason": "Preservar moeda",
+            "source_quote_id": "f1", "start": None, **overrides}
+
+
+def test_referencia_copia_citacao_literal_e_mantem_schema_fechado(monkeypatch):
+    result, captured = review(monkeypatch, [issue()])
+    assert result["issues"][0]["source_quote"] == FACTS[1]["source_quote"]
+    assert "source_quote_id" not in result["issues"][0]
+    fields = captured["response_format"]["json_schema"]["schema"]["properties"]["issues"]["items"]
+    assert fields["properties"]["source_quote_id"] == {"type": "string", "enum": ["", "f0", "f1", "s0"]}
+    assert "source_quote" not in fields["properties"] and fields["additionalProperties"] is False
+    assert set(fields["required"]) == set(fields["properties"])
+    assert captured["max_completion_tokens"] == 2048 and captured["reasoning_effort"] == "none"
+    instruction = captured["messages"][0]["content"]
+    assert "nunca source_quote_ref, IDs" not in instruction
+    assert "Copie source_quote exatamente" not in instruction
+
+
+def test_gramatica_sem_citacao_continua_sem_evidencia_inventada(monkeypatch):
+    result, _ = review(monkeypatch, [issue(category="grammar", source_quote_id="")])
+    assert result["issues"][0]["source_quote"] == ""
+
+
+@pytest.mark.parametrize("facts", [[], FACTS[:1]])
+def test_fonte_preserva_evidencia_omitida_do_ledger(facts):
+    registry = _source_quote_registry({"factual_context": json.dumps(facts), "source_chunk": SOURCE})
+    assert registry["s0"] == SOURCE
+
+
+def test_contexto_invalido_preserva_contrato_anterior_e_global_sem_fonte():
+    assert _source_quote_registry({"factual_context": "inválido", "source_chunk": SOURCE}) is None
+    assert _source_quote_registry({"factual_context": json.dumps(FACTS), "source_chunk": ""}) == {
+        "f0": FACTS[0]["source_quote"], "f1": FACTS[1]["source_quote"]}
+
+
+@pytest.mark.parametrize("changes", [
+    {"source_quote_id": "PRIVATE_UNKNOWN"}, {"source_quote_id": []},
+    {"source_quote_id": None}, {"source_quote": "PRIVATE_PARAPHRASE"},
+])
+def test_referencia_invalida_ou_citacao_livre_nao_e_consumida(monkeypatch, changes):
+    with pytest.raises(ValueError) as caught:
+        review(monkeypatch, [issue(**changes)])
+    assert "PRIVATE" not in str(caught.value)
+
+
+def test_reversao_preserva_contrato_literal_anterior(monkeypatch):
+    legacy = issue()
+    del legacy["source_quote_id"]
+    legacy["source_quote"] = FACTS[1]["source_quote"]
+    result, captured = review(monkeypatch, [legacy], semantic_citation_ids=False)
+    assert result["issues"] == [legacy]
+    fields = captured["response_format"]["json_schema"]["schema"]["properties"]["issues"]["items"]["properties"]
+    assert "source_quote" in fields and "source_quote_id" not in fields
+
+
+@pytest.mark.parametrize("invalid_id,partial_ledger", [(False, False), (True, False), (False, True)])
+def test_gate_completo_resolve_evidencia_ou_rejeita_id_sem_fallback(tmp_path, monkeypatch, invalid_id, partial_ledger):
+    import utils.groq_client
+    monkeypatch.setenv("GROQ_API_KEY_PT", "chave-falsa-sem-rede")
+    calls = []
+    def create(**kwargs):
+        context = json.loads(kwargs["messages"][1]["content"])
+        calls.append(context)
+        if context["mode"] == "facts":
+            data = {"facts": []} if partial_ledger else {"facts": [{"kind": "amount", "value": "Payment of 50 dollars",
+                               "source_unit_ids": ["u0"]}]}
+        else:
+            issues = ([issue(source_quote_id="PRIVATE_UNKNOWN" if invalid_id else ("s0" if partial_ledger else "f0"))]
+                      if "50 reais" in context["candidate_text"] else [])
+            data = {"approved": not issues, "issues": issues}
+        return SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
+            content=json.dumps(data)))])
+    monkeypatch.setattr(utils.groq_client, "tracked_groq", lambda *a, **k: SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    lt = SimpleNamespace(health=lambda **kwargs: SimpleNamespace(version="6.6", locales=("pt-BR", "en-US", "es")),
+                         check=lambda *args: ())
+    guardian = ScriptGuardian({"groq_model": "qwen/qwen3.8-27b", "semantic_retry_wait_seconds": 0},
+                               base_dir=tmp_path, languagetool=lt)
+    profile = NarratorProfile("pf", "s1", "female", "female", 1.0, "explicit", (), "1")
+    arguments = dict(source_text=SOURCE, candidate_text="Depois paguei 50 reais.", language="pt",
+                     stage="translation", story_id="s1", profile=profile)
+    if invalid_id:
+        with pytest.raises(QualityUnavailable) as caught:
+            guardian.review_and_fix(**arguments)
+        assert caught.value.review.semantic_failure.code == "invalid_source_reference"
+        assert caught.value.review.semantic_failure.source_reference_error == "unknown_id"
+        assert caught.value.review.semantic_failure.attempts == 3
+        assert "PRIVATE" not in guardian.report_path.read_text(encoding="utf-8")
+        assert [call["mode"] for call in calls] == ["facts", "chunk", "chunk", "chunk"]
+    else:
+        result = guardian.review_and_fix(**arguments)
+        assert result.status == "approved" and result.approved_text == "Depois paguei 50 dólares."
+        assert result.patches[0].source_quote == SOURCE
+        assert [call["mode"] for call in calls] == ["facts", "chunk", "global", "chunk", "global"]
