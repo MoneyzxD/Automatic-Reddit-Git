@@ -83,3 +83,25 @@ Não corrige arbitrariamente AITCH nem reabre a adaptação já aprovada do name
 do incidente. A execução seguinte deve usar estado elegível de produção ou uma
 validação nova. Veja [PIPELINE_STATE.md](PIPELINE_STATE.md) para gerar mantendo
 produção, sem upload, e para o limite de publicação posterior pelo cron.
+
+## Estado depois da retomada sem upload
+
+O [run38508047757](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38508047757),
+commit ebb6ca0, passou testes e restore; dois pedidos do adaptador responderam200.
+A coleta factual EN recebeu429 nas três tentativas, contexto3.738 caracteres,
+TPM restante8.000/RPD restante1.000, sem subtipo nem espera declarados. Nenhuma
+etapa nova aprovada, mídia nova ou upload. Não chamar esse resultado de falha
+YouTube nem presumir qual cota foi atingida.
+
+Snapshot production/38508047757/seq66:91IDs idênticos,24arquivos imutáveis
+preservados byte a byte, dez estados rejeitados idênticos, EN/ES/PT unavailable
+e nenhuma fila YouTube pendente. A automação está pausada, impedindo publicação
+indireta da fila durante a recuperação assistida.
+
+Em paralelo, Gemini ficou somente na branch gemini-recovery. A combinação passou
+1.180 testes locais e revisão. O [teste38657422977](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38657422977)
+respondeu à tradução e a cinco pedidos de revisão; terminou503/chunk após três
+tentativas, sem429 nem mídia/upload. O diagnóstico encontrou também um ciclo de
+crase: LT mudou `todas as vezes` para `todas às vezes`, o modelo desfez, e LT
+voltou a apontar erro. A correção contextual e a prova com LanguageTool real
+estão sendo validadas nessa branch; ainda não há aceite para substituir produção.

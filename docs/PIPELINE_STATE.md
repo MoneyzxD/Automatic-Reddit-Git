@@ -12,12 +12,18 @@ texto expandido persistidos, sem recalcular a identidade pela regra nova.
 Uma adaptação ainda não aprovada expande AITA/AITAH no candidato antes da
 revisão inglesa, inclusive em retomadas; o cache já aprovado não é reescrito.
 
-Head mais recente conferido: production/38447177562/seq61, 91IDs, nenhuma
-fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES unavailable por429,
-fonte/perfil masculino preservados. A retomada real carregou a mesma identidade
-e dispensou extração; não resetar nem reabrir os dez estados rejected. Geração
-normal continua sem aceite; aguardar diagnóstico da cota e retomar somente os
-estados elegíveis. O próximo cron segue09UTC, automação habilitada.
+Head mais recente conferido: production/38508047757/seq66, 91IDs, nenhuma
+fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES/PT unavailable após429
+na coleta factual da adaptação EN. O subtipo dessa recusa não foi declarado.
+Comparação offline com seq61 confirmou24arquivos imutáveis byte a byte, o
+mesmo conjunto de91IDs e os mesmos dez estados rejected. Não resetar nem
+reabrir rejeitados. A geração normal ainda não tem aceite.
+
+A automação foi pausada (`PIPELINE_AUTOMATION_ENABLED=false`) na geração
+assistida para impedir publicação pelo cron antes da autorização específica.
+O horário versionado continua09UTC, mas não executa enquanto a variável ficar
+falsa. Testes Gemini permanecem isolados, sem upload, na branch gemini-recovery;
+isso não substitui o provedor em produção.
 
 ## Autoridade e pré-requisitos
 
