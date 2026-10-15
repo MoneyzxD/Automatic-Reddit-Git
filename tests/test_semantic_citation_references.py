@@ -15,8 +15,13 @@ FACTS = [{"kind": "event", "value": "No loan", "source_quote": "I didn't lend mo
          {"kind": "amount", "value": "Payment of 50 dollars", "source_quote": "Then I paid 50 dollars. 🧾"}]
 
 
-def wire_review(issues):
+def wire_review(issues, *, candidate=False):
     optional = {"grammar", "style", "language"}
+    if candidate:
+        issues = [dict(i) for i in issues]
+        for value in issues:
+            value.pop("start", None)
+            value["candidate_unit_ids"] = ["c0"] if value.get("original") and value.get("replacement") else []
     return {"approved": not issues,
             "issues": [i for i in issues if i["category"] not in optional],
             "language_issues": [i for i in issues if i["category"] in optional]}
@@ -29,7 +34,7 @@ def review(monkeypatch, issues, **config):
         captured.update(kwargs)
         return SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
             content=json.dumps({"approved": not issues, "issues": issues} if config.get("semantic_citation_ids") is False
-                               else wire_review(issues))))])
+                               else wire_review(issues, candidate=True))))])
     monkeypatch.setenv("GROQ_API_KEY_PT", "chave-falsa-sem-rede")
     monkeypatch.setattr(utils.groq_client, "tracked_groq", lambda *a, **k: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
@@ -162,6 +167,8 @@ def test_reversao_preserva_contrato_literal_anterior(monkeypatch):
     assert result["issues"] == [legacy]
     fields = captured["response_format"]["json_schema"]["schema"]["properties"]["issues"]["items"]["properties"]
     assert "source_quote" in fields and "source_quote_id" not in fields
+    assert "start" in fields and "candidate_unit_ids" not in fields
+    assert "candidate_text" in json.loads(captured["messages"][1]["content"])
 
 
 @pytest.mark.parametrize("invalid_id,partial_ledger", [(False, False), (True, False), (False, True)])
@@ -176,9 +183,10 @@ def test_gate_completo_resolve_evidencia_ou_rejeita_id_sem_fallback(tmp_path, mo
             data = {"facts": []} if partial_ledger else {"facts": [{"kind": "amount", "value": "Payment of 50 dollars",
                                "source_unit_ids": ["u0"]}]}
         else:
+            candidate = context.get("candidate_text", "".join(unit["text"] for unit in context.get("candidate_units", [])))
             issues = ([issue(source_quote_id="PRIVATE_UNKNOWN" if invalid_id else ("s0" if partial_ledger else "f0"))]
-                      if "50 reais" in context["candidate_text"] else [])
-            data = wire_review(issues)
+                      if "50 reais" in candidate else [])
+            data = wire_review(issues, candidate="candidate_units" in context)
         return SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
             content=json.dumps(data)))])
     monkeypatch.setattr(utils.groq_client, "tracked_groq", lambda *a, **k: SimpleNamespace(

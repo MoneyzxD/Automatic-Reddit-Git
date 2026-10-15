@@ -177,3 +177,32 @@ A aplicação recupera as citações e reúne as listas antes dos mesmos parsers
 categoria na lista errada bloqueia, sem reclassificação. Uma segunda sonda pública
 com esse contrato recebeu200/stop. Isso comprova aceitação do formato naquele
 pedido, sem comprovar a geração. Rollback segue `semantic_citation_ids: false`.
+
+## Reparos ambíguos e concordância nominal
+
+O [run38666579042](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38666579042)
+aceitou o formato e completou sete chamadas semânticas PT, sem falhas de
+transporte nesse idioma. A tradução foi rejeitada após dois reparos: originais
+repetidos (`mim mesma`, `sozinha`) sem âncora válida foram recusados; o modelo
+também apontou incorretamente `minha própria comida`, confundindo o gênero do
+substantivo possuído com o do narrador. Não descartar achados críticos nem
+reabrir o estado PT rejeitado para contornar o problema.
+
+ES aplicou dois reparos e terminou `incomplete_response` em chunk, saída2.048
+tokens; três429 anteriores foram recuperados dentro do orçamento. EN ainda não
+iniciou. Snapshotseq101 mantém91IDs, os dez rejeitados anteriores e mais um PT.
+Nenhuma mídia nova. O problema não se limita ao idioma EN nem chega ao YouTube.
+
+O transporte candidato usa unidades lossless `cN` e `candidate_unit_ids`:
+IDs existentes, sem repetição, contíguos e original único no intervalo escolhido.
+O código deriva `start`; depois correm as mesmas verificações de literalidade,
+span, sobreposição e perfil. Não substitui todas as ocorrências nem inventa
+offsets. O prompt explicita concordância com o substantivo possuído e reflexivos
+invariáveis, sem silenciar achados críticos. Caps e tentativas permanecem.
+
+A primeira sonda pública PT desse candidato recebeu429. Uma sonda mínima da
+mesma chave local/modelo respondeu200, prompt19/completion2. Uma revisão pública
+controlada seguinte retornou duas correções aplicáveis, corrigiu as duas
+ocorrências e preservou possessivos e personagem feminina. Sem história privada,
+estado ou publicação nessas sondas. Isso valida o caso controlado, sem provar
+o pipeline. Não demonstra que a chave PT local coincide com o Secret remoto.

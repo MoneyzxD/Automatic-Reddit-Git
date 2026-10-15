@@ -58,7 +58,7 @@ def test_wire_remove_repeticao_mas_preserva_todos_os_fatos(monkeypatch):
     assert isinstance(wire["factual_context"], list)
     assert _decode(wire) == facts
     assert len(captured["messages"][1]["content"]) < len(old) + len(source)
-    assert wire["candidate_text"] == "Texto candidato"
+    assert "".join(unit["text"] for unit in wire["candidate_units"]) == "Texto candidato"
     assert wire["profile"] == {"narration_gender": "male"}
     assert wire["stage"] == "adaptation"
     assert captured["max_completion_tokens"] == 2048
