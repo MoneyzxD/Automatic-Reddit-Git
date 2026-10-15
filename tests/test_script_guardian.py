@@ -206,6 +206,39 @@ def guardian_fake(tmp_path, semantic=None, lt=None, **config):
     )
 
 
+def test_guardiao_nao_introduz_crase_nem_reparo_no_contexto_do_incidente(
+    tmp_path, perfil_feminino, monkeypatch,
+):
+    from unittest.mock import Mock
+    from stages.language_tool import LanguageToolClient
+    monkeypatch.delenv("LANGUAGETOOL_URL", raising=False)
+    session = Mock()
+    session.get.return_value.status_code = 200
+    session.get.return_value.json.return_value = [{"longCode": lang} for lang in ("pt-BR", "en-US", "es")]
+
+    def post(*args, **kwargs):
+        text = kwargs["data"]["text"]
+        matches = []
+        if "as vezes" in text:
+            matches = [{"offset": text.index("as vezes"), "length": 8,
+                        "message": "Substitua as vezes por às vezes.",
+                        "replacements": [{"value": "às vezes"}],
+                        "rule": {"id": "AS_VEZES_BR", "category": {"id": "TYPOS"}}}]
+        response = Mock(status_code=200)
+        response.json.return_value = {"software": {"version": "6.6"}, "matches": matches}
+        return response
+
+    session.post.side_effect = post
+    semantic = FakeSemanticReviewer()
+    guardian = guardian_fake(tmp_path, semantic, LanguageToolClient({}, session=session))
+    candidate = "Falhei todas as vezes."
+    review = guardian.review_and_fix(source_text="I failed every time.", candidate_text=candidate,
+                                     language="pt", stage="translation", story_id="s1", profile=perfil_feminino)
+    assert review.status == "approved" and review.approved_text == candidate
+    assert review.attempts == 1 and not review.changed and not review.patches
+    assert [call.mode for call in semantic.calls] == ["facts", "chunk", "global"]
+
+
 @pytest.mark.parametrize("original,start,error_code", [
     ("Citei a clínica.", None, "chunk_original_missing"),
     ("Citei a cirurgia.", 1, None),

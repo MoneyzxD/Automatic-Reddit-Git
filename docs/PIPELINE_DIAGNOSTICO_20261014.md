@@ -105,3 +105,20 @@ tentativas, sem429 nem mídia/upload. O diagnóstico encontrou também um ciclo 
 crase: LT mudou `todas as vezes` para `todas às vezes`, o modelo desfez, e LT
 voltou a apontar erro. A correção contextual e a prova com LanguageTool real
 estão sendo validadas nessa branch; ainda não há aceite para substituir produção.
+
+O [run38659167207](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659167207)
+passou1.190 testes no Actions, incluindo a prova do falso positivo na regra
+AS_VEZES_BR6.6 real e a preservação do erro adverbial verdadeiro. A geração
+Gemini terminou429/resource_exhausted, RetryInfo85.047s, sem mídia. Não repetir
+antes do prazo, aproximadamente21h de15/10 em São Paulo. O filtro contextual
+isolado foi aprovado para produção: apenas `todas as vezes`, com os demais
+achados e as revisões semânticas preservados. A suíte local de produção passou
+1.137 testes; os dois testes de runtime real ficam explicitamente pulados localmente.
+
+A [comparação38659547097](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659547097),
+autorizada pelo operador, confirmou que a chave EN normalizada no Actions é
+idêntica à local e usa o Secret específico EN. Nenhuma chamada LLM nessa
+comparação. A [sonda pública38659982743](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659982743)
+fez uma chamada sem retry, chave/modelo EN fixos, cap2.048: HTTP200, prompt19,
+completion2, total21. Texto público, sem história privada. Esse resultado não
+valida a coleta factual com schema ou a geração completa.

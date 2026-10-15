@@ -1,10 +1,14 @@
 """Cliente HTTP para uma instância local do LanguageTool."""
 
 from dataclasses import dataclass
+import logging
 import os
+import re
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -150,6 +154,14 @@ class LanguageToolClient:
                     raise ValueError("campos de revisão inválidos")
             except (TypeError, KeyError, ValueError) as exc:
                 raise LanguageToolUnavailable("Achado inválido do LanguageTool") from exc
+            # A regra 6.6 não distingue a locução adverbial do artigo em
+            # "todas as vezes"; trocar por crase aqui introduz um erro.
+            # Limite comprovado: só essa regra e esse contexto, nunca outros achados.
+            if (key == "pt" and self._languages[key] == "pt-BR" and rule_id == "AS_VEZES_BR"
+                    and text[start:end].casefold() == "as vezes"
+                    and re.search(r"\btodas\s+$", text[:start], flags=re.IGNORECASE)):
+                logger.info("LanguageTool: falso positivo contextual AS_VEZES_BR desconsiderado")
+                continue
             issues.append(LanguageIssue(rule_id, category, message, replacements, start, end, text[start:end]))
         return tuple(issues)
 
