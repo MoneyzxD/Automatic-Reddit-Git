@@ -180,3 +180,25 @@ O RetryInfo anterior termina aproximadamente às 21h de 14/10 no fuso de São Pa
 isso permite nova tentativa limitada, mas não garante renovação/disponibilidade.
 Os [limites oficiais](https://ai.google.dev/gemini-api/docs/rate-limits) são por
 projeto e RPD renova à meia-noite do Pacífico, não necessariamente nesse prazo.
+
+O [run38657422977](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38657422977)
+retomou o namespace sintético após o prazo: tradução PT respondeu STOP/2.012
+tokens e cinco respostas do guardião foram concluídas. A revisão chegou à
+terceira rodada e terminou503/chunk após três tentativas, contexto15.226
+caracteres; nenhum429 nesta rodada. Snapshot seq35 conserva adaptação EN,
+fonte/perfil, três idiomas unavailable e zero mídia/upload. Não há aceite Gemini.
+
+Um ciclo concreto antecedeu essa falha: LT mudou `todas as vezes` para
+`todas às vezes`; a revisão semântica desfez a crase, e LT voltou a apontar erro.
+A [regra oficial6.6 AS_VEZES_BR](https://github.com/languagetool-org/languagetool/blob/v6.6/languagetool-language-modules/pt/src/main/resources/org/languagetool/rules/pt/pt-BR/grammar.xml#L821)
+não verifica o contexto anterior. O cliente agora reconhece esse falso positivo
+somente em pt-BR, na regra exata e no span `as vezes` imediatamente precedido
+por `todas`. Erros adverbiais reais (`Eu as vezes...`), outras regras e idiomas
+permanecem exigidos. O guardião continua revisando fatos, bloco e global.
+
+Três regressões falharam antes da correção; sete casos contextuais passaram,
+mais uma prova do guardião mantendo a frase intacta sem reparo. Dois testes
+adicionais só executam com o runtime LanguageTool configurado, como no Actions;
+skip local não comprova o serviço. A próxima validação limitada deve executar
+esses testes reais e retomar os idiomas, sem trocar modelo por quota, alterar
+caps/retries ou promover Gemini para produção antes do aceite completo.

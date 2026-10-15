@@ -226,6 +226,26 @@ def test_span_dentro_de_surrogate_ou_fora_do_texto_e_recusado(session, offset, l
         cliente(session).check("A😀B", "pt")
 
 
+@pytest.mark.parametrize("text,language,rule_id,expected", [
+    ("Falhei todas as vezes.", "pt", "AS_VEZES_BR", 0),
+    ("😀 Falhei TODAS as vezes.", "pt-br", "AS_VEZES_BR", 0),
+    ("Falhei todas\nas vezes.", "pt", "AS_VEZES_BR", 0),
+    ("Eu as vezes falho.", "pt", "AS_VEZES_BR", 1),
+    ("Todas falharam. Eu as vezes falho.", "pt", "AS_VEZES_BR", 1),
+    ("Falhei todas as vezes.", "en", "AS_VEZES_BR", 1),
+    ("Falhei todas as vezes.", "pt", "OUTRA_REGRA", 1),
+])
+def test_crase_do_incidente_depende_da_regra_e_do_contexto(session, text, language, rule_id, expected):
+    start = text.index("as vezes")
+    offset = len(text[:start].encode("utf-16-le")) // 2
+    resposta_check(session, {"matches": [{
+        "offset": offset, "length": 8, "message": "Substitua as vezes por às vezes.",
+        "replacements": [{"value": "às vezes"}],
+        "rule": {"id": rule_id, "category": {"id": "TYPOS"}},
+    }]})
+    assert len(cliente(session).check(text, language)) == expected
+
+
 @pytest.mark.parametrize("payload", [
     None,
     {},
