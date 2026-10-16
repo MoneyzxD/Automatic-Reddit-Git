@@ -20,12 +20,6 @@ on:
         required: true
         default: "pt"
         type: string
-      llm_provider:
-        description: "Provedor de IA fixo para esta execução"
-        required: true
-        default: groq
-        type: choice
-        options: [groq, gemini]
       gemini_catalog_only:
         description: "Só consultar modelos disponíveis; exige Gemini e execução isolada"
         required: false
@@ -302,20 +296,11 @@ jobs:
           PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
           DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           PIPELINE_ENV: runner
-          PIPELINE_LLM_PROVIDER: ${{ inputs.llm_provider || vars.PIPELINE_LLM_PROVIDER || 'groq' }}
+          # Decisão do operador: todas as etapas de IA usam Gemini.
+          PIPELINE_LLM_PROVIDER: gemini
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           PIPELINE_GEMINI_CATALOG_ONLY: ${{ inputs.gemini_catalog_only }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          # Uma chave gratuita do Groq POR IDIOMA — cada idioma tem seu
-          # proprio orcamento de tokens (por minuto e por dia), em vez de
-          # PT/EN/ES competirem pelo teto de uma unica conta. Secret
-          # ausente = string vazia = cai pra GROQ_API_KEY acima
-          # (utils/environment.py:groq_api_key). So precisa cadastrar
-          # conforme for configurando cada idioma, nao e obrigatorio.
-          GROQ_API_KEY_PT: ${{ secrets.GROQ_API_KEY_PT }}
-          GROQ_API_KEY_EN: ${{ secrets.GROQ_API_KEY_EN }}
-          GROQ_API_KEY_ES: ${{ secrets.GROQ_API_KEY_ES }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
           # Biblioteca de backgrounds fora do repositorio (~800MB): o runner
@@ -328,14 +313,11 @@ jobs:
           # scripts/check_oauth_expiry.py pro aviso de expiracao).
           REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
-          if [[ "$PIPELINE_LLM_PROVIDER" == "gemini" ]]; then
+          if [[ "$PIPELINE_DRY_RUN" != "true" ]]; then
             python scripts/check_gemini.py
-            if [[ "$PIPELINE_GEMINI_CATALOG_ONLY" == "true" ]]; then
-              exit 0
-            fi
-          elif [[ "$PIPELINE_GEMINI_CATALOG_ONLY" == "true" ]]; then
-            echo "Consulta Gemini exige o provedor Gemini." >&2
-            exit 2
+          fi
+          if [[ "$PIPELINE_GEMINI_CATALOG_ONLY" == "true" ]]; then
+            exit 0
           fi
           options=()
           [[ "$PIPELINE_DRY_RUN" == "true" ]] && options+=(--dry-run)

@@ -1,13 +1,16 @@
-# Gemini gratuito — validação antes da substituição
+# Gemini gratuito — provedor padrão do pipeline
 
-O operador autorizou integrar o Gemini em todas as etapas de IA e substituir
-o Groq somente depois de demonstrar funcionamento. O Secret GEMINI_API_KEY foi
-confirmado apenas pelo nome em 13/10/2026; seu valor não foi lido.
+Decisão atual do operador em 16/10/2026: usar Gemini no lugar do Groq em todas
+as etapas de IA. Essa instrução substitui a condição anterior de manter Groq
+como padrão até o aceite completo. O Secret GEMINI_API_KEY já está cadastrado;
+seu valor não é impresso. A geração completa ainda precisa de prova real.
 
 ## Implementação e reversão
 
 PIPELINE_LLM_PROVIDER seleciona groq ou gemini uma vez por execução. O default
-continua groq enquanto o aceite real estiver pendente. A camada utils/llm_client.py
+é gemini, inclusive quando a variável está vazia. O workflow manual/agendado
+fixa Gemini e não injeta Secrets Groq nem aceita seleção de outro provedor.
+A camada utils/llm_client.py
 encaminha os clientes de adaptação, perfil, correção de gênero, naturalização,
 título/hook/encerramento, metadados e validação. Métodos privados com nomes
 históricos groq são preservados para manter compatibilidade e testes existentes.
@@ -26,6 +29,9 @@ Prompts e gates locais permanecem; o schema completo de fatos/patches é enviado
 em responseJsonSchema. Só uma resposta STOP com texto final pode ser consumida.
 Resposta bloqueada, truncada, vazia ou inválida não aprova conteúdo. O perfil,
 evidências literais, rechecagem LanguageTool e quarentena continuam obrigatórios.
+Falha Gemini nas etapas de geração interrompe o lote, sem acionar Ollama,
+regras ou templates como substitutos. Limpeza determinística explícita e perfil
+imutável permanecem. Tradução retorna indisponibilidade tipificada sem Google.
 O guardião controla as três tentativas; o cliente não adiciona retries nesse
 caminho. Geração tem no máximo duas tentativas em 429/503/timeout/conexão,
 com teto de espera 30s. Timeout e payload são iguais nas duas tentativas.
@@ -44,10 +50,12 @@ Consumo registra o modelo efetivamente usado, inclusive respostas incompletas.
 3. Conferir roteiro/perfil nos três idiomas, MP4/voz/legendas/cards e checkpoint.
    Um workflow verde com conteúdo rejeitado ou sem mídia não basta.
 4. Restaurar/verificar a mídia em outro runner antes de liberar produção.
-5. Após aceite, integrar código e selecionar Gemini no fluxo normal. Preservar
+5. Validar Gemini já selecionado no fluxo normal. Preservar
    estado production, IDs confirmados, filas, tokens OAuth e meta diária.
 
-Reversão usa PIPELINE_LLM_PROVIDER=groq; não apaga snapshots, fontes ou perfil.
+O código legado permite reversão local explícita com PIPELINE_LLM_PROVIDER=groq;
+o Actions exige alteração revisada para isso. Não existe reversão automática
+por erro ou cota. Nenhuma reversão apaga snapshots, fontes ou perfil.
 Uma aprovação antiga reutilizável não conta como revisão nova pelo Gemini.
 Nenhum teste sintético deve ser publicado. Falha de cota ou gate mantém o
 aceite pendente; não reduzir validações nem ativar cobrança para fazê-lo passar.

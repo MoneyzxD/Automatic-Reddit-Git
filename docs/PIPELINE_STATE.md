@@ -3,6 +3,19 @@
 Status: integrado em main; bootstrap e publicação recuperada confirmados em 13/10.
 Teste unitário/fake HTTP não comprova persistência no GitHub nem upload real.
 
+Atualização em 16/10: Gemini substitui Groq em todas as etapas de IA por decisão
+explícita do operador. Fluxo manual/agendado fixa Gemini, sem Secrets Groq nem
+fallback de geração para Ollama/regras/templates. Veja [migração](GEMINI_MIGRATION.md).
+Cron permanece pausado e geração assistida não publica.
+
+Último checkpoint conferido antes da troca: production/38669463240/seq115.
+O run anterior gerou três vídeos pendentes (EN2/ES1), sem upload, e preservou
+91 IDs confirmados e11 estados rejeitados. EN/ES de1wyx2wj estão exported;
+PT de1x43yzx está unavailable após429 na revisão de tradução, com adaptação EN
+aprovada preservada. Verificação offline confirmou25arquivos imutáveis idênticos
+à baseline seq73, os91IDs iguais e os dez rejeitados anteriores preservados.
+Os registros abaixo são histórico e não substituem esse checkpoint.
+
 Normal38425392437 terminou por cancelamento assistido após oito estados EN/ES
 rejeitados, sem mídia nova. Snapshot final production/seq47 mantém91IDs, nenhuma
 pendência de upload e nenhuma linguagem processing/pending/unavailable. Fontes,

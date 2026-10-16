@@ -262,6 +262,8 @@ class GenderDetector:
         if result:
             return result
 
+        from utils.llm_client import require_gemini_result
+        require_gemini_result(result, "concordância de gênero")
         result = self._correct_via_ollama(text, narrator_gender, language)
         if result:
             return result

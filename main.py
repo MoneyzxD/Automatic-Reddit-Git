@@ -56,6 +56,7 @@ load_dotenv()
 import yaml
 from stages.narrator_profile import NarratorProfile
 from stages.script_guardian import QualityRejected, QualityUnavailable, ScriptReview, ReviewIssue
+from utils.llm_client import LLMUnavailable
 from utils.pipeline_state import StateError
 
 BASE_DIR = Path(__file__).parent
@@ -1119,7 +1120,7 @@ def cli(argv: list[str] | None = None) -> int:
             config, args.lang, dry_run=args.dry_run,
             test_story=args.test_story, max_parts=args.max_parts,
         )
-    except (QualityUnavailable, StateError):
+    except (QualityUnavailable, StateError, LLMUnavailable):
         logging.getLogger("pipeline.main").error("Dependência obrigatória indisponível; lote interrompido")
         return 2
     return 0

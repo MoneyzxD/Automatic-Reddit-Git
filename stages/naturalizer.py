@@ -479,6 +479,8 @@ class ScriptNaturalizer:
         if result:
             return self._apply_known_fixes(result, language)
 
+        from utils.llm_client import require_gemini_result
+        require_gemini_result(result, "naturalização")
         result = self._ollama_rewrite(text, language, narrator_gender)
         if result:
             return self._apply_known_fixes(result, language)

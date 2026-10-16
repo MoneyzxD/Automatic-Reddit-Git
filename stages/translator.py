@@ -148,8 +148,9 @@ class ScriptTranslator:
         """
         sample = text[:500]
         try:
-            from deep_translator import GoogleTranslator
-            GoogleTranslator(source="auto", target="en").translate(sample)
+            if env.llm_provider() != "gemini":
+                from deep_translator import GoogleTranslator
+                GoogleTranslator(source="auto", target="en").translate(sample)
             pt_words = ["não", "você", "que", "uma", "para", "com", "meu", "foi"]
             es_words = ["que", "una", "para", "con", "fue", "pero", "porque", "cuando"]
             en_words = ["the", "and", "that", "was", "for", "with", "have", "this"]

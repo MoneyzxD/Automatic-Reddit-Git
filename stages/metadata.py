@@ -399,6 +399,8 @@ class MetadataGenerator:
             title, story_summary, language, narrator_gender
         )
         if not description_body:
+            from utils.llm_client import require_gemini_result
+            require_gemini_result(description_body, "metadados")
             from utils import telemetry
             telemetry.record_fallback("metadata", language, "LLM remoto indisponível — descrição via template")
             description_body = self._description_via_template(language)

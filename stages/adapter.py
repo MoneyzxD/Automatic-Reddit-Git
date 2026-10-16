@@ -174,6 +174,9 @@ class StoryAdapter:
             if result:
                 return result
 
+        from utils.llm_client import require_gemini_result
+        if self.llm_enabled:
+            require_gemini_result(None, "adaptação")
         from utils import telemetry
         telemetry.record_fallback("adapter", "en", "LLM remoto indisponível")
         logger.info("Script adaptado via regras (fallback)")

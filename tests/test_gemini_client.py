@@ -54,6 +54,52 @@ def test_selecao_nao_reutiliza_chave_groq_com_gemini_ausente(monkeypatch):
     assert env.llm_api_key("en", "legado") == ""
 
 
+@pytest.mark.parametrize("selection", [None, "", "  "])
+def test_padrao_gemini_ignora_chaves_groq_existentes(monkeypatch, selection):
+    from utils import groq_client
+    if selection is None:
+        monkeypatch.delenv("PIPELINE_LLM_PROVIDER")
+    else:
+        monkeypatch.setenv("PIPELINE_LLM_PROVIDER", selection)
+    monkeypatch.setenv("GROQ_API_KEY", "legado-nao-usar")
+    monkeypatch.setenv("GROQ_API_KEY_EN", "legado-nao-usar")
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Default tentou usar Groq")
+    monkeypatch.setattr(groq_client, "tracked_groq", forbidden)
+    calls = fake_transport(monkeypatch)
+    assert env.llm_provider() == "gemini"
+    assert create().choices[0].message.content == "Texto completo."
+    assert calls[0][1]["headers"]["x-goog-api-key"] == "segredo-sintetico"
+
+
+def test_guardiao_gemini_resolve_ancoras_e_duas_listas_sem_perder_texto(monkeypatch):
+    from utils import gemini_client
+    from stages.script_guardian import _GroqReviewer, parse_semantic_review
+    candidate = "mim mesma. " + "Contexto preservado. " * 25 + "Eu cuido de mim mesma. 🧾"
+    captured = {}
+    def post(url, **options):
+        captured.update(options["json"])
+        wire = json.loads(captured["contents"][0]["parts"][0]["text"])
+        assert "candidate_text" not in wire
+        assert "".join(unit["text"] for unit in wire["candidate_units"]) == candidate
+        uid = next(unit["id"] for unit in reversed(wire["candidate_units"]) if "mim mesma" in unit["text"])
+        finding = {"original": "mim mesma", "replacement": "mim mesmo", "category": "narrator_gender",
+                   "severity": "critical", "subject": "narrator", "reason": "Perfil masculino",
+                   "source_quote_id": "s0", "candidate_unit_ids": [uid]}
+        body = response(json.dumps({"approved": False, "issues": [finding], "language_issues": []}))
+        return SimpleNamespace(status_code=200, headers={}, json=lambda: body, close=lambda: None)
+    monkeypatch.setattr(gemini_client.requests, "post", post)
+    result = _GroqReviewer({"semantic_timeout_seconds": 5}).review(
+        language="pt", mode="chunk", source_chunk="A male narrator cares for himself.",
+        candidate_text=candidate, factual_context="[]")
+    review = parse_semantic_review(result)
+    assert review.patches[0].start == candidate.rindex("mim mesma")
+    assert review.patches[0].source_quote == "A male narrator cares for himself."
+    schema = captured["generationConfig"]["responseJsonSchema"]
+    assert set(schema["properties"]) == {"approved", "issues", "language_issues"}
+    assert "start" not in schema["properties"]["issues"]["items"]["properties"]
+
+
 def test_provedor_invalido_bloqueia_em_vez_de_fallback(monkeypatch):
     monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "typo")
     with pytest.raises(ValueError):
@@ -148,10 +194,10 @@ def test_timeout_sanitizado_e_reconhecido(monkeypatch):
     assert "PRIVADAS" not in str(caught.value)
 
 
-def test_groq_padrao_preserva_cliente_e_parametros(monkeypatch):
+def test_groq_explicito_preserva_cliente_e_parametros(monkeypatch):
     from utils import groq_client
     from utils.llm_client import tracked_llm
-    monkeypatch.delenv("PIPELINE_LLM_PROVIDER")
+    monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "groq")
     monkeypatch.setattr(env, "groq_api_key", lambda language: "chave-legada")
     monkeypatch.setattr(groq_client, "tracked_groq", lambda key, stage, **options: (key, stage, options))
     assert env.llm_api_key("pt") == "chave-legada"
@@ -213,6 +259,44 @@ def test_guardiao_nao_repete_resposta_truncada_com_json_valido(monkeypatch, tmp_
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize("stage", ["adapter", "naturalizer", "title", "hook", "closing", "metadata", "gender"])
+def test_falha_gemini_interrompe_geracao_sem_ollama_regras_ou_templates(monkeypatch, stage):
+    from utils.llm_client import LLMUnavailable
+    fake_transport(monkeypatch, {"error": {"details": [
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "42s"}]}}, status=429)
+    def forbidden(*args, **kwargs):
+        pytest.fail("Falha Gemini não pode gerar por outro caminho")
+    if stage == "adapter":
+        from stages.adapter import StoryAdapter
+        obj = StoryAdapter({})
+        monkeypatch.setattr(obj, "_build_clean_script", forbidden)
+        invoke = lambda: obj.adapt({"title": "Title", "text": "A complete source."})
+    elif stage == "naturalizer":
+        from stages.naturalizer import ScriptNaturalizer
+        obj = ScriptNaturalizer({})
+        monkeypatch.setattr(obj, "_ollama_rewrite", forbidden)
+        monkeypatch.setattr(obj, "_rule_based_rewrite", forbidden)
+        invoke = lambda: obj.naturalize("Texto completo.", "pt", "male")
+    elif stage in {"title", "hook", "closing"}:
+        from stages.titler import TitleGenerator
+        obj = TitleGenerator({})
+        monkeypatch.setattr(obj, "_ollama_" + stage, forbidden)
+        method = {"title": "generate", "hook": "generate_hook", "closing": "generate_closing_hook"}[stage]
+        invoke = lambda: getattr(obj, method)("Texto completo.", "pt", original_title="Title")
+    elif stage == "metadata":
+        from stages.metadata import MetadataGenerator
+        obj = MetadataGenerator({})
+        monkeypatch.setattr(obj, "_description_via_template", forbidden)
+        invoke = lambda: obj.generate({"title": "Title", "text": "Fonte."}, "pt")
+    else:
+        from stages.gender_detector import GenderDetector
+        obj = GenderDetector({})
+        monkeypatch.setattr(obj, "_correct_via_ollama", forbidden)
+        invoke = lambda: obj.validate_and_fix("Texto completo.", "male", "pt")
+    with pytest.raises(LLMUnavailable):
+        invoke()
+
+
 def test_retry_de_geracao_limitado_sem_repetir_espera_acima_do_teto(monkeypatch):
     from utils import gemini_client
     from utils.llm_client import tracked_llm
@@ -241,18 +325,19 @@ def test_cadencia_compartilhada_entre_etapas(monkeypatch):
     assert len(calls) == 2 and waits == [12]
 
 
-def test_workflow_gemini_usa_secret_so_na_geracao_e_producao_continua_groq():
+def test_workflow_manual_e_cron_usam_gemini_sem_secrets_groq():
     from pathlib import Path
     import yaml
     data = yaml.load((Path(__file__).resolve().parents[1] / ".github/workflows/pipeline.yml").read_text(
         encoding="utf-8"), Loader=yaml.BaseLoader)
     inputs = data["on"]["workflow_dispatch"]["inputs"]
-    assert inputs["llm_provider"]["default"] == "groq"
-    assert inputs["llm_provider"]["options"] == ["groq", "gemini"]
+    assert "llm_provider" not in inputs
     steps = data["jobs"]["gerar-e-publicar"]["steps"]
     secret_steps = [s for s in steps if "GEMINI_API_KEY" in s.get("env", {})]
     assert len(secret_steps) == 1 and secret_steps[0]["id"] == "generate"
     assert secret_steps[0]["env"]["GEMINI_API_KEY"] == "${{ secrets.GEMINI_API_KEY }}"
+    assert secret_steps[0]["env"]["PIPELINE_LLM_PROVIDER"] == "gemini"
+    assert not any(key.startswith("GROQ_API_KEY") for step in steps for key in step.get("env", {}))
     assert secret_steps[0]["if"] == "${{ steps.execution.outputs.generate == 'true' }}"
     from utils.pipeline_execution import resolve_execution
     execution = resolve_execution(event="workflow_dispatch", ref="refs/heads/gemini-provider",
@@ -339,6 +424,13 @@ def gemini_translator(monkeypatch):
     for name in ("_translate_chunk_google", "_translate_chunk_mymemory"):
         monkeypatch.setattr(translator, name, lambda *a: pytest.fail("Provedor legado não deve ser usado"))
     return translator
+
+
+def test_deteccao_idioma_gemini_nao_consulta_google(monkeypatch):
+    from deep_translator import GoogleTranslator
+    from stages.translator import ScriptTranslator
+    monkeypatch.setattr(GoogleTranslator, "translate", lambda *a: pytest.fail("Google não deve ser consultado"))
+    assert ScriptTranslator({}).detect_language(" the story was told with this and that ") == "en"
 
 
 def test_traducao_gemini_preserva_whitespace_e_provedor(monkeypatch):

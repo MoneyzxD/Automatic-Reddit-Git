@@ -574,6 +574,8 @@ class TitleGenerator:
         result = self._groq_title(original_title, story_summary, language, hook_type)
         if result:
             return result
+        from utils.llm_client import require_gemini_result
+        require_gemini_result(result, "título")
         result = self._ollama_title(original_title, story_summary, language, hook_type)
         if result:
             return result
@@ -600,6 +602,8 @@ class TitleGenerator:
         result = self._groq_hook(original_title, story_summary, language)
         if result:
             return result
+        from utils.llm_client import require_gemini_result
+        require_gemini_result(result, "hook")
         result = self._ollama_hook(original_title, story_summary, language)
         if result:
             return result
@@ -627,6 +631,8 @@ class TitleGenerator:
         result = self._groq_closing(original_title, story_summary, language)
         if result:
             return result
+        from utils.llm_client import require_gemini_result
+        require_gemini_result(result, "encerramento")
         result = self._ollama_closing(original_title, story_summary, language)
         if result:
             return result

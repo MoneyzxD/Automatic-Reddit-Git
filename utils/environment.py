@@ -82,7 +82,7 @@ def groq_api_key(language: str = "") -> str:
 
 def llm_provider() -> str:
     """Escolha fixa por execução; indisponibilidade não alterna o provedor."""
-    provider = _env("PIPELINE_LLM_PROVIDER", "groq").lower() or "groq"
+    provider = _env("PIPELINE_LLM_PROVIDER", "gemini").lower() or "gemini"
     if provider not in {"groq", "gemini"}:
         raise ValueError("Provedor de LLM inválido; use groq ou gemini")
     return provider
