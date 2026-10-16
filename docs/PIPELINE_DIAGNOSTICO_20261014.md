@@ -84,19 +84,125 @@ do incidente. A execução seguinte deve usar estado elegível de produção ou 
 validação nova. Veja [PIPELINE_STATE.md](PIPELINE_STATE.md) para gerar mantendo
 produção, sem upload, e para o limite de publicação posterior pelo cron.
 
-## Retomada de produção sem upload
+## Estado depois da retomada sem upload
 
-Após 1.126 testes e revisão independente, `ebb6ca0` foi integrado em main.
-O [run38508047757](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38508047757)
-restaurou production e preservou91IDs, mas a coleta factual da adaptação EN
-recebeu429 nas três tentativas. Contexto3.738 caracteres, TPM restante8.000,
-RPD restante1.000, sem subtipo nem retry declarado. Portanto não atribuir esse
-resultado a TPD, TPM, ao tamanho da história ou ao YouTube sem nova evidência.
-Dois pedidos do adaptador tiveramHTTP200 antes da coleta. Nenhuma etapa nova
-foi aprovada, nenhuma mídia nova foi gerada e o upload foi pulado.
+O [run38508047757](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38508047757),
+commit ebb6ca0, passou testes e restore; dois pedidos do adaptador responderam200.
+A coleta factual EN recebeu429 nas três tentativas, contexto3.738 caracteres,
+TPM restante8.000/RPD restante1.000, sem subtipo nem espera declarados. Nenhuma
+etapa nova aprovada, mídia nova ou upload. Não chamar esse resultado de falha
+YouTube nem presumir qual cota foi atingida.
 
-Snapshot final production/38508047757/seq66 conserva91IDs, os dez rejeitados,
-fonte/perfil e EN/ES/PT unavailable, sem fila YouTube pendente. A automação ficou
-pausada (`PIPELINE_AUTOMATION_ENABLED=false`) para a geração assistida, evitando
-publicação futura da fila antes da autorização específica. O próximo teste usa
-Gemini somente no namespace sintético existente, após o prazo do RetryInfo.
+Snapshot production/38508047757/seq66:91IDs idênticos,24arquivos imutáveis
+preservados byte a byte, dez estados rejeitados idênticos, EN/ES/PT unavailable
+e nenhuma fila YouTube pendente. A automação está pausada, impedindo publicação
+indireta da fila durante a recuperação assistida.
+
+Em paralelo, Gemini ficou somente na branch gemini-recovery. A combinação passou
+1.180 testes locais e revisão. O [teste38657422977](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38657422977)
+respondeu à tradução e a cinco pedidos de revisão; terminou503/chunk após três
+tentativas, sem429 nem mídia/upload. O diagnóstico encontrou também um ciclo de
+crase: LT mudou `todas as vezes` para `todas às vezes`, o modelo desfez, e LT
+voltou a apontar erro. A correção contextual e a prova com LanguageTool real
+estão sendo validadas nessa branch; ainda não há aceite para substituir produção.
+
+O [run38659167207](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659167207)
+passou1.190 testes no Actions, incluindo a prova do falso positivo na regra
+AS_VEZES_BR6.6 real e a preservação do erro adverbial verdadeiro. A geração
+Gemini terminou429/resource_exhausted, RetryInfo85.047s, sem mídia. Não repetir
+antes do prazo, aproximadamente21h de15/10 em São Paulo. O filtro contextual
+isolado foi aprovado para produção: apenas `todas as vezes`, com os demais
+achados e as revisões semânticas preservados. A suíte local de produção passou
+1.137 testes; os dois testes de runtime real ficam explicitamente pulados localmente.
+
+A [comparação38659547097](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659547097),
+autorizada pelo operador, confirmou que a chave EN normalizada no Actions é
+idêntica à local e usa o Secret específico EN. Nenhuma chamada LLM nessa
+comparação. A [sonda pública38659982743](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38659982743)
+fez uma chamada sem retry, chave/modelo EN fixos, cap2.048: HTTP200, prompt19,
+completion2, total21. Texto público, sem história privada. Esse resultado não
+valida a coleta factual com schema ou a geração completa.
+
+## Retomadas com a chave conferida
+
+O [run38660290998](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38660290998)
+aprovou e persistiu a adaptação EN. A tradução PT terminou por
+`nonliteral_evidence`: dois429 e uma resposta200 consumiram as três tentativas
+do bloco. Snapshotseq73 sem mídia nova. A correção de transporte usa IDs locais
+do ledger e da fonte; a aplicação recupera a citação original e mantém os gates.
+
+O [run38662836166](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38662836166)
+passou1.152 testes no CI, incluindo o LanguageTool real, e reutilizou a adaptação
+aprovada. A coleta factual PT respondeu200. O bloco recebeu429/200/429; a última
+recusa declarou Retry-After2s, TPM restante7.799/RPD998 e nenhum subtipo conhecido.
+O relatório anterior conserva só a falha final; não afirmar por que a resposta
+intermediária foi recusada. Snapshotseq80 sem mídia nova,25arquivos imutáveis
+idênticos aseq73, mesmos91IDs/dez rejeitados.
+
+A cadência anterior esperou16,3s após o coletor e35,3s após o bloco200. O reset
+TPM do pedido anterior não garante capacidade para o próximo pedido maior.
+O modelo fixo qwen/qwen3.8-27b agora tem piso conservador de61s, preservando
+cabeçalhos com espera maior. Isso aumenta latência e só coordena o processo
+atual; não garante cota diária nem coordena consumidores externos. Nenhum
+modelo/chave alterna. Os limites de três tentativas/cap2.048 ficam iguais.
+O relatório também guarda até20falhas intermediárias sanitizadas, com contagens
+de evidência ausente/não literal; não guarda resposta, citação ou erro HTTP livre.
+Ainda falta comprovar geração completa e restauração da mídia em outro runner.
+
+O [run38664030524](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38664030524)
+passou1.157 testes reais de CI. A pausa de61s foi respeitada, mas o bloco PT
+recebeu429/429/200; as recusas não declararam subtipo ou Retry-After. O histórico
+identificou a falha da resposta200: `nonliteral_evidence`, `missing: 1`.
+O schema anterior permitia ID vazio mesmo em achado factual; o gate bloqueou
+corretamente a resposta. Snapshotseq87 sem mídia nova; adaptação preservada.
+
+O schema com IDs inicialmente usou duas variantes fechadas de categorias disjuntas:
+grammar/style/language admitem referência vazia, as demais exigem ID válido não
+vazio. Corresponde ao critério local existente, sem retirar achados críticos.
+A [documentação Groq](https://console.groq.com/docs/structured-outputs) informa
+suporte a `anyOf`, mas isso não provou compatibilidade deste formato.
+
+O [run38665231394](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38665231394)
+terminou400 no primeiro bloco PT; facts200 e nenhuma mídia. Uma única sonda
+pública, sem história/estado/publicação, reproduziu400 com
+`discriminator_multiple_candidates`: category/severity/source_quote_id tornaram
+a união ambígua para esse backend. Não era uma resposta de história inválida.
+O código registra esse enum sem mensagem/path livres. Seq94 mantém25arquivos
+imutáveis,91IDs e dez rejeitados idênticos aseq73.
+
+O contrato foi ajustado para duas listas fechadas: `issues` contém as categorias
+factuais e exige IDs válidos não vazios; `language_issues` contém somente
+grammar/style/language e admite ID vazio. Ambas têm todos os campos obrigatórios.
+A aplicação recupera as citações e reúne as listas antes dos mesmos parsers/gates;
+categoria na lista errada bloqueia, sem reclassificação. Uma segunda sonda pública
+com esse contrato recebeu200/stop. Isso comprova aceitação do formato naquele
+pedido, sem comprovar a geração. Rollback segue `semantic_citation_ids: false`.
+
+## Reparos ambíguos e concordância nominal
+
+O [run38666579042](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38666579042)
+aceitou o formato e completou sete chamadas semânticas PT, sem falhas de
+transporte nesse idioma. A tradução foi rejeitada após dois reparos: originais
+repetidos (`mim mesma`, `sozinha`) sem âncora válida foram recusados; o modelo
+também apontou incorretamente `minha própria comida`, confundindo o gênero do
+substantivo possuído com o do narrador. Não descartar achados críticos nem
+reabrir o estado PT rejeitado para contornar o problema.
+
+ES aplicou dois reparos e terminou `incomplete_response` em chunk, saída2.048
+tokens; três429 anteriores foram recuperados dentro do orçamento. EN ainda não
+iniciou. Snapshotseq101 mantém91IDs, os dez rejeitados anteriores e mais um PT.
+Nenhuma mídia nova. O problema não se limita ao idioma EN nem chega ao YouTube.
+
+O transporte candidato usa unidades lossless `cN` e `candidate_unit_ids`:
+IDs existentes, sem repetição, contíguos e original único no intervalo escolhido.
+O código deriva `start`; depois correm as mesmas verificações de literalidade,
+span, sobreposição e perfil. Não substitui todas as ocorrências nem inventa
+offsets. O prompt explicita concordância com o substantivo possuído e reflexivos
+invariáveis, sem silenciar achados críticos. Caps e tentativas permanecem.
+
+A primeira sonda pública PT desse candidato recebeu429. Uma sonda mínima da
+mesma chave local/modelo respondeu200, prompt19/completion2. Uma revisão pública
+controlada seguinte retornou duas correções aplicáveis, corrigiu as duas
+ocorrências e preservou possessivos e personagem feminina. Sem história privada,
+estado ou publicação nessas sondas. Isso valida o caso controlado, sem provar
+o pipeline. Não demonstra que a chave PT local coincide com o Secret remoto.

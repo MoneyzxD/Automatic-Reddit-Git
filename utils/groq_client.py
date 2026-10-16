@@ -167,7 +167,13 @@ def _paced_create(inner, stage, model, args, kwargs):
             _emit_http_diagnostic(response, request=getattr(exc, "request", None), exc=exc)
             raise
         finally:
-            _NEXT_REQUEST_AT[model] = time.monotonic() + _token_reset_seconds(headers)
+            delay = _token_reset_seconds(headers)
+            if model == "qwen/qwen3.8-27b":
+                # A recarga do pedido anterior não reserva o próximo, maior.
+                # Piso conservador para o modelo fixo de produção; não coordena
+                # outros processos/consumidores nem garante saldo diário.
+                delay = max(delay, 61.0)
+            _NEXT_REQUEST_AT[model] = time.monotonic() + delay
 
 # ── RETRY EM RATE LIMIT (429) ────────────────────────────────────────────────
 # O SDK do Groq ja tenta de novo sozinho algumas vezes, mas desiste antes do

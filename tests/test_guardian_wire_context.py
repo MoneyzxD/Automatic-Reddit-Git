@@ -15,9 +15,13 @@ def _wire(monkeypatch, factual_context, source_chunk):
         def create(self, **kwargs):
             captured.update(kwargs)
             from types import SimpleNamespace
+            data = {"approved": True, "issues": []}
+            properties = kwargs["response_format"]["json_schema"]["schema"]["properties"]
+            if "language_issues" in properties:
+                data["language_issues"] = []
             return SimpleNamespace(choices=[SimpleNamespace(
                 finish_reason="stop", message=SimpleNamespace(
-                    content='{"approved":true,"issues":[]}'))])
+                    content=json.dumps(data)))])
 
     from types import SimpleNamespace
     monkeypatch.setattr(utils.groq_client, "tracked_groq", lambda *a, **k:
@@ -54,7 +58,7 @@ def test_wire_remove_repeticao_mas_preserva_todos_os_fatos(monkeypatch):
     assert isinstance(wire["factual_context"], list)
     assert _decode(wire) == facts
     assert len(captured["messages"][1]["content"]) < len(old) + len(source)
-    assert wire["candidate_text"] == "Texto candidato"
+    assert "".join(unit["text"] for unit in wire["candidate_units"]) == "Texto candidato"
     assert wire["profile"] == {"narration_gender": "male"}
     assert wire["stage"] == "adaptation"
     assert captured["max_completion_tokens"] == 2048

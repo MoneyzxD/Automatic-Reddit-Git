@@ -12,14 +12,52 @@ texto expandido persistidos, sem recalcular a identidade pela regra nova.
 Uma adaptação ainda não aprovada expande AITA/AITAH no candidato antes da
 revisão inglesa, inclusive em retomadas; o cache já aprovado não é reescrito.
 
-Head mais recente conferido: production/38447177562/seq61, 91IDs, nenhuma
-fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES unavailable por429,
-fonte/perfil masculino preservados. A retomada real carregou a mesma identidade
-e dispensou extração; não resetar nem reabrir os dez estados rejected. Geração
-normal continua sem aceite; aguardar diagnóstico da cota e retomar somente os
-estados elegíveis. O próximo cron segue09UTC, automação habilitada.
+Head mais recente conferido: production/38666579042/seq101,91IDs, nenhuma
+fila YouTube pendente, nenhum processing; 1wyx2wj EN/ES unavailable e PT rejected.
+A adaptação EN foi aprovada e salva, mas a tradução PT terminou por
+nonliteral_evidence na revisão de bloco do run38660290998; o run seguinte
+terminou429/chunk, após uma resposta200 intermediária. Retomar deve reutilizar a adaptação
+aprovada. O run38664030524 respeitou61s, recebeu429/429/200 no bloco PT e
+terminou por evidência ausente num achado factual. Retomar mantém a adaptação
+aprovada, a mesma fonte/perfil e os dez rejeitados. A geração completa
+ainda não tem aceite. A comparação anterior entreseq61/66 confirmou24arquivos
+imutáveis byte a byte e igualdade dos91IDs/dez rejeitados.
+Entreseq73/80 foram conferidos25arquivos imutáveis,91IDs e dez rejeitados iguais.
+O run38665231394 terminou400 no primeiro bloco, por união de schema ambígua;
+seq94 conserva25arquivos imutáveis,91IDs e dez rejeitados idênticos aseq73.
+O run38666579042 aceitou o formato de duas listas. PT chegou ao gate final
+de tradução e foi rejeitado após dois reparos; não deve ser reaberto. ES
+terminou por resposta incompleta no segundo reparo; EN ainda não iniciou.
+Os dez rejeitados anteriores permanecem; o total agora é11 com PT novo.
+
+A automação foi pausada (`PIPELINE_AUTOMATION_ENABLED=false`) na geração
+assistida para impedir publicação pelo cron antes da autorização específica.
+O horário versionado continua09UTC, mas não executa enquanto a variável ficar
+falsa. Testes Gemini permanecem isolados, sem upload, na branch gemini-recovery;
+isso não substitui o provedor em produção.
 
 ## Autoridade e pré-requisitos
+
+O transporte semântico pode usar `semantic_citation_ids: true`: o modelo escolhe
+um ID `fN` do ledger factual ou `s0` da fonte completa disponível na chamada,
+e o código recupera a citação original
+antes dos mesmos parsers, gates e validações de patches.
+O schema separa gramática/estilo/idioma (referência opcional) das mesmas categorias
+que exigem evidência no gate local (ID válido não vazio obrigatório).
+No transporte, `issues` e `language_issues` são listas fechadas separadas; a
+aplicação reúne ambas antes dos parsers/gates. Não usa a união `anyOf` recusada
+pelo backend. Categoria na lista errada bloqueia, sem reclassificar o achado.
+O candidato viaja inteiro como unidades `cN`, sem duplicar/truncar o texto.
+O modelo escolhe IDs contíguos e um original literal único nesse intervalo;
+a aplicação calcula `start` e aplica os mesmos gates de span/perfil/sobreposição.
+IDs inválidos, repetidos, fora de ordem ou ocorrência ambígua bloqueiam com o
+mesmo orçamento de três tentativas. O rollback do transporte também restaura
+o candidato literal e offsets legados; não muda etapas aprovadas persistidas.
+IDs desconhecidos, campos/tipos inválidos e evidência factual ausente bloqueiam. Não altera hashes,
+perfis ou etapas aprovadas persistidas. `false` restaura o protocolo literal
+anterior; ledger ausente/não tipificado também mantém esse protocolo. O registro
+aceita ledger tipado vazio e conserva `s0` quando há fonte disponível. O orçamento
+de três tentativas e o teto de2.048 tokens não aumentam.
 
 O snapshot privado contém backup SQLite, filas explícitas, fonte/perfil e
 passos aprovados, metadados e MP4/JPG ainda necessários. A restauração verifica

@@ -138,3 +138,12 @@ def test_recarga_de_90s_respeita_header_sem_sleep_longo(clock, monkeypatch):
     complete()
     assert 90 <= calls[1][0] - calls[0][0] <= 120
     assert all(0 < wait <= 60 for wait in clock[1])
+
+
+@pytest.mark.parametrize("reset", ["15.292s", "34.282s", "0s", "1m30s"])
+def test_qwen_pedidos_maiores_nao_reutilizam_recarga_curta_do_anterior(clock, monkeypatch, reset):
+    calls = transport(monkeypatch, clock, {"x-ratelimit-reset-tokens": reset})
+    complete(stage="adapter", model="qwen/qwen3.8-27b")
+    complete(stage="script_guardian", model="qwen/qwen3.8-27b")
+    assert calls[1][0] - calls[0][0] >= 61
+    assert all(0 < wait <= 60 for wait in clock[1])

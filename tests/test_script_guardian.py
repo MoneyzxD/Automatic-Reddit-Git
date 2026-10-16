@@ -760,7 +760,8 @@ def test_adapter_padrao_usa_chave_fixa_por_idioma_e_json_estrito(tmp_path, perfi
     def create(**kwargs):
         calls.append(kwargs)
         context = json.loads(kwargs["messages"][1]["content"])
-        raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
+        raw = json.dumps({"facts": []} if context["mode"] == "facts" else
+                         {"approved": True, "issues": [], "language_issues": []})
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
 
     def tracked(key, stage, **kwargs):
@@ -816,7 +817,8 @@ def test_rejeicao_json_validate_failed_prevenida_pelo_schema(tmp_path, perfil_fe
             exc.body = {"error": {"code": "json_validate_failed"}}
             raise exc
         context = json.loads(kwargs["messages"][1]["content"])
-        raw = json.dumps({"facts": []}) if context["mode"] == "facts" else resposta(True, [])
+        raw = json.dumps({"facts": []} if context["mode"] == "facts" else
+                         {"approved": True, "issues": [], "language_issues": []})
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=raw), finish_reason="stop")])
 
     monkeypatch.setattr(module.env, "groq_api_key", lambda lang: "opaque")
@@ -1559,6 +1561,7 @@ def test_recusa_json_intermediaria_permanece_no_relatorio(tmp_path, perfil_femin
         assert revisar(guardian, perfil_feminino).status == "approved"
         latest = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
         assert latest["semantic_json_failures"] == []
+        assert latest["semantic_attempt_failures"] == []
 
 
 def test_historico_de_recusas_json_e_limitado_por_revisao(tmp_path, perfil_feminino):
@@ -1575,6 +1578,31 @@ def test_historico_de_recusas_json_e_limitado_por_revisao(tmp_path, perfil_femin
     assert len(event.get("semantic_json_failures", [])) == 20
     assert event.get("semantic_json_failures_truncated") is True
     assert event["semantic_failure"]["attempts"] == 25
+    assert len(event["semantic_attempt_failures"]) == 20
+    assert event["semantic_attempt_failures_truncated"] is True
+
+
+def test_rate_limit_final_nao_esconde_evidencia_ausente_intermediaria(tmp_path, perfil_feminino):
+    attempts = []
+    class Reviewer:
+        def review(self, **context):
+            if context["mode"] == "facts":
+                return '{"facts":[]}'
+            attempts.append(context)
+            if len(attempts) == 2:
+                return resposta(False, [achado(category="event", source_quote="")])
+            exc = RuntimeError("SYNTHETIC_PRIVATE")
+            exc.status_code = 429
+            raise exc
+    guardian = guardian_fake(tmp_path, Reviewer())
+    with pytest.raises(QualityUnavailable):
+        revisar(guardian, perfil_feminino)
+    event = json.loads(guardian.report_path.read_text(encoding="utf-8").splitlines()[-1])
+    history = event["semantic_attempt_failures"]
+    assert [item["failure"]["code"] for item in history] == ["rate_limit", "nonliteral_evidence", "rate_limit"]
+    assert history[1]["evidence_errors"] == {"missing": 1}
+    assert len(attempts) == 3 and event["semantic_failure"]["code"] == "rate_limit"
+    assert "SYNTHETIC_PRIVATE" not in json.dumps(history)
 
 
 def test_fonte_curta_integral_chega_ao_global_mesmo_sem_fatos(tmp_path, perfil_feminino):
