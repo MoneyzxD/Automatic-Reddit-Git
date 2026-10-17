@@ -271,5 +271,10 @@ bloqueados. Sugestões LT vão ao Gemini como hipóteses, sem aplicação autom�
 da primeira opção. Críticos não resolvidos continuam rejeitando; não se apagam
 achados porque o Gemini aprovou. Sem alterar fatos/perfis ou reabrir rejeitados.
 
-Regressões locais do reparo:291passes; cinco provas com LanguageTool real
-aguardam execução no runner. A prova de mídia completa continua pendente.
+Suíte completa local do reparo:1.283passes e cinco skips do backend. O
+[run38985741179](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38985741179)
+terminou success, com1.288passes e zero skips, incluindo o LanguageTool6.6 real:
+confirmou a regra spelling, preservou o vocábulo e o estilo sem ciclo, e manteve
+erros próximos bloqueados. Somente testes/catálogo, namespace isolado, nenhuma
+chamada generateContent nem mídia/publicação. A prova de mídia completa continua
+pendente. Revisão independente aprovou o diff, sem Critical/Important.
