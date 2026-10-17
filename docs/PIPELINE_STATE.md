@@ -22,6 +22,14 @@ Encerramento assistido preservou checkpoint final production/seq120,91IDs,
 EN2/ES1 pendentes e12rejeitados; sem mídia nova Gemini. Nenhum rejeitado deve
 ser reaberto. O reparo do ciclo do LT é documentado na migração acima.
 
+Main/5ced683 integrou o reparo após1.288testes no backend6.6 real. O teste
+sintético38986158416 aprovou tradução PT e gerou naturalização Gemini, mas sua
+revisão global recebeu429/resource_exhausted, RetryInfo84.537s (aproximadamente
+17/10 às21h de São Paulo). Não repetir antes do prazo nem trocar provedor por
+cota. Checkpoint validation-gemini-20261013/seq47 guarda tradução aprovada;
+zero mídia, sem tocar em production. Tokens OAuth locais PT/EN/ES retornaram
+invalid_grant; aguardam login do operador para renovar. Cron continua false.
+
 Normal38425392437 terminou por cancelamento assistido após oito estados EN/ES
 rejeitados, sem mídia nova. Snapshot final production/seq47 mantém91IDs, nenhuma
 pendência de upload e nenhuma linguagem processing/pending/unavailable. Fontes,

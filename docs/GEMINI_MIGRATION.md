@@ -278,3 +278,23 @@ confirmou a regra spelling, preservou o vocábulo e o estilo sem ciclo, e mantev
 erros próximos bloqueados. Somente testes/catálogo, namespace isolado, nenhuma
 chamada generateContent nem mídia/publicação. A prova de mídia completa continua
 pendente. Revisão independente aprovou o diff, sem Critical/Important.
+
+### Teste de vídeo após integrar o reparo
+
+Main/5ced683; [run38986158416](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38986158416)
+retomou somente PT no namespace sintético validation-gemini-20261013. Passou
+1.288testes reais, sem skips. A tradução Gemini passou o gate depois de um
+reparo; o ciclo LT anterior não se repetiu. A naturalização também respondeu
+completamente. Sua revisão global posterior recebeu429/resource_exhausted,
+uma tentativa, contexto16.325caracteres e RetryInfo84.537s.
+
+O prazo informado corresponde aproximadamente a17/10 às21h de São Paulo
+(18/10 00hUTC); não prova qual subtipo de cota terminou nem garante liberação
+nesse horário. Não repetir chamadas Gemini antes dele nem alternar modelo,
+chave ou provedor para contornar a recusa. Gemini continua selecionado.
+
+Checkpoint final seq47 mantém a fonte, o perfil e a adaptação EN, acrescenta
+a tradução PT aprovada e conserva PT/EN/ES unavailable para retomada. Nenhuma
+mídia ou publicação. O teste isolado não mudou production/seq120, os91IDs ou
+os três vídeos reais pendentes. Publicação continua também dependente da
+renovação OAuth interativa indicada acima. Cronfalse confirmado ao final.
