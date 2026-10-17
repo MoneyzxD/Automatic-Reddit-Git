@@ -432,6 +432,9 @@ def _semantic_response_format(model: str, mode: str, *, quote_ids=None, candidat
         fields.update(category={"type": "string", "enum": list(REVIEW_CATEGORIES)},
                       severity={"type": "string", "enum": ["info", "warning", "critical"]},
                       start={"type": ["integer", "null"]})
+        if mode == "language":
+            fields["category"] = {"type": "string", "enum": ["grammar", "language"]}
+            fields["source_quote"] = {"type": "string", "enum": [""]}
         if quote_ids is not None:
             del fields["source_quote"]
             fields["source_quote_id"] = {"type": "string", "enum": ["", *quote_ids]}
@@ -517,6 +520,24 @@ def _candidate_unit_registry(context):
     return {f"c{unit.index}": unit for unit in split_lossless(text, 200)}
 
 
+def _anchored_language_findings(context, units):
+    """Liga cada ocorrência LT ao texto literal e aos IDs enviados ao modelo."""
+    text = context["candidate_text"]
+    findings = []
+    for index, finding in enumerate(context.get("language_tool_findings", ())):
+        start, end = finding.get("start"), finding.get("end")
+        if (type(start) is not int or type(end) is not int
+                or not 0 <= start <= end <= len(text)
+                or text[start:end] != finding.get("original")):
+            raise _CandidateReferenceError("invalid_fields")
+        left, right = max(0, start - 40), min(len(text), end + 40)
+        findings.append({**finding, "finding_id": finding.get("finding_id", f"lt{index}"),
+            "context_before": text[left:start], "context_after": text[end:right],
+            "candidate_unit_ids": [uid for uid, unit in units.items()
+                                   if unit.start < right and left < unit.end]})
+    return findings
+
+
 def _restore_candidate_anchor(issue, units):
     if "start" in issue or "candidate_unit_ids" not in issue:
         raise _CandidateReferenceError("invalid_fields")
@@ -555,6 +576,12 @@ def _restore_review_citations(raw, registry, *, candidate_units=None):
         return raw  # O parser existente mantém o erro/retry de JSON inválido.
     if not isinstance(data, dict) or not isinstance(data.get("issues"), list):
         return raw
+    if registry is None:
+        if set(data) != {"approved", "issues"} or any(not isinstance(i, dict) for i in data["issues"]):
+            raise _CandidateReferenceError("invalid_fields")
+        for issue in data["issues"]:
+            _restore_candidate_anchor(issue, candidate_units)
+        return json.dumps(data, ensure_ascii=False)
     if set(data) != {"approved", "issues", "language_issues"} or not isinstance(data["language_issues"], list):
         raise _SourceReferenceError("invalid_fields")
     optional = {"grammar", "style", "language"}
@@ -600,7 +627,8 @@ class _GroqReviewer:
                                      SemanticFailure("authentication", None, context["mode"], 1, 0))
         registry = (_source_quote_registry(context)
                     if self.citation_ids and context["mode"] != "facts" else None)
-        candidate_units = _candidate_unit_registry(context) if registry is not None else None
+        candidate_units = (_candidate_unit_registry(context)
+                           if registry is not None or context["mode"] == "language" else None)
         anchor_instruction = (
             "O candidato completo está em candidate_units, em ordem, com id e text. "
             "Selecione candidate_unit_ids existentes, sem repetição, em ordem contígua, "
@@ -630,6 +658,25 @@ class _GroqReviewer:
                 "Estados físicos, aparência e relacionamentos não são declarações de gênero. "
                 "Registre o evento e seu sujeito literal, sem inventar identidade a partir deles. "
                 "Se houver retry_feedback, corrija o defeito indicado sem mudar a fonte."
+            )
+        elif context["mode"] == "language":
+            instruction = (
+                "Corrija somente erros reais de ortografia, pontuação ou gramática indicados "
+                "em language_tool_findings. As sugestões não são ordens: confirme cada uma no "
+                "contexto antes de alterar. context_before + original + context_after identifica "
+                "a ocorrência exata, inclusive quando original se repete no mesmo bloco. "
+                "candidate_unit_ids do achado cobre esse contexto literal. Não altere fatos, "
+                "negações, nomes, valores, relações ou gênero do narrador e dos personagens. "
+                "Use en-US para en, pt-BR para pt e espanhol para es. Não reescreva tudo. "
+                "Amplie original literalmente apenas o necessário para distinguir a ocorrência. "
+                "O perfil é imutável. Se não houver reparo seguro, retorne issues vazio. "
+                f"{anchor_instruction}"
+                'Retorne JSON estrito: {"approved":false,"issues":[{"original":"trecho exato",'
+                '"replacement":"correção pontual","category":"grammar","severity":"critical",'
+                '"subject":"personagem real","reason":"motivo concreto","source_quote":"","start":null}]}. '
+                "Todos os campos são obrigatórios. Só grammar ou language, com source_quote vazio. "
+                "Esta resposta apenas propõe reparos: o texto alterado será novamente verificado "
+                "pelo LanguageTool e pela revisão factual completa antes de qualquer aprovação."
             )
         else:
             instruction = (
@@ -727,6 +774,8 @@ class _GroqReviewer:
         if candidate_units is not None:
             wire.pop("candidate_text")
             wire["candidate_units"] = [{"id": uid, "text": unit.text} for uid, unit in candidate_units.items()]
+            if context.get("language_tool_findings"):
+                wire["language_tool_findings"] = _anchored_language_findings(context, candidate_units)
             instruction = instruction.replace("inclusive reason e start", "inclusive reason e candidate_unit_ids")
             instruction = instruction.replace('"start":null', '"candidate_unit_ids":["c0"]')
             instruction = instruction.replace("e inteiro ou null em start", "e IDs em candidate_unit_ids")
@@ -763,7 +812,7 @@ class _GroqReviewer:
             raise _ReviewUnavailable("Revisão semântica não concluída pelo provedor",
                                      SemanticFailure("incomplete_response", None, context["mode"], 1, 0))
         return (_restore_review_citations(content, registry, candidate_units=candidate_units)
-                if registry is not None else content)
+                if registry is not None or candidate_units is not None else content)
 
 
 class ScriptGuardian:
@@ -890,7 +939,7 @@ class ScriptGuardian:
                                             model=self.config.get("groq_model", "openai/gpt-oss-20b"),
                                             quote_ids=tuple(registry) if registry is not None else None,
                                             candidate_ids=tuple(_candidate_unit_registry(request_context) or ())
-                                                if registry is not None else None)
+                                                if registry is not None or mode == "language" else None)
                 if failure.code == "incomplete_response":
                     self._record_attempt_failure(failure)
                     break
@@ -973,6 +1022,12 @@ class ScriptGuardian:
                 elif data is not None:
                     outcome = parse_semantic_review(raw)
                     if outcome.status != "unavailable":
+                        if mode == "language" and any(
+                            issue.category not in {"grammar", "language"} or issue.source_quote
+                            for issue in outcome.issues
+                        ):
+                            raise _ReviewUnavailable("Reparo gramatical fora do contrato",
+                                SemanticFailure("invalid_schema", None, mode, attempt, context_chars))
                         evidence_errors = Counter(
                             "nonliteral" if issue.source_quote else "missing" for issue in outcome.issues
                             if (issue.source_quote and issue.source_quote not in source_text)
@@ -1103,7 +1158,8 @@ class ScriptGuardian:
                         issues.append(ReviewIssue(category, severity, finding.message,
                                                   finding.original, origin="languagetool"))
                         if not style:
-                            lt_findings.append({"original": finding.original, "message": finding.message,
+                            lt_findings.append({"finding_id": f"lt{len(lt_findings)}", "rule_id": finding.rule_id,
+                                                "original": finding.original, "message": finding.message,
                                                 "start": finding.start, "end": finding.end,
                                                 "replacements": finding.replacements})
                         # Sugestões são hipóteses para a revisão semântica; a primeira
@@ -1113,6 +1169,15 @@ class ScriptGuardian:
                     source_text, text, language, stage, profile, factual_context, lt_findings)
                 issues.extend(semantic_issues)
                 if attempt < self.max_repairs:
+                    if lt_findings and not semantic_patches and not glossary_patches:
+                        # Sem resposta útil no review geral, uma proposta dirigida.
+                        # Não substitui indisponibilidade nem aprova sem nova revisão.
+                        outcome = self._request(mode="language", source_text=source_text,
+                            language=language, stage=stage, profile=asdict(profile),
+                            candidate_text=text, language_tool_findings=lt_findings)
+                        issues.extend(outcome.issues)
+                        semantic_patches.extend(_anchor_semantic_patch(text, patch, scope="global")
+                                                for patch in outcome.patches)
                     result = validate_and_apply_patches(text, glossary_patches + semantic_patches,
                                                         source_text, profile)
                     accepted, rejected = result.applied, result.rejected

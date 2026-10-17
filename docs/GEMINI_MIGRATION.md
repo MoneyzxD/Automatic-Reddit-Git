@@ -451,3 +451,37 @@ de caracteres permanecem iguais. Três regressões falharam antes da alteração
 os126 testes próximos passaram depois. O teto maior não prova suficiência
 no serviço real: ainda é necessária a validação Groq e a publicação de mídia
 nova. Gemini permanece padrão e cron; esta correção não muda a seleção.
+
+Sonda autorizada do incidente1wybqga confirmou título/hook/encerramento Groq
+completos, com59/88/107 caracteres. Não reabriu a história nem publicou esse
+roteiro rejeitado. Sonda separada de descrição inteiramente sintética também
+terminou em stop (91tokens, teto120), sem necessidade de alteração nessa etapa.
+
+### Achados gramaticais ignorados pela revisão geral
+
+[Run38999030873](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38999030873),
+main/1f63cbd, passou1.328 testes reais, sem skips. A fonte1x0acbv EN foi
+rejeitada na adaptação: oito críticos LT (vírgulas em orações independentes
+e capitalização de Uber). A revisão geral Groq retornou listas vazias em
+chunk/global. Não houve descarte de patches pelo parser nem nova mídia.
+Production/seq155 preserva54 arquivos imutáveis,94IDs e16 rejeições anteriores;
+acrescenta essa rejeição (agora17).
+
+O transporte agora liga cada achado LT aos IDs dos blocos e a40 caracteres
+literais de contexto antes/depois da ocorrência. Se a revisão geral não
+oferecer nenhum patch semântico/glossário, houver críticos LT e ainda existir
+orçamento de reparo, o guardião solicita uma proposta `mode=language` ao mesmo
+provedor/modelo/chave. Essa chamada recebe candidato, perfil e achados; não
+repete fonte ou ledger. Seu schema aceita somente grammar/language e citação
+vazia. Âncoras continuam exatas; ambiguidade, texto truncado e mudança fora do
+contrato bloqueiam. Depois de aplicar qualquer patch, LT e revisão factual
+completa rodam novamente antes de aprovar. Resposta vazia continua rejeitando
+sem repetir um loop sem progresso. Indisponibilidade na revisão geral não
+aciona essa chamada. Não aumenta max_repair_attempts nem retries por request,
+mas pode acrescentar uma chamada por rodada de reparo elegível e consumir mais
+cota/tempo. Gemini permanece compatível e padrão; não há troca por rate limit.
+
+Seis regressões falharam antes da correção. Sonda Groq isolada com329palavras
+inteiramente sintéticas confirmou cinco reparos esperados (and/but/so e Uber),
+sem patches recusados. Isso prova apenas essa sonda, não a geração/publicação
+de uma nova história real. Nova rodada ponta a ponta permanece necessária.
