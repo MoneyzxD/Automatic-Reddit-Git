@@ -374,3 +374,42 @@ Para gerar e publicar conteúdo real, usar main, `state_action=normal`,
 e sem namespace de validação. História sintética continua isolada e sem upload.
 Um run sem mídia não prova o aceite; conferir os novos IDs na API YouTube e
 preservar os 94 IDs já confirmados, os 12 rejeitados e o estado anterior.
+
+### Primeira validação manual Groq
+
+[Run38991444372](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38991444372),
+main/c8d60c9, passou 1.310 testes reais sem skips. Seleção real en/pt/es retomou
+a fonte 1x3lge2, cujos EN/ES já estavam rejeitados e permaneceram bloqueados;
+PT ainda não havia sido tentado. A adaptação EN aprovada foi reaproveitada.
+Google Translate recusou solicitações e MyMemory forneceu a tradução PT.
+Cinco chamadas do guardião Groq responderam HTTP200, consumindo 17.369 tokens;
+nenhuma429. Os reparos de gênero foram aplicados, mas a grafia AITCH herdada
+da adaptação antiga permaneceu como erro crítico LT. PT foi rejeitado.
+
+O workflow terminou success sem nova mídia: não satisfaz o aceite. Checkpoint
+production/seq137 preserva os 94 IDs e todos os arquivos imutáveis anteriores,
+acrescentando somente esse estado rejeitado (agora13). Nova fonte elegível EN
+foi solicitada no run38992558417, mantendo rejeitados e seleção manual Groq.
+
+Conferência posterior pela API proprietária confirmou O3gobjMbCaE público,
+processado e no canal EN esperado, após o publishAt de17/10 01:50:38UTC
+(16/10 22:50:38 de Brasília), sem edição manual de visibilidade. Isso comprova
+o agendamento automático do YouTube para a mídia recuperada. Os outros dois
+continuavam privados/agendados; a geração nova Groq permanece em validação.
+
+### Rejeição da fonte nova e instrução de correção da forma
+
+Run38992558417 também passou1.310 testes reais, mas a fonte nova1x6sq3x foi
+rejeitada na adaptação EN: cinco críticos LT para realise/empathise (locale
+en-US), dont e duas contrações its/Its. Groq respondeu HTTP200 às etapas; a
+revisão semântica retornou listas vazias e os críticos LT bloquearam a mídia.
+Checkpoint production/seq141 conserva94IDs e os13 rejeitados anteriores,
+acrescentando a rejeição EN (agora14). Nenhum vídeo novo desse run.
+
+Os prompts passaram a explicitar correção de gramática/ortografia en-US no
+adapter e correção da forma mesmo se o erro já estiver na fonte no guardião.
+Fatos, nomes, sujeitos e sentido permanecem obrigatórios; os gates LT não
+foram enfraquecidos. Sonda sintética Groq isolada com os cinco padrões retornou
+cinco patches corretos. Isso prova somente a sonda, sem reproduzir todo o
+contexto da fonte ou provar mídia/upload. Testes relevantes dos gates,
+referências, patches e Gemini:420passes. Nova rodada real ainda necessária.

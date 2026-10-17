@@ -36,6 +36,7 @@ STRICT RULES:
 - Replace "OP" with "I" or "the author"
 - Keep the story complete — do NOT summarize
 - Use natural English narration style
+- Correct spelling, grammar and punctuation using US English, even when the source contains those errors; preserve all facts, names, subjects and meaning
 - Do NOT repeat the same transition word twice in a row (e.g. "said said", "told told")
 - Return ONLY the cleaned story text, no explanations
 
