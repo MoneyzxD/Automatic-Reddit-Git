@@ -485,3 +485,28 @@ Seis regressões falharam antes da correção. Sonda Groq isolada com329palavras
 inteiramente sintéticas confirmou cinco reparos esperados (and/but/so e Uber),
 sem patches recusados. Isso prova apenas essa sonda, não a geração/publicação
 de uma nova história real. Nova rodada ponta a ponta permanece necessária.
+
+### Contagem do contexto antes da compactação
+
+O cron39033188387 executou em17/10 12:36UTC (atraso do disparo GitHub),
+respeitou a janela Gemini e preservou production/seq156. Owner API confirmou
+os três vídeos recuperados públicos/processados nos canais corretos. Isso
+prova publicação automática da mídia antiga, não nova geração.
+
+[Run39047511018](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/39047511018),
+main/a7ab173, passou1.340 testes sem skips. Registrou a fonte1wz5tdt EN, mas
+ficou unavailable na adaptação antes do primeiro request de revisão chunk:
+o guardião contou25.997 caracteres nos campos expandidos, contra teto24.000,
+antes de substituir citações repetidas por referências lossless. A coleta de
+fatos Groq respondeu200. Não foi recusa de cota nesse bloqueio. O checkpoint
+production/seq160 mantém94IDs/17rejeições e a fonte unavailable elegível para
+retomada, com fonte/perfil imutáveis e nenhuma mídia nova.
+
+O guardião nativo agora mede o JSON compacto exato da mensagem de contexto,
+incluindo IDs, estrutura, contexto dos achados e feedback. Contagem e HTTP
+usam o mesmo helper. O teto24.000 não aumentou; nenhum fato/citação foi
+descartado. Revisores externos preservam o contrato literal anterior. Duas
+regressões falharam antes: bloqueio indevido por citações duplicadas e falta
+de bloqueio por desconsiderar IDs/JSON. Depois,450 testes próximos passaram.
+Essa contagem é em caracteres de contexto, não uma garantia de crédito TPM.
+Ainda exige retomada real da fonte e prova de geração/publicação nova.

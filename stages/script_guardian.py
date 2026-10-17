@@ -538,6 +538,21 @@ def _anchored_language_findings(context, units):
     return findings
 
 
+def _review_transport_context(context, citation_ids):
+    """A mesma representação lossless serve à contagem e ao envio HTTP."""
+    registry = (_source_quote_registry(context)
+                if citation_ids and context["mode"] != "facts" else None)
+    candidate_units = (_candidate_unit_registry(context)
+                       if registry is not None or context["mode"] == "language" else None)
+    wire = _compact_review_context(context)
+    if candidate_units is not None:
+        wire.pop("candidate_text")
+        wire["candidate_units"] = [{"id": uid, "text": unit.text} for uid, unit in candidate_units.items()]
+        if context.get("language_tool_findings"):
+            wire["language_tool_findings"] = _anchored_language_findings(context, candidate_units)
+    return registry, candidate_units, wire
+
+
 def _restore_candidate_anchor(issue, units):
     if "start" in issue or "candidate_unit_ids" not in issue:
         raise _CandidateReferenceError("invalid_fields")
@@ -619,16 +634,17 @@ class _GroqReviewer:
         if type(self.completion_cap) is not int or not 1 <= self.completion_cap <= 32768:
             raise ValueError("Teto de saída semântica inválido")
 
+    def context_chars(self, **context):
+        _, _, wire = _review_transport_context(context, self.citation_ids)
+        return len(json.dumps(wire, ensure_ascii=False, separators=(",", ":")))
+
     def review(self, **context):
         from utils.llm_client import tracked_llm
         key = env.llm_api_key(context["language"])
         if not key:
             raise _ReviewUnavailable("Chave do provedor de IA não configurada",
                                      SemanticFailure("authentication", None, context["mode"], 1, 0))
-        registry = (_source_quote_registry(context)
-                    if self.citation_ids and context["mode"] != "facts" else None)
-        candidate_units = (_candidate_unit_registry(context)
-                           if registry is not None or context["mode"] == "language" else None)
+        registry, candidate_units, wire = _review_transport_context(context, self.citation_ids)
         anchor_instruction = (
             "O candidato completo está em candidate_units, em ordem, com id e text. "
             "Selecione candidate_unit_ids existentes, sem repetição, em ordem contígua, "
@@ -770,12 +786,7 @@ class _GroqReviewer:
                 "com ID válido não vazio; language_issues apenas para grammar, style e language, "
                 "que podem usar ID vazio. Sem achados em uma lista, retorne-a vazia."
             )
-        wire = _compact_review_context(context)
         if candidate_units is not None:
-            wire.pop("candidate_text")
-            wire["candidate_units"] = [{"id": uid, "text": unit.text} for uid, unit in candidate_units.items()]
-            if context.get("language_tool_findings"):
-                wire["language_tool_findings"] = _anchored_language_findings(context, candidate_units)
             instruction = instruction.replace("inclusive reason e start", "inclusive reason e candidate_unit_ids")
             instruction = instruction.replace('"start":null', '"candidate_unit_ids":["c0"]')
             instruction = instruction.replace("e inteiro ou null em start", "e IDs em candidate_unit_ids")
@@ -888,6 +899,19 @@ class ScriptGuardian:
                                   (), 0, False, "", self.report_path)
             raise QualityUnavailable(review) from None
 
+    def _context_chars(self, mode, context):
+        sizer = getattr(type(self.semantic), "context_chars", None)
+        if callable(sizer):
+            try:
+                return sizer(self.semantic, **dict(context, mode=mode))
+            except _CandidateReferenceError as exc:
+                raise _ReviewUnavailable("Referência do candidato inválida antes do envio",
+                    SemanticFailure("invalid_candidate_reference", None, mode, 0, 0,
+                                    source_reference_error=exc.code)) from None
+        # Revisores externos conservam seu contrato de contexto literal.
+        return (len(json.dumps(dict(context, mode=mode), ensure_ascii=False)) if mode == "facts"
+                else sum(len(str(value)) for value in context.values()))
+
     def _request(self, *, mode, source_text, **context):
         # Um orçamento fixo evita retries ilimitados e nunca troca a carga de idioma.
         units = ()
@@ -895,8 +919,7 @@ class ScriptGuardian:
             source_chunk = context.pop("source_chunk")
             units = tuple((f"u{unit.index}", unit.text) for unit in split_lossless(source_chunk, 200))
             context["source_units"] = [{"id": uid, "text": text} for uid, text in units]
-        context_chars = (len(json.dumps(dict(context, mode=mode), ensure_ascii=False)) if mode == "facts"
-                         else sum(len(str(value)) for value in context.values()))
+        context_chars = self._context_chars(mode, context)
         if context_chars > self.max_context_chars:
             raise _ReviewUnavailable("Contexto excede o limite configurado; nenhum trecho foi truncado",
                                      SemanticFailure("context_limit", None, mode, 0, context_chars))
@@ -908,8 +931,7 @@ class ScriptGuardian:
                 # Cada tentativa recebe cópia; resolver usa a fonte imutável, não a resposta.
                 request_context = dict(request_context, source_units=[
                     {"id": uid, "text": text} for uid, text in units])
-            context_chars = (len(json.dumps(dict(request_context, mode=mode), ensure_ascii=False)) if mode == "facts"
-                             else sum(len(str(value)) for value in request_context.values()))
+            context_chars = self._context_chars(mode, request_context)
             if context_chars > self.max_context_chars:
                 raise _ReviewUnavailable("Feedback excede o limite; nenhum trecho foi truncado",
                                          SemanticFailure("context_limit", None, mode, attempt - 1, context_chars))

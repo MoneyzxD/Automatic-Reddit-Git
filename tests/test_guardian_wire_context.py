@@ -89,3 +89,41 @@ def test_literalidade_continua_integra_com_unicode_repeticao_e_citacao_externa(m
 def test_contexto_nao_tipificado_nunca_tem_campos_descartados(monkeypatch, value):
     wire, _ = _wire(monkeypatch, value, "x")
     assert wire["factual_context"] == value
+
+
+@pytest.mark.parametrize("redundant", [True, False])
+def test_limite_nativo_conta_wire_real_sem_descartar_citacoes(monkeypatch, tmp_path, redundant):
+    from types import SimpleNamespace
+    from utils import environment, llm_client
+    from stages.script_guardian import ScriptGuardian, _ReviewUnavailable
+
+    captured = []
+    source = "The narrator gave a library card to a cousin. " * 25 if redundant else "Hi."
+    facts = [{"kind": "event", "value": f"Event {i}", "source_quote": source}
+             for i in range(30)] if redundant else []
+    raw = json.dumps(facts, ensure_ascii=False)
+    assert not redundant or len(raw) > 24000
+
+    def create(**kwargs):
+        captured.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
+            content=json.dumps({"approved": True, "issues": [], "language_issues": []})))])
+
+    monkeypatch.setattr(environment, "llm_api_key", lambda *args: "opaque")
+    monkeypatch.setattr(llm_client, "tracked_llm", lambda *args, **kwargs:
+        SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    limit = 24000 if redundant else 80
+    guardian = ScriptGuardian({"max_context_chars": limit}, base_dir=tmp_path)
+    args = dict(mode="global", source_text=source, source_chunk=source, language="en",
+                candidate_text="A library card.", factual_context=raw)
+    if redundant:
+        assert guardian._request(**args).approved
+        body = captured[0]["messages"][1]["content"]
+        assert len(body) <= limit
+        assert _decode(json.loads(body)) == facts
+    else:
+        # IDs e metadados também custam espaço; não basta contar só os valores.
+        with pytest.raises(_ReviewUnavailable) as caught:
+            guardian._request(**args)
+        assert caught.value.failure.code == "context_limit"
+        assert not captured
