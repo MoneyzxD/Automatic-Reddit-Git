@@ -8,6 +8,22 @@ from requests.utils import select_proxy
 from stages.language_tool import LanguageIssue, LanguageToolClient, LanguageToolUnavailable
 
 
+@pytest.mark.parametrize('text,language,rule,expected', [
+    ('I fleetingly mentioned the message.', 'en', 'PRP_VB', 0),
+    ('🧾 That I fleetingly mentioned the message.', 'en', 'PRP_VB', 0),
+    ('I fleetingly device.', 'en', 'PRP_VB', 1),
+    ('I fleetingly mentionedly.', 'en', 'PRP_VB', 1),
+    ('I fleetingly mentioned it.', 'pt', 'PRP_VB', 1),
+    ('I fleetingly mentioned it.', 'en', 'OTHER_RULE', 1),
+])
+def test_falso_positivo_fleetingly_tem_escopo_literal(session,text,language,rule,expected):
+    start=text.index('I fleetingly')
+    resposta_check(session, {'matches':[{'offset':len(text[:start].encode('utf-16-le'))//2,
+        'length':len('I fleetingly'), 'message':'Missing verb.', 'replacements':[],
+        'rule':{'id':rule,'category':{'id':'GRAMMAR'},'issueType':'grammar'}}]})
+    assert len(cliente(session).check(text,language)) == expected
+
+
 @pytest.mark.parametrize("text,language,rule_id,expected", [
     ("I told you you’re not going.", "en", "ENGLISH_WORD_REPEAT_RULE", 0),
     ("I told you you're not going.", "en", "ENGLISH_WORD_REPEAT_RULE", 0),

@@ -157,6 +157,15 @@ class LanguageToolClient:
                     raise ValueError("campos de revisão inválidos")
             except (TypeError, KeyError, ValueError) as exc:
                 raise LanguageToolUnavailable("Achado inválido do LanguageTool") from exc
+            # Em 6.6, PRP_VB trata o advérbio fleetingly como substantivo.
+            # Só o contexto comprovado com mentioned logo depois: não desabilitar a
+            # regra nem aceitar ausência de verbo ou grafias próximas.
+            if (key == "en" and self._languages[key] == "en-US" and rule_id == "PRP_VB"
+                    and text[start:end] == "I fleetingly"
+                    and (start == 0 or not re.match(r"\w", text[start-1]))
+                    and re.match(r"[ \t]+mentioned\b", text[end:])):
+                logger.info("LanguageTool: falso positivo contextual PRP_VB desconsiderado")
+                continue
             # O TODO da regra 6.6 reconhece "you you're" como caso pendente.
             # Limite: objeto + sujeito após "told", en-US e essa regra apenas;
             # não retirar nenhum pronome nem ignorar duplicações fora do contexto.

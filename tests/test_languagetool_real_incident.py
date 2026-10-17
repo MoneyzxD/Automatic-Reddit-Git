@@ -10,6 +10,18 @@ pytestmark = pytest.mark.skipif(not os.getenv("LANGUAGETOOL_URL"),
                                 reason="Runtime local de LanguageTool não configurado")
 
 
+def test_backend_real_nao_trata_fleetingly_como_substantivo_antes_de_mentioned():
+    client = LanguageToolClient({})
+    text = "It was a normal message that I fleetingly mentioned to a roommate."
+    with client._post(text, "en-US") as response:
+        response.raise_for_status()
+        matches = response.json()["matches"]
+    assert any(m["rule"]["id"] == "PRP_VB" for m in matches)
+    assert not any(i.rule_id == "PRP_VB" for i in client.check(text, "en"))
+    assert any(i.rule_id == "YOUR_YOU_2" for i in client.check("You device isn't working.", "en"))
+    assert any(i.rule_id == "PRP_VB" for i in client.check("I fleetingly device.", "en"))
+
+
 @pytest.mark.parametrize("quote", ["I told you you’re not going.", "I told you you're not going."])
 def test_backend_real_confirma_repeticao_aparente_com_contracao(quote):
     client = LanguageToolClient({})

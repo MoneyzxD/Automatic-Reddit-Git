@@ -607,3 +607,22 @@ e zero achados remanescentes nessa frase. A suíte completa local passou
 1.354 testes, sem skips, com o LanguageTool real. Revisão independente não
 encontrou bloqueios. Ainda exige uma nova história elegível gerada/publicada;
 essas sondas não constituem prova ponta a ponta.
+
+### Falso positivo PRP_VB com advérbio antes de verbo
+
+Run39064766713, main/6a606fc, passou1.354 testes sem skips e extraiu1x8124m
+EN (512palavras, perfil feminino explícito). Todas as chamadas Groq foram200;
+chunk/global usaram3850tokens de entrada. A adaptação foi rejeitada apenas
+por um crítico LT: PRP_VB trata fleetingly como substantivo em I fleetingly
+mentioned. A revisão geral e a proposta dirigida não mudaram essa frase
+gramaticalmente válida. Production/seq176 mantém94IDs, agora19rejeições,
+11blobs e nenhuma nova mídia. Essa rejeição permanece fechada.
+
+O falso positivo foi reproduzido no LT6.6 local com frase sintética. O
+cliente desconsidera somente PRP_VB em en-US, span literal I fleetingly com
+limite de palavra anterior e mentioned logo depois. Não altera o roteiro
+nem desabilita a regra: I fleetingly device continua sinalizado; outro
+idioma/regra, sufixo mentionedly e erro YOUR_YOU_2 também permanecem. Dois
+testes de transporte e o teste de backend real falharam antes; depois81testes
+próximos passaram. Não existe arbitragem genérica que aprove achados LT sem
+reparo; esta é outra exceção estreita e comprovada, como as anteriores.
