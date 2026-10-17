@@ -24,7 +24,7 @@ def test_backend_real_confirma_repeticao_aparente_com_contracao(quote):
 def test_guardiao_real_preserva_pronomes_sem_perder_repeticao_incorreta(tmp_path):
     import json
     from types import SimpleNamespace
-    from stages.script_guardian import ScriptGuardian
+    from stages.script_guardian import ScriptGuardian, QualityRejected
     from stages.narrator_profile import NarratorProfile
     def semantic(**context):
         return json.dumps({"facts": []} if context["mode"] == "facts" else {"approved": True, "issues": []})
@@ -32,8 +32,14 @@ def test_guardiao_real_preserva_pronomes_sem_perder_repeticao_incorreta(tmp_path
     profile = NarratorProfile("pf", "s1", "male", "male", 1.0, "explicit", (), "1")
     for text, expected in (("I told you you’re not going.", "approved"), ("I miss you you.", "rejected"),
                            ("I told you you’re not going. I miss you you.", "rejected")):
-        review = guardian.review_and_fix(source_text=text, candidate_text=text, language="en",
-            stage="adaptation", story_id="s1", profile=profile)
+        if expected == "rejected":
+            with pytest.raises(QualityRejected) as caught:
+                guardian.review_and_fix(source_text=text, candidate_text=text, language="en",
+                    stage="adaptation", story_id="s1", profile=profile)
+            review = caught.value.review
+        else:
+            review = guardian.review_and_fix(source_text=text, candidate_text=text, language="en",
+                stage="adaptation", story_id="s1", profile=profile)
         assert review.status == expected and review.approved_text == text
 
 
