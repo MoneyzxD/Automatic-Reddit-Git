@@ -730,11 +730,10 @@ class TitleGenerator:
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.85,
-                # 400 e nao 150: os modelos gpt-oss gastam parte do orcamento
-                # "pensando" antes de escrever. Com 150 o raciocinio consumia
-                # tudo, o conteudo voltava vazio e o titulo caia para regras
-                # (visto em producao: titulo cortado "por interromper...").
-                max_tokens=400,
+                # O raciocínio do gpt-oss consumiu os 400 tokens no incidente
+                # 1wybqga. Reservar saída suficiente sem aceitar texto truncado;
+                # os limites de caracteres públicos continuam em _clean_title.
+                max_tokens=2048,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
                 logger.warning("LLM remoto interrompeu o título por limite de tokens (%s)", language)
@@ -774,11 +773,10 @@ class TitleGenerator:
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.88,
-                # 400 e nao 150: os modelos gpt-oss gastam parte do orcamento
-                # "pensando" antes de escrever. Com 150 o raciocinio consumia
-                # tudo, o conteudo voltava vazio e o titulo caia para regras
-                # (visto em producao: titulo cortado "por interromper...").
-                max_tokens=400,
+                # O raciocínio do gpt-oss consumiu os 400 tokens no incidente
+                # 1wybqga. Reservar saída suficiente sem aceitar texto truncado;
+                # os limites de caracteres públicos continuam em _clean_title.
+                max_tokens=2048,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
                 logger.warning("LLM remoto interrompeu o hook por limite de tokens (%s)", language)
@@ -820,11 +818,10 @@ class TitleGenerator:
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.85,
-                # 400 e nao 150: os modelos gpt-oss gastam parte do orcamento
-                # "pensando" antes de escrever. Com 150 o raciocinio consumia
-                # tudo, o conteudo voltava vazio e o titulo caia para regras
-                # (visto em producao: titulo cortado "por interromper...").
-                max_tokens=400,
+                # O raciocínio do gpt-oss consumiu os 400 tokens no incidente
+                # 1wybqga. Reservar saída suficiente sem aceitar texto truncado;
+                # os limites de caracteres públicos continuam em _clean_title.
+                max_tokens=2048,
             )
             if getattr(resp.choices[0], "finish_reason", None) == "length":
                 logger.warning("LLM remoto interrompeu o encerramento por limite de tokens (%s)", language)

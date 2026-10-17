@@ -14,6 +14,30 @@ HOOK_LONGO_EN = (
 )
 
 
+@pytest.mark.parametrize("method", ["_groq_title", "_groq_hook", "_groq_closing"])
+def test_texto_publico_reserva_tokens_para_raciocinio_sem_cair_em_fallback(method, monkeypatch):
+    from utils import environment, llm_client
+
+    monkeypatch.setattr(environment, "llm_api_key", lambda *args: "chave-teste")
+    calls = []
+
+    def complete(**kwargs):
+        calls.append(kwargs)
+        # Incidente 1wybqga: o raciocínio consumiu os 400 tokens disponíveis.
+        suficiente = kwargs["max_tokens"] >= 2048
+        return SimpleNamespace(choices=[SimpleNamespace(
+            finish_reason="stop" if suficiente else "length",
+            message=SimpleNamespace(content="I refused to pay." if suficiente else ""),
+        )])
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=complete)))
+    monkeypatch.setattr(llm_client, "tracked_llm", lambda *args: client)
+
+    assert getattr(TitleGenerator({}), method)("Title", "Story", "en") == "I refused to pay."
+    assert len(calls) == 1
+    assert calls[0]["max_tokens"] == 2048
+
+
 def test_clean_hook_longo_nao_corta_frase_do_incidente():
     generator = TitleGenerator({})
 

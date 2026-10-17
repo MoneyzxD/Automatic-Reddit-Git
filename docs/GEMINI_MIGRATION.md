@@ -434,3 +434,20 @@ imediatamente após told e seguido da contração 're/’re. Não altera o texto
 mantém duplicações fora desse contexto, outros idiomas/regras e achados
 concomitantes. Quatro regressões falharam antes, com sete controles negativos
 preservados. Novas regressões CI verificam o backend6.6 e o guardião real.
+
+### Orçamento de raciocínio insuficiente no título
+
+[Run38995813166](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38995813166)
+passou1.325 testes reais, sem skips. A fonte1wybqga EN passou adaptação,
+tradução e naturalização, mas o título Groq GPT-OSS120b esgotou os400 tokens
+de saída (`finish_reason=length`). O fallback legado produziu um fragmento
+com caixa/aspas inválidas e o gate rejeitou a história. Nenhum vídeo novo.
+Production/seq151 preserva49 arquivos imutáveis,94IDs e15 rejeições anteriores,
+acrescentando somente essa rejeição (agora16).
+
+O teto de título, hook e encerramento passa a2.048 tokens, incluindo o
+raciocínio. Respostas truncadas continuam recusadas e os limites públicos
+de caracteres permanecem iguais. Três regressões falharam antes da alteração;
+os126 testes próximos passaram depois. O teto maior não prova suficiência
+no serviço real: ainda é necessária a validação Groq e a publicação de mídia
+nova. Gemini permanece padrão e cron; esta correção não muda a seleção.
