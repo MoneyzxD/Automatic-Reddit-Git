@@ -510,3 +510,25 @@ regressões falharam antes: bloqueio indevido por citações duplicadas e falta
 de bloqueio por desconsiderar IDs/JSON. Depois,450 testes próximos passaram.
 Essa contagem é em caracteres de contexto, não uma garantia de crédito TPM.
 Ainda exige retomada real da fonte e prova de geração/publicação nova.
+
+### Recusa 429 e reprodução autorizada da coleta
+
+Run39048972543, main/ab2ab91, retomou1wz5tdt EN, mas a coleta de fatos
+recebeu429 nas três tentativas. Não chegou à revisão chunk nem gerou mídia.
+Production/seq164 mantém94IDs,17rejeições,11blobs e zero uploads pendentes.
+Os cabeçalhos TPM/RPD disponíveis não identificaram qual limite recusou.
+
+Após autorização explícita do operador para os diagnósticos com fontes reais
+já enviadas, a reprodução local exata da coleta (contexto compacto5606chars,
+mesmo modelo/chave EN/teto2048) respondeu200:1716tokens de entrada e1867de
+saída. Não alterou fonte, perfil, fatos aprovados, DB ou fila. O diagnóstico
+público39049869606 também respondeu200 no Actions, mas usou um prompt curto.
+A comparação39050552792 confirmou que a chave EN local coincide com o Secret,
+sem chamar IA ou imprimir a chave/hash. Esses resultados não provam que uma
+execução completa no runner esteja recuperada; nova tentativa é necessária.
+
+O diagnóstico do guardião passa a reconhecer rate_limit_exceeded e corpos
+JSON textuais limitados a64KiB. Classifica o tipo de cota somente quando há
+nome completo inequívoco, incluindo input/output tokens per minute; siglas
+isoladas e mensagens ambíguas não determinam o tipo. Não persiste mensagens
+livres, não modifica retries/gates e não alterna provedor/modelo/chave.

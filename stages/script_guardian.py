@@ -339,6 +339,11 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
         elif isinstance(exc, ConnectionError) or type(exc).__name__ == "APIConnectionError":
             code = "connection"
     body = getattr(exc, "body", None)
+    if isinstance(body, str) and len(body) <= 65536:
+        try:
+            body = json.loads(body)
+        except (ValueError, RecursionError):
+            body = None
     provider_code = None
     diagnostic = (None, None, None)
     schema_diagnostic = (None, (), False)
@@ -355,20 +360,20 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
         if status == 429 and isinstance(error, dict):
             message = error.get("message")
             if isinstance(message, str) and len(message) <= 8192:
-                declared = {
-                    abbreviation for label, abbreviation in (
-                        ("tokens per day (TPD)", "TPD"),
-                        ("tokens per minute (TPM)", "TPM"),
-                        ("requests per day (RPD)", "RPD"),
-                        ("requests per minute (RPM)", "RPM"),
-                    ) if label.lower() in message.lower()
-                }
+                declared = set()
+                declared.update(abbreviation for label, abbreviation in (
+                    ("tokens per day", "TPD"), ("requests per day", "RPD"),
+                    ("requests per minute", "RPM"),
+                ) if label in message.lower())
+                declared.update({None: "TPM", "input": "ITPM", "output": "OTPM"}[match[1]]
+                    for match in re.finditer(r"\b(?:(input|output) )?tokens per minute\b", message.lower()))
                 if len(declared) == 1:
                     rate_limit_type = declared.pop()
         if isinstance(error, dict) and "code" in error:
             known = {"json_validate_failed": "invalid_json", "context_length_exceeded": "context_limit",
                      "model_not_found": "provider_error", "invalid_api_key": "authentication",
-                     "resource_exhausted": "rate_limit", "incomplete_response": "incomplete_response",
+                     "resource_exhausted": "rate_limit", "rate_limit_exceeded": "rate_limit",
+                     "incomplete_response": "incomplete_response",
                      "invalid_json": "invalid_json"}
             raw_code = error["code"]
             provider_code = raw_code if isinstance(raw_code, str) and raw_code in known else "other"

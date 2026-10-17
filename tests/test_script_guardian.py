@@ -310,6 +310,20 @@ def test_diagnostico_de_ancora_so_emite_enum_conhecido():
     assert "segredo_interno_nao_emitir" not in json.dumps(summary)
 
 
+@pytest.mark.parametrize("as_text", [True, False])
+def test_recusa_groq_json_em_texto_preserva_tipo_de_limite_sem_vazar_mensagem(as_text):
+    from dataclasses import asdict
+    from stages.script_guardian import _provider_failure
+
+    body = {"error": {"code": "rate_limit_exceeded", "message":
+            "PRIVATE_CANARY organization PRIVATE_ORG tokens per day (TPD)."}}
+    error = SimpleNamespace(status_code=429, body=json.dumps(body) if as_text else body)
+    failure = _provider_failure(error, "facts", 1, 5606)
+    assert failure.code == "rate_limit" and failure.provider_code == "rate_limit_exceeded"
+    assert failure.rate_limit_type == "TPD"
+    assert "PRIVATE" not in json.dumps(asdict(failure))
+
+
 def test_referencias_factuais_copiam_unidades_unicode_sem_regenerar(tmp_path):
     source = "I (28M) traded a Pokémon card.\r\n" + "X" * 410 + " Never a credit card! 🃏"
     contexts = []
