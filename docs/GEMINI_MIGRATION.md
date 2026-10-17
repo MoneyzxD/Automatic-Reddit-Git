@@ -532,3 +532,31 @@ JSON textuais limitados a64KiB. Classifica o tipo de cota somente quando há
 nome completo inequívoco, incluindo input/output tokens per minute; siglas
 isoladas e mensagens ambíguas não determinam o tipo. Não persiste mensagens
 livres, não modifica retries/gates e não alterna provedor/modelo/chave.
+
+### Pedido excedendo a cota de entrada por minuto
+
+Run39050626949, main/9a2fc3e, passou1.344 testes reais sem skips. A coleta de
+fatos respondeu200, mas a revisão chunk recebeu413/rate_limit_exceeded:
+contexto23.591chars, payload33.417chars. Checkpoint final production/seq168
+preserva94IDs/17rejeições,11blobs e nenhuma nova mídia ou upload pendente.
+
+Sonda autorizada com a fonte e fatos do incidente, candidato sanitizado e
+dez achados LT reconstituídos identificou explicitamente ITPM7000,
+Requested7154. Não é o request original byte a byte: as regras diagnósticas
+substituem os IDs e não incluem sugestões LT. O cabeçalho TPM8000 não
+representava esse limite de entrada. A sonda sem achados tinha respondido200.
+
+A instrução geral foi encurtada preservando restrições de fatos/sujeitos,
+perfil, gravidez, possessivos, pronomes, erros da fonte, evidência, escopo por
+etapa e feedback. Schema, duas listas, categorias, teto de saída e gates não
+mudaram. Referências internas às citações do source_chunk agora usam
+source_quote_ref=[start,end], em offsets Python inclusivo/exclusivo, evitando
+repetir o nome do campo em cada fato. O registro fN e o ledger persistido
+permanecem literais e completos. Decodificação independente prova round-trip
+Unicode e redução estrutural superior a1.500chars para44fatos; o teste falhou
+antes. O caminho de citações literais e Gemini continuam cobertos.
+
+A mesma sonda reconstituída respondeu200 após a compactação:6761tokens de
+entrada e17de saída. Sua revisão vazia não prova correção dos achados; estes
+continuam bloqueando e exigem reparo/revisão completa no pipeline. A geração
+e publicação automática de mídia nova ainda dependem da próxima execução.

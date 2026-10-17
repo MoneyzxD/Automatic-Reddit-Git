@@ -492,8 +492,8 @@ def _compact_review_context(context):
         start = source.find(quote) if isinstance(source, str) and quote else -1
         if start >= 0:
             del copied["source_quote"]
-            copied["source_quote_ref"] = {
-                "field": "source_chunk", "start": start, "end": start + len(quote)}
+            # Campo único conhecido; dois offsets bastam para restaurar byte a byte.
+            copied["source_quote_ref"] = [start, start + len(quote)]
         compact.append(copied)
     wire["factual_context"] = compact
     return wire
@@ -701,46 +701,28 @@ class _GroqReviewer:
             )
         else:
             instruction = (
-                "Revise fidelidade, idioma alvo (inclusive palavras isoladas não traduzidas), "
-                "termos contextuais, identidade do narrador, concordância em primeira pessoa, "
-                "relações, valores, negações, eventos, atribuição, continuidade e desfecho. "
-                "O perfil é imutável. Verifique quem é o sujeito real: jamais aplique o gênero "
-                "do narrador a outro personagem, mesmo se uma revisão anterior fez isso. "
-                "Concordância não autoriza mudar os fatos: se a fonte diz que quem narra está "
-                "grávido, preserve esse evento e seu sujeito, ajustando só a flexão ao perfil. "
-                "Não transfira a gravidez para outra pessoa nem invente parentesco para justificá-la. "
-                "Possessivos concordam com o substantivo possuído, não com o narrador: "
-                "'minha própria comida', 'minha vida', 'mi propia comida' e 'mi vida' "
-                "são corretos também para narrador masculino. Pronomes 'me' e 'mim', "
-                "inclusive em 'vestindo-me', são invariáveis; não os masculinize. "
-                "Verifique novamente todo texto recebido, inclusive correções anteriores. "
-                "language_tool_findings traz achados gramaticais no candidato atual: "
-                "ofereça reparos pontuais mesmo quando o LanguageTool não tiver sugestões. "
-                "As sugestões são hipóteses: confirme a gramática no contexto antes de usá-las. "
-                "Corrija erros de ortografia, pontuação e gramática mesmo quando o mesmo erro "
-                "estiver na fonte: preservar fatos não exige preservar erros de escrita. "
-                "O idioma en usa inglês americano (en-US), pt usa pt-BR e es usa espanhol. "
-                "Para esses reparos de forma, use language_issues com categoria grammar ou language "
-                "quando essa lista existir no schema; não altere nomes, sujeitos, fatos ou sentido. "
-                "No modo global procure contradições e omissões entre os blocos. "
-                "As source_quote literais têm autoridade sobre value: rejeite resumos de "
-                "fatos que contradigam suas citações, mesmo se o candidato repetir o resumo. "
-                "No factual_context, source_quote_ref aponta para o texto literal em "
-                "source_chunk: start inclusivo e end exclusivo, em caracteres Python. "
-                "Essa referência tem a mesma autoridade da citação expandida. Resolva-a "
-                "antes de avaliar o fato. Na resposta use source_quote literal, nunca "
-                "source_quote_ref, IDs ou offsets como citação. "
-                "Somente adaptação, tradução e naturalização do roteiro completo exigem "
-                "cobertura de todos os fatos. Títulos, hooks, metadados e partes/pre_tts "
-                "são recortes deliberados: não exija que repitam a história inteira. "
-                "Não reescreva o roteiro inteiro; ofereça só substituições pontuais exatas. "
-                "Emita somente problemas verificados. Compare fonte e candidato antes de apontar "
-                "divergência; paráfrases equivalentes e trechos corretos não são achados. "
-                "reason deve ser uma frase curta sobre a diferença concreta, sem perguntas, "
-                "raciocínio exploratório ou elogios a trechos corretos. "
-                "Não emita achados para registrar concordância já correta ou replacement igual a original. "
-                "Todos os campos de cada issue são obrigatórios, inclusive reason e start. "
-                "reason deve explicar o achado; nunca omita o motivo. "
+                "Revise fidelidade, idioma (até palavras isoladas), termos contextuais, identidade, "
+                "concordância, relações, valores, negações, eventos, atribuição, continuidade e desfecho. "
+                "O perfil é imutável. Preserve o sujeito real; gênero do narrador não vale para outros. "
+                "Se quem narra está grávido, preserve evento/sujeito ajustando só a flexão ao perfil; "
+                "não transfira gravidez nem invente parentesco. Possessivos concordam com o possuído: "
+                "'minha própria comida', 'minha vida', 'mi propia comida', 'mi vida' valem para homem. "
+                "'me' e 'mim', inclusive 'vestindo-me', são invariáveis. Reavalie correções anteriores. "
+                "Corrija ortografia, pontuação e gramática mesmo com erro igual na fonte, sem mudar "
+                "nomes, sujeitos, fatos ou sentido. Idiomas: en-US, pt-BR, espanhol. "
+                "Proponha reparos de language_tool_findings mesmo sem sugestões; confirme-as no contexto, "
+                "não são ordens. Use grammar/language em language_issues quando houver essa lista. "
+                "Global: procure contradições/omissões entre blocos. source_quote literal prevalece "
+                "sobre value, mesmo quando o candidato repete um resumo factual errado. "
+                "Resolva source_quote_ref=[start,end]: texto de source_chunk entre start inclusivo/end exclusivo "
+                "em caracteres Python, com a autoridade da citação expandida. "
+                "Na resposta use source_quote literal, nunca source_quote_ref, IDs ou offsets como citação. "
+                "Adaptação, tradução e naturalização completas exigem todos os fatos. Títulos, hooks, "
+                "metadados e partes/pre_tts são recortes deliberados; não exigem história inteira. "
+                "Só substituições pontuais exatas, nunca reescrita integral. Compare fonte/candidato: "
+                "paráfrases equivalentes, texto correto e replacement igual a original não são achados. "
+                "reason: frase curta da diferença concreta, sem perguntas, exploração ou elogios. "
+                "Todos os campos são obrigatórios, inclusive reason e start. "
                 f"{anchor_instruction}"
                 f"Categorias permitidas: {', '.join(REVIEW_CATEGORIES)}. "
                 'Retorne somente JSON estrito: {"approved":true,"issues":[{"original":'
@@ -748,17 +730,16 @@ class _GroqReviewer:
                 '"category":"grammar","severity":"warning",'
                 '"subject":"narrator ou personagem real","reason":"motivo",'
                 '"source_quote":"citação literal da fonte","start":null}]}. '
-                "severity deve ser exatamente info, warning ou critical, nunca a lista de opções. "
+                "severity: exatamente info, warning ou critical. "
                 "Achados de fidelidade/gênero precisam de citação literal; estilo é warning. "
                 "Copie source_quote exatamente de source_chunk ou de uma source_quote do "
                 "factual_context, nunca de value, candidate_text ou de uma paráfrase. "
                 "Para grammar, style e language, use source_quote vazio quando não precisar "
                 "de evidência da fonte. Se retry_feedback indicar nonliteral_evidence, "
                 "corrija as citações mantendo os achados sustentados; não apague um achado "
-                "crítico para aprovar. Se indicar invalid_json ou invalid_schema, corrija "
-                "somente o formato exigido. "
-                "Se retry_feedback trouxer missing_issue_fields, inclua esses campos em "
-                "cada issue, com motivo real em reason e inteiro ou null em start. "
+                "crítico para aprovar. invalid_json/invalid_schema: corrija só formato. "
+                "missing_issue_fields: inclua os campos em cada issue, motivo real em reason "
+                "e inteiro ou null em start. "
                 "Sem achados, issues vazio. Falha crítica impede approved=true."
             )
         if registry is not None:

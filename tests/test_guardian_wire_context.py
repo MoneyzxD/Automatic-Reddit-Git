@@ -42,9 +42,10 @@ def _decode(wire):
         fact = dict(fact)
         if "source_quote_ref" in fact:
             ref = fact.pop("source_quote_ref")
-            assert set(ref) == {"field", "start", "end"}
-            assert ref["field"] == "source_chunk"
-            fact["source_quote"] = wire[ref["field"]][ref["start"]:ref["end"]]
+            assert isinstance(ref, list) and len(ref) == 2
+            start, end = ref
+            assert type(start) is int and type(end) is int
+            fact["source_quote"] = wire["source_chunk"][start:end]
         restored.append(fact)
     return restored
 
@@ -62,6 +63,32 @@ def test_wire_remove_repeticao_mas_preserva_todos_os_fatos(monkeypatch):
     assert wire["profile"] == {"narration_gender": "male"}
     assert wire["stage"] == "adaptation"
     assert captured["max_completion_tokens"] == 2048
+
+
+def test_instrucao_geral_cabe_sem_remover_contratos_criticos(monkeypatch):
+    _, captured = _wire(monkeypatch, json.dumps([
+        {"kind": "event", "value": "fato", "source_quote": "Fonte literal"}
+    ]), "Fonte literal")
+    instruction = captured["messages"][0]["content"]
+    # O incidente tinha espaço no contexto, mas estourou TPM com instrução/schema.
+    assert len(instruction) <= 5000
+    for contract in ("perfil é imutável", "grávido", "minha própria comida", "me", "mim",
+                     "en-US", "recortes deliberados", "source_quote_ref", "candidate_unit_ids",
+                     "language_issues", "invalid_source_reference", "nonliteral_evidence"):
+        assert contract in instruction
+
+
+def test_referencias_compactas_reduzem_estrutura_preservando_ledger_inteiro(monkeypatch):
+    source = "Ação literal: nunca paguei a cirurgia.\n"
+    facts = [{"kind": "event", "value": f"Fato {i}", "source_quote": source}
+             for i in range(44)]
+    wire, captured = _wire(monkeypatch, json.dumps(facts, ensure_ascii=False), source)
+    old = [{"kind": f["kind"], "value": f["value"], "source_quote_ref":
+            {"field": "source_chunk", "start": 0, "end": len(source)}} for f in facts]
+    encoded = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    assert _decode(wire) == facts
+    assert len(encoded(old)) - len(encoded(wire["factual_context"])) >= 1500
+    assert "source_quote_ref=[start,end]" in captured["messages"][0]["content"]
 
 
 @pytest.mark.parametrize("source, quote", [
