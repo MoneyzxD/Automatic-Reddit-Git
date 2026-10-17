@@ -298,3 +298,17 @@ a tradução PT aprovada e conserva PT/EN/ES unavailable para retomada. Nenhuma
 mídia ou publicação. O teste isolado não mudou production/seq120, os91IDs ou
 os três vídeos reais pendentes. Publicação continua também dependente da
 renovação OAuth interativa indicada acima. Cronfalse confirmado ao final.
+
+## Renovação YouTube concluída após o teste
+
+O operador concluiu os três logins em16/10, entre21h55 e21h57 de São Paulo
+(17/10 00h55–00h57UTC). Os novos tokens passaram refresh e leitura da API.
+O canal de cada token foi comparado aos IDs de canal dos vídeos já confirmados
+na fila do respectivo idioma: PT Ah Voz do Reddit, EN The Voice of Reddit,
+ES La voz de Reddit. As três comparações coincidiram antes de gravar Secrets.
+
+YOUTUBE_TOKEN_PT, YOUTUBE_TOKEN_EN e YOUTUBE_TOKEN_ES atualizados no repositório
+MoneyzxD/Automatic-Reddit-Git por stdin, sem imprimir tokens. Cópias locais
+da produção e da raiz sincronizadas; datas de geração atualizadas. A falha
+OAuth local anterior está resolvida. A checagem não publicou vídeos e não
+executou nova chamada Gemini; o prazo de RetryInfo e o cron pausado permanecem.

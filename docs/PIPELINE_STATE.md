@@ -30,6 +30,14 @@ cota. Checkpoint validation-gemini-20261013/seq47 guarda tradução aprovada;
 zero mídia, sem tocar em production. Tokens OAuth locais PT/EN/ES retornaram
 invalid_grant; aguardam login do operador para renovar. Cron continua false.
 
+Atualização posterior: OAuth PT/EN/ES renovado com login do operador em16/10
+às21h55–21h57 de São Paulo (17/10 00h55–00h57UTC). Refresh e API YouTube
+confirmaram os canais Ah Voz do Reddit, The Voice of Reddit e La voz de Reddit,
+com IDs iguais aos uploads anteriores. Secrets YOUTUBE_TOKEN_PT/EN/ES atualizados
+e cópias locais sincronizadas. Datas novas em data/oauth_token_status.json.
+O invalid_grant anterior foi resolvido; a cota Gemini e a prova de geração
+completa continuam pendentes. Nenhum upload executado; cron permanece pausado.
+
 Normal38425392437 terminou por cancelamento assistido após oito estados EN/ES
 rejeitados, sem mídia nova. Snapshot final production/seq47 mantém91IDs, nenhuma
 pendência de upload e nenhuma linguagem processing/pending/unavailable. Fontes,
