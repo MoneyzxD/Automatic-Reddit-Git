@@ -261,3 +261,19 @@ namespace production, restore íntegro e serviços obrigatórios disponíveis.
 Estado, relatórios de reconciliação, tokens e fontes de recuperação ficam fora
 dos artifacts públicos. Logs sanitizados e mídia aprovada mantêm a política
 existente. Agentes de manutenção/crescimento são entregas posteriores.
+
+## Publicação independente da disponibilidade de geração
+
+O operador autorizou retomar publicação automática em 17/10/2026 UTC. O passo
+de publicação pode executar após falha da geração, exigindo restore e testes
+bem-sucedidos, política de publicação válida e execução não cancelada. Antes
+de qualquer kit ou upload de uma fila não vazia, um checkpoint
+`publication_preflight` valida e persiste o estado atual. Falha de estado
+interrompe os efeitos externos; o checkpoint anterior a cada upload permanece.
+Estados rejeitados e IDs confirmados não são reabertos por essa separação.
+
+A variável `GEMINI_RETRY_NOT_BEFORE` aceita data ISO com fuso. Até esse prazo,
+o workflow pula geração e pode publicar a fila aprovada. Data inválida bloqueia
+geração; ausência libera a tentativa normal. Catálogo e dry-run não geram
+conteúdo. A data expirar não garante disponibilidade da API. O primeiro prazo
+é `2026-10-18T00:00:05Z`, derivado do RetryInfo real, sem trocar chave/modelo.

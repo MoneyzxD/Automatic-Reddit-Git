@@ -205,6 +205,7 @@ jobs:
         run: python -m utils.pipeline_execution
 
       - name: Validar codigo antes da geracao
+        id: tests
         run: python -m pytest tests -q
 
       # ── ESTADO ENTRE EXECUCOES ──────────────────────────────────────────
@@ -283,9 +284,16 @@ jobs:
         run: python scripts/pipeline_state.py verify --base-dir .
 
       # ── GERACAO ─────────────────────────────────────────────────────────
+      - name: Respeitar prazo de retomada Gemini
+        id: generation_window
+        if: ${{ steps.execution.outputs.generate == 'true' && steps.execution.outputs.dry_run != 'true' && !inputs.gemini_catalog_only }}
+        env:
+          GEMINI_RETRY_NOT_BEFORE: ${{ vars.GEMINI_RETRY_NOT_BEFORE }}
+        run: python -m utils.generation_window
+
       - name: Gerar video
         id: generate
-        if: ${{ steps.execution.outputs.generate == 'true' }}
+        if: ${{ steps.execution.outputs.generate == 'true' && (steps.generation_window.outputs.allowed == 'true' || steps.execution.outputs.dry_run == 'true' || inputs.gemini_catalog_only) }}
         env:
           PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}
           PIPELINE_DRY_RUN: ${{ steps.execution.outputs.dry_run }}
@@ -330,7 +338,9 @@ jobs:
       # Mesmo job, de proposito: o arquivo de video so existe aqui dentro.
       - name: Publicar (YouTube agendado + kit TikTok no Telegram)
         id: publish
-        if: ${{ steps.execution.outputs.publish == 'true' }}
+        # A fila restaurada contém somente lotes aprovados. Uma falha nova
+        # de geração não deve reter esses vídeos; erro de estado ainda bloqueia.
+        if: ${{ !cancelled() && steps.execution.outputs.publish == 'true' && steps.state_restore.outcome == 'success' && steps.tests.outcome == 'success' }}
         env:
           PIPELINE_STATE_REQUIRED: "true"
           PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}

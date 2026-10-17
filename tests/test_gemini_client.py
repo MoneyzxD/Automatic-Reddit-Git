@@ -338,7 +338,8 @@ def test_workflow_manual_e_cron_usam_gemini_sem_secrets_groq():
     assert secret_steps[0]["env"]["GEMINI_API_KEY"] == "${{ secrets.GEMINI_API_KEY }}"
     assert secret_steps[0]["env"]["PIPELINE_LLM_PROVIDER"] == "gemini"
     assert not any(key.startswith("GROQ_API_KEY") for step in steps for key in step.get("env", {}))
-    assert secret_steps[0]["if"] == "${{ steps.execution.outputs.generate == 'true' }}"
+    assert "steps.execution.outputs.generate == 'true'" in secret_steps[0]["if"]
+    assert "steps.generation_window.outputs.allowed == 'true'" in secret_steps[0]["if"]
     from utils.pipeline_execution import resolve_execution
     execution = resolve_execution(event="workflow_dispatch", ref="refs/heads/gemini-provider",
                                   run_id="123", only_generate=True, test_story=True)

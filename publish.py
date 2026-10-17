@@ -127,6 +127,10 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
         logger.info("Fila vazia: %s", language)
         return resumo
 
+    if not dry_run and os.getenv("PIPELINE_STATE_REQUIRED", "").lower() == "true":
+        # Confirma o estado atual antes de qualquer kit ou transporte externo.
+        checkpoint_from_environment(BASE_DIR, reason="publication_preflight")
+
     # Limites do growth_plan (rampa por idade da conta, anti-block). Reusa a
     # funcao do runner de proposito: duplicar essa regra criaria uma segunda
     # fonte de verdade para limites que existem por seguranca da conta.

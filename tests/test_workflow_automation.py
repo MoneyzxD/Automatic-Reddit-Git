@@ -64,6 +64,25 @@ def test_cron_diario_fica_protegido_por_chave_de_ativacao():
     assert "vars.YOUTUBE_OAUTH_PUBLISHING_STATUS == 'production'" not in workflow
 
 
+def test_fila_pronta_pode_publicar_apos_falha_de_geracao_com_restore_e_testes_confirmados():
+    steps = {step.get("id"): step for step in pipeline_job()["steps"] if step.get("id")}
+    condition = steps["publish"]["if"]
+    # Função de status explícita remove o success() implícito do Actions.
+    assert "!cancelled()" in condition
+    assert "steps.state_restore.outcome == 'success'" in condition
+    assert "steps.tests.outcome == 'success'" in condition
+    assert "steps.execution.outputs.publish == 'true'" in condition
+    assert "steps.generate.outcome" not in condition
+
+
+def test_cron_respeita_prazo_gemini_antes_de_gerar_sem_bloquear_fila_pronta():
+    steps = {step.get("id"): step for step in pipeline_job()["steps"] if step.get("id")}
+    assert "steps.generation_window.outputs.allowed == 'true'" in steps["generate"]["if"]
+    assert steps["generation_window"]["env"]["GEMINI_RETRY_NOT_BEFORE"] == "${{ vars.GEMINI_RETRY_NOT_BEFORE }}"
+    assert steps["generation_window"]["run"] == "python -m utils.generation_window"
+    assert "generation_window" not in steps["publish"]["if"]
+
+
 def test_cron_usa_tres_idiomas_tambem_na_publicacao():
     workflow = (BASE_DIR / ".github" / "workflows" / "pipeline.yml").read_text(
         encoding="utf-8"

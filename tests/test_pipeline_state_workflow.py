@@ -43,10 +43,14 @@ def test_workflow_publicar_somente_preserva_serializacao_restore_e_checkpoint():
     assert data["concurrency"]["cancel-in-progress"] == "false"
     steps = {step["id"]: step for step in data["jobs"]["gerar-e-publicar"]["steps"] if "id" in step}
     assert steps["state_restore"]["if"] == "${{ steps.execution.outputs.required == 'true' }}"
-    assert steps["generate"]["if"] == "${{ steps.execution.outputs.generate == 'true' }}"
+    assert "steps.execution.outputs.generate == 'true'" in steps["generate"]["if"]
+    assert "steps.generation_window.outputs.allowed == 'true'" in steps["generate"]["if"]
     publish = steps["publish"]
-    # Sem always(): falha anterior continua impedindo publicação, inclusive no modo normal.
-    assert publish["if"] == "${{ steps.execution.outputs.publish == 'true' }}"
+    # Falha de geração não retém fila aprovada; testes/restore/cancelamento bloqueiam.
+    assert "!cancelled()" in publish["if"]
+    assert "steps.execution.outputs.publish == 'true'" in publish["if"]
+    assert "steps.state_restore.outcome == 'success'" in publish["if"]
+    assert "steps.tests.outcome == 'success'" in publish["if"]
     assert publish["env"]["PIPELINE_STATE_REQUIRED"] == "true"
     assert publish["run"].strip() == "python publish.py --lang $PIPELINE_LANGUAGES"
     final = steps["state_save"]

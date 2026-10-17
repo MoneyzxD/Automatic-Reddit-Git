@@ -312,3 +312,18 @@ MoneyzxD/Automatic-Reddit-Git por stdin, sem imprimir tokens. Cópias locais
 da produção e da raiz sincronizadas; datas de geração atualizadas. A falha
 OAuth local anterior está resolvida. A checagem não publicou vídeos e não
 executou nova chamada Gemini; o prazo de RetryInfo e o cron pausado permanecem.
+
+## Retomada automática autorizada
+
+O operador pediu restabelecer publicação automática após renovar os logins.
+A fila real restaurada isoladamente de production/seq120 contém três vídeos
+aprovados: EN duas partes de 50,784s e 92,793s; ES um vídeo de 154,233s. FFprobe
+confirmou H264 1080×1920 e áudio AAC; três frames por vídeo permitiram conferir
+cards e legendas legíveis. Isso não prova nova geração Gemini nem análise de
+retenção. PT rejeitado permanece bloqueado.
+
+O workflow permite publicar a fila aprovada quando geração falha, com testes,
+restore e novo checkpoint de estado antes de efeitos externos. Uma janela por
+`GEMINI_RETRY_NOT_BEFORE` impede chamadas de geração antes de
+2026-10-18T00:00:05Z. A automação pode escoar estoque nesse intervalo. Provar
+upload e ativação do cron continua distinto de provar nova geração completa.
