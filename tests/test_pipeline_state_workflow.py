@@ -116,6 +116,7 @@ def test_publicar_somente_exige_dispatch_main_sem_opcoes_de_teste(options):
     else:
         assert resolve_execution(**values) == {
             "namespace": "production", "state_action": "publish", "state_operation": "restore",
+            "llm_provider": "gemini",
             "generate": False, "publish": True, "dry_run": False, "test_story": False, "required": True,
         }
 
@@ -126,6 +127,7 @@ def test_gerar_producao_preserva_estado_sem_permitir_publicacao(only_generate):
     result = resolve_execution(event="workflow_dispatch", ref="refs/heads/main", run_id="123",
                                state_action="generate", only_generate=only_generate)
     assert result == {"namespace": "production", "state_action": "generate", "state_operation": "restore",
+                      "llm_provider": "gemini",
                       "generate": True, "publish": False, "dry_run": False, "test_story": False,
                       "required": True}
 

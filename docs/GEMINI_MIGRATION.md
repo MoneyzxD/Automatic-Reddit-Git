@@ -8,8 +8,9 @@ seu valor não é impresso. A geração completa ainda precisa de prova real.
 ## Implementação e reversão
 
 PIPELINE_LLM_PROVIDER seleciona groq ou gemini uma vez por execução. O default
-é gemini, inclusive quando a variável está vazia. O workflow manual/agendado
-fixa Gemini e não injeta Secrets Groq nem aceita seleção de outro provedor.
+é gemini, inclusive quando a variável está vazia. O workflow agendado fixa
+Gemini. O disparo manual oferece `validacao_groq=false` por padrão; a exceção
+Groq foi autorizada pelo operador para validar a restauração do pipeline.
 A camada utils/llm_client.py
 encaminha os clientes de adaptação, perfil, correção de gênero, naturalização,
 título/hook/encerramento, metadados e validação. Métodos privados com nomes
@@ -55,8 +56,8 @@ Consumo registra o modelo efetivamente usado, inclusive respostas incompletas.
 5. Validar Gemini já selecionado no fluxo normal. Preservar
    estado production, IDs confirmados, filas, tokens OAuth e meta diária.
 
-O código legado permite reversão local explícita com PIPELINE_LLM_PROVIDER=groq;
-o Actions exige alteração revisada para isso. Não existe reversão automática
+O código permite seleção local explícita com PIPELINE_LLM_PROVIDER=groq;
+o Actions permite Groq somente na validação manual explícita. Não existe reversão automática
 por erro ou cota. Nenhuma reversão apaga snapshots, fontes ou perfil.
 Uma aprovação antiga reutilizável não conta como revisão nova pelo Gemini.
 Nenhum teste sintético deve ser publicado. Falha de cota ou gate mantém o
@@ -354,3 +355,22 @@ Gemini foi gravado como `2026-10-18T00:00:05Z`; não houve chamada de geração
 nesse run. A publicação foi recuperada, mas nova geração completa com Gemini
 ainda depende de a API aceitar chamadas após esse prazo. OAuth continua em
 Testing com renovação manual a cada sete dias, conforme decisão do operador.
+
+## Validação Groq autorizada sem descartar Gemini
+
+Após a recuperação dos uploads, o operador pediu uma validação completa com
+Groq para comprovar geração real e publicação automática enquanto Gemini aguarda
+o prazo da API. `validacao_groq=true` seleciona Groq somente nesse disparo manual
+e executa uma história, nos idiomas escolhidos, com os gates e checkpoints
+normais. Não alterna modelos/chaves Groq para contornar cota. O modo Groq
+conserva fallbacks legados de geração; o aceite exige conferir respostas Groq
+reais e ausência desses fallbacks nos logs, além dos novos vídeos. Um run verde
+sozinho não prova isso. A seleção controla também os Secrets:
+Groq recebe somente chaves Groq; Gemini recebe somente sua chave e respeita a
+janela. O cron força Gemini e mantém a meta diária original.
+
+Para gerar e publicar conteúdo real, usar main, `state_action=normal`,
+`validacao_groq=true`, `apenas_gerar=false`, `historia_teste=false`, `dry_run=false`
+e sem namespace de validação. História sintética continua isolada e sem upload.
+Um run sem mídia não prova o aceite; conferir os novos IDs na API YouTube e
+preservar os 94 IDs já confirmados, os 12 rejeitados e o estado anterior.

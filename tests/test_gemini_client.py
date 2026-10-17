@@ -325,7 +325,7 @@ def test_cadencia_compartilhada_entre_etapas(monkeypatch):
     assert len(calls) == 2 and waits == [12]
 
 
-def test_workflow_manual_e_cron_usam_gemini_sem_secrets_groq():
+def test_workflow_padrao_gemini_preserva_excecao_manual_groq():
     from pathlib import Path
     import yaml
     data = yaml.load((Path(__file__).resolve().parents[1] / ".github/workflows/pipeline.yml").read_text(
@@ -335,9 +335,8 @@ def test_workflow_manual_e_cron_usam_gemini_sem_secrets_groq():
     steps = data["jobs"]["gerar-e-publicar"]["steps"]
     secret_steps = [s for s in steps if "GEMINI_API_KEY" in s.get("env", {})]
     assert len(secret_steps) == 1 and secret_steps[0]["id"] == "generate"
-    assert secret_steps[0]["env"]["GEMINI_API_KEY"] == "${{ secrets.GEMINI_API_KEY }}"
-    assert secret_steps[0]["env"]["PIPELINE_LLM_PROVIDER"] == "gemini"
-    assert not any(key.startswith("GROQ_API_KEY") for step in steps for key in step.get("env", {}))
+    assert secret_steps[0]["env"]["GEMINI_API_KEY"] == "${{ steps.execution.outputs.llm_provider == 'gemini' && secrets.GEMINI_API_KEY || '' }}"
+    assert secret_steps[0]["env"]["PIPELINE_LLM_PROVIDER"] == "${{ steps.execution.outputs.llm_provider }}"
     assert "steps.execution.outputs.generate == 'true'" in secret_steps[0]["if"]
     assert "steps.generation_window.outputs.allowed == 'true'" in secret_steps[0]["if"]
     from utils.pipeline_execution import resolve_execution

@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      validacao_groq:
+        description: "Validar uma história com Groq nesta execução; cron continua Gemini"
+        required: false
+        default: false
+        type: boolean
       dry_run:
         description: "Simular sem gerar nem publicar"
         required: false
@@ -200,6 +205,7 @@ jobs:
           INPUT_ONLY_GENERATE: ${{ inputs.apenas_gerar }}
           INPUT_TEST_STORY: ${{ inputs.historia_teste }}
           INPUT_GEMINI_CATALOG_ONLY: ${{ inputs.gemini_catalog_only }}
+          INPUT_GROQ_VALIDATION: ${{ inputs.validacao_groq }}
           INPUT_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
           INPUT_LEGACY_CACHE_RUN_ID: ${{ inputs.legacy_cache_run_id }}
         run: python -m utils.pipeline_execution
@@ -286,14 +292,14 @@ jobs:
       # ── GERACAO ─────────────────────────────────────────────────────────
       - name: Respeitar prazo de retomada Gemini
         id: generation_window
-        if: ${{ steps.execution.outputs.generate == 'true' && steps.execution.outputs.dry_run != 'true' && !inputs.gemini_catalog_only }}
+        if: ${{ steps.execution.outputs.generate == 'true' && steps.execution.outputs.llm_provider == 'gemini' && steps.execution.outputs.dry_run != 'true' && !inputs.gemini_catalog_only }}
         env:
           GEMINI_RETRY_NOT_BEFORE: ${{ vars.GEMINI_RETRY_NOT_BEFORE }}
         run: python -m utils.generation_window
 
       - name: Gerar video
         id: generate
-        if: ${{ steps.execution.outputs.generate == 'true' && (steps.generation_window.outputs.allowed == 'true' || steps.execution.outputs.dry_run == 'true' || inputs.gemini_catalog_only) }}
+        if: ${{ steps.execution.outputs.generate == 'true' && (steps.execution.outputs.llm_provider == 'groq' || steps.generation_window.outputs.allowed == 'true' || steps.execution.outputs.dry_run == 'true' || inputs.gemini_catalog_only) }}
         env:
           PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}
           PIPELINE_DRY_RUN: ${{ steps.execution.outputs.dry_run }}
@@ -304,9 +310,13 @@ jobs:
           PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
           DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           PIPELINE_ENV: runner
-          # Decisão do operador: todas as etapas de IA usam Gemini.
-          PIPELINE_LLM_PROVIDER: gemini
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Gemini permanece padrão; Groq somente na validação manual autorizada.
+          PIPELINE_LLM_PROVIDER: ${{ steps.execution.outputs.llm_provider }}
+          GEMINI_API_KEY: ${{ steps.execution.outputs.llm_provider == 'gemini' && secrets.GEMINI_API_KEY || '' }}
+          GROQ_API_KEY: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
+          GROQ_API_KEY_PT: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_PT || '' }}
+          GROQ_API_KEY_EN: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_EN || '' }}
+          GROQ_API_KEY_ES: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_ES || '' }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           PIPELINE_GEMINI_CATALOG_ONLY: ${{ inputs.gemini_catalog_only }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -321,7 +331,7 @@ jobs:
           # scripts/check_oauth_expiry.py pro aviso de expiracao).
           REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
         run: |
-          if [[ "$PIPELINE_DRY_RUN" != "true" ]]; then
+          if [[ "$PIPELINE_DRY_RUN" != "true" && "$PIPELINE_LLM_PROVIDER" == "gemini" ]]; then
             python scripts/check_gemini.py
           fi
           if [[ "$PIPELINE_GEMINI_CATALOG_ONLY" == "true" ]]; then
@@ -330,9 +340,13 @@ jobs:
           options=()
           [[ "$PIPELINE_DRY_RUN" == "true" ]] && options+=(--dry-run)
           [[ "$PIPELINE_TEST_STORY" == "true" ]] && options+=(--test-story)
-          python scripts/generate_daily_batch.py \
-            --lang $PIPELINE_LANGUAGES \
-            "${options[@]}"
+          if [[ "$PIPELINE_LLM_PROVIDER" == "groq" ]]; then
+            python main.py --lang $PIPELINE_LANGUAGES "${options[@]}"
+          else
+            python scripts/generate_daily_batch.py \
+              --lang $PIPELINE_LANGUAGES \
+              "${options[@]}"
+          fi
 
       # ── PUBLICACAO ──────────────────────────────────────────────────────
       # Mesmo job, de proposito: o arquivo de video so existe aqui dentro.
