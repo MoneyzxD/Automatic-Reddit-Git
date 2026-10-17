@@ -327,3 +327,30 @@ restore e novo checkpoint de estado antes de efeitos externos. Uma janela por
 `GEMINI_RETRY_NOT_BEFORE` impede chamadas de geração antes de
 2026-10-18T00:00:05Z. A automação pode escoar estoque nesse intervalo. Provar
 upload e ativação do cron continua distinto de provar nova geração completa.
+
+### Publicação real confirmada em 17/10/2026 UTC
+
+Main/2813cbb; [run38989995803](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38989995803)
+terminou success. Passou 1.302 testes, sem skips, incluindo LanguageTool real.
+Restore confirmado, geração pulada pela janela Gemini e três uploads concluídos.
+A API proprietária confirmou `processed`/`succeeded`, canal correto e `publishAt`:
+
+| Idioma | Vídeo | Publicação UTC |
+|---|---|---|
+| EN parte 1 | [O3gobjMbCaE](https://youtu.be/O3gobjMbCaE) | 17/10/2026 01:50:38 |
+| EN parte 2 | [PbFvyFKIcIk](https://youtu.be/PbFvyFKIcIk) | 17/10/2026 15:17:00 |
+| ES | [uUs_L3-nO_Q](https://youtu.be/uUs_L3-nO_Q) | 17/10/2026 08:11:00 |
+
+Conferência às 01h22UTC encontrou os três ainda privados/agendados, sem declarar
+que já estavam públicos. Checkpoint final production/seq132 preserva 45 arquivos
+imutáveis byte a byte, os 91 IDs anteriores e os 12 rejeitados; agora são 94 IDs,
+zero pendentes e zero envios incertos. O YouTube recusou a thumbnail dos três
+com 403; os vídeos estão enviados e a mídia foi preservada para corrigir apenas
+a capa, sem reenviar. A falha de capa não bloqueia os horários agendados.
+
+`PIPELINE_AUTOMATION_ENABLED=true` confirmado às 01h22UTC, workflow ativo e
+cron `0 9 * * *` presentes no GitHub. Meta continua três por idioma. O prazo
+Gemini foi gravado como `2026-10-18T00:00:05Z`; não houve chamada de geração
+nesse run. A publicação foi recuperada, mas nova geração completa com Gemini
+ainda depende de a API aceitar chamadas após esse prazo. OAuth continua em
+Testing com renovação manual a cada sete dias, conforme decisão do operador.

@@ -277,3 +277,11 @@ o workflow pula geração e pode publicar a fila aprovada. Data inválida bloque
 geração; ausência libera a tentativa normal. Catálogo e dry-run não geram
 conteúdo. A data expirar não garante disponibilidade da API. O primeiro prazo
 é `2026-10-18T00:00:05Z`, derivado do RetryInfo real, sem trocar chave/modelo.
+
+Prova real: [run38989995803](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38989995803)
+terminou success, com 1.302 testes reais sem skips, geração pulada pela janela e
+três vídeos enviados/agendados, conferidos na API YouTube. Production/seq132
+conserva os 91 IDs anteriores, acrescenta três e mantém 12 estados rejeitados,
+sem pendência nem envio incerto. Cron09UTC e automação true conferidos após o
+upload. Os três novos vídeos têm capa403, sem afetar o agendamento; mídia fica
+preservada. Evidência e limite da geração em [GEMINI_MIGRATION](GEMINI_MIGRATION.md).
