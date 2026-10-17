@@ -1084,14 +1084,14 @@ class ScriptGuardian:
                 glossary_patches = list(self.glossary.findings(source_text, text, language))
                 issues.extend(ReviewIssue(p.category, p.severity, p.reason, p.original,
                                           p.subject, p.source_quote, "glossary") for p in glossary_patches)
-                lt_patches, lt_findings = [], []
+                lt_findings = []
                 if self.config.get("languagetool_enabled", True):
                     try:
                         findings = self.languagetool.check(text, language)
                     except Exception:
                         raise _ReviewUnavailable("LanguageTool indisponível durante a revisão") from None
                     for finding in findings:
-                        style = finding.category.upper() in {
+                        style = getattr(finding, "issue_type", "") == "style" or finding.category.upper() in {
                             "STYLE", "TYPOGRAPHY", "REDUNDANCY", "REPETITIONS_STYLE",
                         }
                         category, severity = ("style", "warning") if style else ("grammar", "critical")
@@ -1101,16 +1101,14 @@ class ScriptGuardian:
                             lt_findings.append({"original": finding.original, "message": finding.message,
                                                 "start": finding.start, "end": finding.end,
                                                 "replacements": finding.replacements})
-                        # Estilo só avisa; sugestão mecânica não reescreve a narrativa.
-                        if finding.replacements and not style:
-                            lt_patches.append(TextPatch(finding.original, finding.replacements[0], category,
-                                                        severity, "text", finding.message, "", finding.start))
+                        # Sugestões são hipóteses para a revisão semântica; a primeira
+                        # pode introduzir erros. Achados críticos persistentes bloqueiam.
                 factual_context = self._collect_facts(source_text, language)
                 semantic_issues, semantic_patches = self._semantic_pass(
                     source_text, text, language, stage, profile, factual_context, lt_findings)
                 issues.extend(semantic_issues)
                 if attempt < self.max_repairs:
-                    result = validate_and_apply_patches(text, glossary_patches + semantic_patches + lt_patches,
+                    result = validate_and_apply_patches(text, glossary_patches + semantic_patches,
                                                         source_text, profile)
                     accepted, rejected = result.applied, result.rejected
                     if accepted:

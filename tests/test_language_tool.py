@@ -8,6 +8,29 @@ from requests.utils import select_proxy
 from stages.language_tool import LanguageIssue, LanguageToolClient, LanguageToolUnavailable
 
 
+@pytest.mark.parametrize("text,language,rule_id,start,length,expected", [
+    ("A parentalidade importa.", "pt", "MORFOLOGIK_RULE_PT_BR", 2, 13, 0),
+    ("A PARENTALIDADE importa.", "pt-br", "MORFOLOGIK_RULE_PT_BR", 2, 13, 0),
+    ("A parentalidade importa.", "en", "MORFOLOGIK_RULE_PT_BR", 2, 13, 1),
+    ("A parentalidade importa.", "pt", "OTHER_RULE", 2, 13, 1),
+    ("A parentalidades importa.", "pt", "MORFOLOGIK_RULE_PT_BR", 2, 13, 1),
+    ("A parentaliade importa.", "pt", "MORFOLOGIK_RULE_PT_BR", 2, 12, 1),
+])
+def test_vocabulo_parentalidade_nao_vira_duas_palavras(session, text, language, rule_id, start, length, expected):
+    resposta_check(session, {"matches": [{"offset": start, "length": length,
+        "message": "Possível erro de ortografia", "replacements": [{"value": "parental idade"}],
+        "rule": {"id": rule_id, "category": {"id": "TYPOS"}, "issueType": "misspelling"}}]})
+    assert len(cliente(session).check(text, language)) == expected
+
+
+def test_tipo_estilo_do_backend_e_preservado_mesmo_em_categoria_formal(session):
+    resposta_check(session, {"matches": [{"offset": 0, "length": 9,
+        "message": "Substitua por após", "replacements": [{"value": "após"}],
+        "rule": {"id": "DEPOIS_DE_APÓS", "category": {"id": "FORMAL"}, "issueType": "style"}}]})
+    issue = cliente(session).check("Depois de estudar.", "pt")[0]
+    assert issue.issue_type == "style" and issue.category == "FORMAL"
+
+
 @pytest.fixture(autouse=True)
 def sem_url_ambiente(monkeypatch):
     monkeypatch.delenv("LANGUAGETOOL_URL", raising=False)

@@ -198,6 +198,30 @@ class FakeSemanticReviewer:
         return self.responses.pop(0) if self.responses else resposta(True, [])
 
 
+def test_sugestao_lt_nao_confirmada_nao_altera_texto_e_critico_continua_bloqueando(tmp_path, perfil_feminino):
+    text = "Quero vê-las hoje."
+    finding = LanguageIssue("PROCLISE", "GRAMMAR", "Sugestão de colocação pronominal",
+                            ("as vês",), 6, 12, "vê-las")
+    semantic = FakeSemanticReviewer()
+    guardian = guardian_fake(tmp_path, semantic, FakeLanguageTool([(finding,)] * 3))
+    with pytest.raises(QualityRejected) as caught:
+        guardian.review_and_fix(source_text="I want to see them today.", candidate_text=text,
+            language="pt", stage="translation", story_id="s1", profile=perfil_feminino)
+    assert caught.value.review.approved_text == text and not caught.value.review.patches
+    assert any(getattr(call, "language_tool_findings", None) for call in semantic.calls)
+
+
+def test_sugestao_formal_depois_de_so_avisa_sem_trocar_para_apos(tmp_path, perfil_feminino):
+    text = "Depois de estudar, fui dormir."
+    finding = LanguageIssue("DEPOIS_DE_APÓS", "FORMAL", "Substitua por após",
+                            ("Após",), 0, 9, "Depois de", issue_type="style")
+    review = guardian_fake(tmp_path, lt=FakeLanguageTool([(finding,)])).review_and_fix(
+        source_text="After studying, I went to sleep.", candidate_text=text,
+        language="pt", stage="translation", story_id="s1", profile=perfil_feminino)
+    assert review.status == "approved" and review.approved_text == text and not review.patches
+    assert review.issues[0].severity == "warning"
+
+
 def guardian_fake(tmp_path, semantic=None, lt=None, **config):
     return ScriptGuardian(
         {"fail_closed": True, "max_repair_attempts": 2, "semantic_retry_wait_seconds": 0, **config}, base_dir=tmp_path,

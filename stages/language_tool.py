@@ -20,6 +20,7 @@ class LanguageIssue:
     start: int
     end: int
     original: str
+    issue_type: str = ""
 
 
 @dataclass(frozen=True)
@@ -144,12 +145,14 @@ class LanguageToolClient:
                 rule = match["rule"]
                 rule_id = rule["id"]
                 category = rule["category"]["id"]
+                issue_type = rule.get("issueType", "")
                 if (
                     not isinstance(message, str)
                     or not isinstance(match["replacements"], list)
                     or any(not isinstance(value, str) for value in replacements)
                     or not isinstance(rule_id, str)
                     or not isinstance(category, str)
+                    or not isinstance(issue_type, str)
                 ):
                     raise ValueError("campos de revisão inválidos")
             except (TypeError, KeyError, ValueError) as exc:
@@ -162,7 +165,14 @@ class LanguageToolClient:
                     and re.search(r"\btodas\s+$", text[:start], flags=re.IGNORECASE)):
                 logger.info("LanguageTool: falso positivo contextual AS_VEZES_BR desconsiderado")
                 continue
-            issues.append(LanguageIssue(rule_id, category, message, replacements, start, end, text[start:end]))
+            # Vocábulo dicionarizado ausente no léxico 6.6. Exceção limitada ao
+            # span completo e à regra BR; não aceita grafias próximas ou plurais.
+            if (key == "pt" and self._languages[key] == "pt-BR" and rule_id == "MORFOLOGIK_RULE_PT_BR"
+                    and any(word.span() == (start, end)
+                            for word in re.finditer(r"\bparentalidade\b", text, flags=re.IGNORECASE))):
+                logger.info("LanguageTool: vocábulo parentalidade preservado no léxico pt-BR")
+                continue
+            issues.append(LanguageIssue(rule_id, category, message, replacements, start, end, text[start:end], issue_type))
         return tuple(issues)
 
     def health(self, expected_version: str = "6.6") -> HealthReport:

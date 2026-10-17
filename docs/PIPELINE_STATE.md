@@ -16,6 +16,12 @@ aprovada preservada. Verificação offline confirmou25arquivos imutáveis idênt
 à baseline seq73, os91IDs iguais e os dez rejeitados anteriores preservados.
 Os registros abaixo são histórico e não substituem esse checkpoint.
 
+Após a troca, run38983801654 validou Gemini real (tradução+nove revisões sem
+erro de API), mas PT foi rejeitado num ciclo de sugestões incorretas do LT.
+Encerramento assistido preservou checkpoint final production/seq120,91IDs,
+EN2/ES1 pendentes e12rejeitados; sem mídia nova Gemini. Nenhum rejeitado deve
+ser reaberto. O reparo do ciclo do LT é documentado na migração acima.
+
 Normal38425392437 terminou por cancelamento assistido após oito estados EN/ES
 rejeitados, sem mídia nova. Snapshot final production/seq47 mantém91IDs, nenhuma
 pendência de upload e nenhuma linguagem processing/pending/unavailable. Fontes,

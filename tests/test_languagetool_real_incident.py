@@ -26,3 +26,38 @@ def test_regra_real_continua_detectando_crase_ausente():
     findings = client.check("Eu as vezes fico triste.", "pt")
     assert any(issue.rule_id == "AS_VEZES_BR" and "às vezes" in issue.replacements
                for issue in findings)
+
+
+def test_backend_real_confirma_lacuna_parentalidade_sem_aceitar_erro_proximo():
+    client = LanguageToolClient({})
+    with client._post("A parentalidade importa.", "pt-BR") as response:
+        response.raise_for_status()
+        matches = response.json()["matches"]
+    assert any(m["rule"]["id"] == "MORFOLOGIK_RULE_PT_BR" for m in matches)
+    assert not any(i.rule_id == "MORFOLOGIK_RULE_PT_BR" for i in client.check("A parentalidade importa.", "pt"))
+    assert any(i.rule_id == "MORFOLOGIK_RULE_PT_BR" for i in client.check("A parentaliade importa.", "pt"))
+
+
+def test_backend_real_identifica_depois_de_como_estilo_formal():
+    client = LanguageToolClient({})
+    findings = client.check("Isto tudo depois de saber os resultados.", "pt")
+    formal = [i for i in findings if i.rule_id == "DEPOIS_DE_APÓS"]
+    assert formal and all(i.issue_type == "style" and i.category == "FORMAL" for i in formal)
+
+
+def test_guardiao_com_backend_real_preserva_vocabulo_e_estilo_sem_ciclo(tmp_path):
+    import json
+    from types import SimpleNamespace
+    from stages.script_guardian import ScriptGuardian
+    from stages.narrator_profile import NarratorProfile
+    def semantic(**context):
+        if context["mode"] == "facts":
+            return json.dumps({"facts": []})
+        return json.dumps({"approved": True, "issues": []})
+    guardian = ScriptGuardian({}, base_dir=tmp_path, semantic_reviewer=SimpleNamespace(review=semantic))
+    profile = NarratorProfile("pf", "s1", "female", "female", 1.0, "explicit", (), "1")
+    text = "Pensei na parentalidade depois de saber os resultados."
+    review = guardian.review_and_fix(source_text="I thought about parenting after learning the results.",
+        candidate_text=text, language="pt", stage="translation", story_id="s1", profile=profile)
+    assert review.status == "approved" and review.approved_text == text
+    assert review.attempts == 1 and not review.patches

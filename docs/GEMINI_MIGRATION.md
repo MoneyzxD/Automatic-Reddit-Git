@@ -45,8 +45,10 @@ Consumo registra o modelo efetivamente usado, inclusive respostas incompletas.
 ## Aceite operacional
 
 1. Suíte local e testes de encaminhamento, schema, truncamento, erros e credenciais.
-2. Branch gemini-provider no Actions: llm_provider=gemini, idiomas=pt en es,
-   historia_teste=true e apenas_gerar=true; namespace validation-* novo.
+2. Main no Actions usa Gemini fixo. Para teste sintético isolado, usar
+   idiomas=pt en es, historia_teste=true e apenas_gerar=true; namespace validation-*.
+   Para retomar produção sem publicar, usar state_action=generate, sem história
+   de teste ou namespace de validação. Rejeitados não são reabertos.
 3. Conferir roteiro/perfil nos três idiomas, MP4/voz/legendas/cards e checkpoint.
    Um workflow verde com conteúdo rejeitado ou sem mídia não basta.
 4. Restaurar/verificar a mídia em outro runner antes de liberar produção.
@@ -220,3 +222,54 @@ zero mídia e PT/EN/ES unavailable; nenhuma publicação. Não repetir Gemini an
 do prazo (aproximadamente21h de15/10, São Paulo), nem presumir qual cota terminou.
 O filtro contextual isolado recebeu aprovação para produção após essa prova;
 isso não libera a integração Gemini. A geração completa continua sem aceite.
+
+## Troca definitiva solicitada em 16/10/2026
+
+Main/57d7ed7 aplica a decisão atual do operador: Gemini em todas as etapas de IA,
+inclusive tradução, com credencial própria e sem injetar Secrets Groq no fluxo
+manual/agendado. Cota/erro Gemini não aciona Groq, Ollama, regras ou templates de
+geração. Limpeza determinística e aprovações reutilizáveis continuam preservadas.
+
+Suíte local:1.274 passes e dois skips exclusivos do runtime LanguageTool.
+Revisão independente sem bloqueios após corrigir os fallbacks. A seleção
+Groq das regressões antigas é explícita na fixture; novos testes retiram a
+variável para comprovar o default Gemini, sem consumir nenhuma API real.
+
+O [run38983801654](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38983801654)
+foi iniciado na main com state_action=generate, idiomas=pt e apenas_gerar=true.
+Retomou estado de produção, sem upload; não foi teste sintético. Passou1.276
+testes no Actions, inclusive LanguageTool real, sem skips. Gemini completou a
+tradução e nove chamadas semânticas, sem429/503 ou falha de schema. O roteiro PT
+foi rejeitado após dois reparos. Encerramento assistido durante filtragem da
+próxima fonte permitiu inspecionar os logs; checkpoint final production/seq120
+preserva91IDs, três vídeos pendentes EN2/ES1 e12 estados rejeitados. Comparação
+seq115/119 confirmou45arquivos imutáveis iguais e os11rejeitados anteriores
+preservados. Nenhuma mídia Gemini nova. Cron permanece desabilitado.
+
+Checagem somente leitura dos tokens OAuth locais em16/10 retornou invalid_grant
+em PT/EN/ES. O registro versionado indica geração em09/10. Isso evidencia um
+bloqueio de autenticação local além da geração LLM; não compara nem comprova
+os Secrets do GitHub. Renovação exige login interativo do operador e não foi
+feita. Nenhum token foi impresso, salvo ou enviado por essa checagem.
+
+### Causa do ciclo de reparos identificada
+
+O guardião aplicava cegamente a primeira sugestão LanguageTool antes da
+rechecagem: parentalidade→parental idade em três ocorrências; Gemini desfazia
+a separação e o LT repetia o achado. Também introduziu vê-las→as vês, reparado
+depois pelo Gemini. Ao final, depois de→após foi tratado como erro crítico.
+
+A regra oficial6.6 [DEPOIS_DE_APÓS](https://github.com/languagetool-org/languagetool/blob/v6.6/languagetool-language-modules/pt/src/main/resources/org/languagetool/rules/pt/style.xml#L4262)
+pertence à categoria FORMAL, tipo style. O cliente descartava esse tipo e o
+guardião não reconhecia essa categoria como estilo. Agora preserva issueType;
+somente estilo explicitamente identificado avisa sem impor formalização.
+
+[Parentalidade é dicionarizada](https://dicionario.priberam.org/parentalidade).
+A exceção do léxico é limitada à palavra inteira exata, locale pt-BR e regra
+MORFOLOGIK_RULE_PT_BR; grafias próximas, outros idiomas e regras continuam
+bloqueados. Sugestões LT vão ao Gemini como hipóteses, sem aplicação automática
+da primeira opção. Críticos não resolvidos continuam rejeitando; não se apagam
+achados porque o Gemini aprovou. Sem alterar fatos/perfis ou reabrir rejeitados.
+
+Regressões locais do reparo:291passes; cinco provas com LanguageTool real
+aguardam execução no runner. A prova de mídia completa continua pendente.
