@@ -682,12 +682,21 @@ class _GroqReviewer:
             )
         elif context["mode"] == "language":
             instruction = (
-                "Corrija somente erros reais de ortografia, pontuação ou gramática indicados "
-                "em language_tool_findings. As sugestões não são ordens: confirme cada uma no "
-                "contexto antes de alterar. context_before + original + context_after identifica "
+                "Proponha substituições pontuais para resolver os achados de language_tool_findings. "
+                "Para cada sugestão gramaticalmente válida no contexto, devolva um patch com "
+                "original e replacement; esta é uma tarefa de reparo, não de aprovação. "
+                "As sugestões precisam ser confirmadas no contexto antes de alterar. "
+                "context_before + original + context_after identifica "
                 "a ocorrência exata, inclusive quando original se repete no mesmo bloco. "
-                "candidate_unit_ids do achado cobre esse contexto literal. Não altere fatos, "
-                "negações, nomes, valores, relações ou gênero do narrador e dos personagens. "
+                "Quando duas pontuações forem gramaticalmente válidas, prefira a sugerida pelo "
+                "LanguageTool; tolerância informal à vírgula ausente não impede esse reparo. "
+                "Convenção editorial: separe orações independentes com vírgula antes de and/but/so, "
+                "inclusive quando curtas e relacionadas; a exceção citada na mensagem LT é opcional. "
+                "Recuse a sugestão se causar erro gramatical ou alterar o conteúdo. "
+                "candidate_unit_ids do achado cobre esse contexto literal. "
+                "read_only_context.before e after dão contexto adjacente quando abreviações ou "
+                "quebras cortam a frase; leia-os, mas proponha patches só em candidate_units. "
+                "Não altere fatos, negações, nomes, valores, relações ou gênero do narrador e dos personagens. "
                 "Use en-US para en, pt-BR para pt e espanhol para es. Não reescreva tudo. "
                 "Amplie original literalmente apenas o necessário para distinguir a ocorrência. "
                 "O perfil é imutável. Se não houver reparo seguro, retorne issues vazio. "
@@ -1125,6 +1134,36 @@ class ScriptGuardian:
             issues.append(ReviewIssue("factual", "critical", "Revisão global recusada sem justificativa"))
         return list(dict.fromkeys(issues)), list(dict.fromkeys(patches))
 
+    def _language_repairs(self, source_text, text, language, stage, profile, findings):
+        """Repara só frases sinalizadas; todas usam o mesmo candidato imutável."""
+        boundaries = sorted({0, len(text), *(m.end() for m in re.finditer(
+            r'''[.!?]["'”’)]?(?:\s+|$)|\n+''', text))})
+        windows = {}
+        for finding in findings:
+            start, end = finding['start'], finding['end']
+            if (type(start) is not int or type(end) is not int or not 0 <= start <= end <= len(text)
+                    or text[start:end] != finding['original']):
+                raise _ReviewUnavailable("Achado gramatical fora do candidato",
+                    SemanticFailure("invalid_candidate_reference", None, "language", 0, 0))
+            left = max(b for b in boundaries if b <= start and b < len(text))
+            right = next(b for b in boundaries if b >= end and b > left)
+            windows.setdefault((left, right), []).append({**finding,
+                'start': start-left, 'end': end-left})
+        # Até oito frases por rodada; achados restantes continuam no LT completo
+        # e só podem ser resolvidos dentro do orçamento de reparos já existente.
+        issues, patches = [], []
+        for (left, right), local in sorted(windows.items())[:8]:
+            sentence = text[left:right]
+            outcome = self._request(mode="language", source_text=source_text,
+                language=language, stage=stage, profile=asdict(profile),
+                candidate_text=sentence, language_tool_findings=local,
+                read_only_context={"before": text[max(0, left-600):left],
+                                   "after": text[right:right+600]})
+            issues.extend(outcome.issues)
+            patches.extend(_anchor_semantic_patch(sentence, patch, left)
+                           for patch in outcome.patches)
+        return issues, patches
+
     def review_and_fix(self, *, source_text, candidate_text, language, stage, story_id,
                        profile, final_gate=False, part=None) -> ScriptReview:
         language = "pt" if language == "pt-br" else language
@@ -1180,12 +1219,10 @@ class ScriptGuardian:
                     if lt_findings and not semantic_patches and not glossary_patches:
                         # Sem resposta útil no review geral, uma proposta dirigida.
                         # Não substitui indisponibilidade nem aprova sem nova revisão.
-                        outcome = self._request(mode="language", source_text=source_text,
-                            language=language, stage=stage, profile=asdict(profile),
-                            candidate_text=text, language_tool_findings=lt_findings)
-                        issues.extend(outcome.issues)
-                        semantic_patches.extend(_anchor_semantic_patch(text, patch, scope="global")
-                                                for patch in outcome.patches)
+                        focused_issues, focused_patches = self._language_repairs(
+                            source_text, text, language, stage, profile, lt_findings)
+                        issues.extend(focused_issues)
+                        semantic_patches.extend(focused_patches)
                     result = validate_and_apply_patches(text, glossary_patches + semantic_patches,
                                                         source_text, profile)
                     accepted, rejected = result.applied, result.rejected

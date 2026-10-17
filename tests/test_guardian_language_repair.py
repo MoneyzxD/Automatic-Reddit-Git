@@ -18,7 +18,7 @@ def grammar_patch(original="plants and", replacement="plants, and"):
                 source_quote="", start=None)
 
 
-def exercise(tmp_path, *, empty=False, attack=False, upstream_failure=False, primary=False, **config):
+def exercise(tmp_path, *, empty=False, attack=False, outside=False, upstream_failure=False, primary=False, **config):
     calls, checked = [], []
 
     class LT:
@@ -44,9 +44,11 @@ def exercise(tmp_path, *, empty=False, attack=False, upstream_failure=False, pri
             if (mode == "language" or primary and mode == "chunk" and "plants and" in context["candidate_text"]) and not empty:
                 issues = [grammar_patch()]
                 if attack:
+                    issues.append(grammar_patch("two", "100"))
+                if outside:
                     issues.append(grammar_patch("ten seeds", "one hundred seeds"))
-            elif "one hundred seeds" in context["candidate_text"]:
-                issues = [dict(grammar_patch("one hundred seeds", ""), category="amount",
+            elif "100 plants" in context["candidate_text"]:
+                issues = [dict(grammar_patch("100 plants", ""), category="amount",
                                source_quote=SOURCE, reason="Quantidade diferente da fonte.")]
             return json.dumps({"approved": not issues, "issues": issues})
 
@@ -75,8 +77,97 @@ def test_reparo_gramatical_nao_aprova_mudanca_factual(tmp_path):
     with pytest.raises(QualityRejected) as caught:
         guardian.review_and_fix(**args)
     assert any(i.category == "amount" for i in caught.value.review.issues)
-    assert checked[-1].endswith("one hundred seeds.")
+    assert "100 plants" in checked[-1]
     assert calls[-1]["mode"] == "global"
+
+
+def test_reparo_dirigido_nao_altera_fato_fora_da_frase(tmp_path):
+    guardian, args, calls, checked = exercise(tmp_path, outside=True)
+    result = guardian.review_and_fix(**args)
+    assert result.status == "approved" and result.approved_text == SOURCE
+    focused = next(c for c in calls if c["mode"] == "language")
+    assert "ten seeds" not in focused["candidate_text"]
+    assert "ten seeds" in focused["read_only_context"]["after"]
+
+
+@pytest.mark.parametrize('text', [
+    'I met Dr. Smith and she helped me.',
+    'I packed the supplies\n and she closed the door.',
+])
+def test_reparo_preserva_contexto_externo_de_abreviacao_e_quebra(tmp_path, text):
+    calls = []
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            window = context['candidate_text']
+            around = context['read_only_context']
+            assert around['before'] + window + around['after'] == text
+            assert 'I met Dr.' in around['before'] or 'I packed the supplies' in around['before']
+            patch = grammar_patch(' and', ', and')
+            # Tentar mudar contexto externo não pode ampliar o escopo do reparo.
+            return json.dumps({'approved':False, 'issues':[patch, grammar_patch('I ', 'We ')]})
+    guardian = ScriptGuardian({}, base_dir=tmp_path, semantic_reviewer=Reviewer())
+    profile = NarratorProfile('pf','s','male','male',1.0,'explicit',(),'1')
+    start = text.index(' and')
+    findings = [dict(start=start,end=start+4,original=' and',rule_id='COMMA_COMPOUND_SENTENCE')]
+    _, patches = guardian._language_repairs(text,text,'en','adaptation',profile,findings)
+    from stages.script_guardian import validate_and_apply_patches
+    result = validate_and_apply_patches(text,patches,text,profile)
+    assert result.text == text.replace(' and', ', and')
+    assert len(result.applied) == len(result.rejected) == 1
+
+
+@pytest.mark.parametrize('start,end,original', [(0,1,'X'), (0,99,'A')])
+def test_achado_fora_do_texto_nao_dispara_reparo(tmp_path,start,end,original):
+    from stages.script_guardian import _ReviewUnavailable
+    def no_call(**context):
+        pytest.fail('Achado inválido não pode chegar ao provedor')
+    guardian = ScriptGuardian({},base_dir=tmp_path,semantic_reviewer=SimpleNamespace(review=no_call))
+    profile = NarratorProfile('pf','s','male','male',1.0,'explicit',(),'1')
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._language_repairs('A sentence.','A sentence.','en','adaptation',profile,
+                                  [dict(start=start,end=end,original=original)])
+    assert caught.value.failure.code == 'invalid_candidate_reference'
+
+
+@pytest.mark.parametrize("sentences", [2, 9, 17])
+def test_frases_repetidas_tem_offsets_globais_e_orcamento_limitado(tmp_path, sentences):
+    text = "🌱 I planted roses and my sister watered lilies. " * sentences
+    calls = []
+    class LT:
+        def health(self, **kwargs):
+            return SimpleNamespace(version="6.6", locales=("pt-BR", "en-US", "es"))
+        def check(self, candidate, language):
+            return tuple(LanguageIssue("COMMA_COMPOUND_SENTENCE", "PUNCTUATION", "Comma.",
+                (", and",), i, i+4, " and") for i in range(len(candidate))
+                if candidate.startswith(" and", i) and candidate[i-1] != ',')
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            if context['mode'] == 'facts':
+                return json.dumps({'facts': []})
+            issues = [grammar_patch('roses and', 'roses, and')] if context['mode'] == 'language' else []
+            return json.dumps({'approved': not issues, 'issues': issues})
+    guardian = ScriptGuardian({}, base_dir=tmp_path, languagetool=LT(), semantic_reviewer=Reviewer())
+    profile = NarratorProfile("pf", "s", "male", "male", 1.0, "explicit", (), "1")
+    args = dict(source_text=text, candidate_text=text, language='en', stage='adaptation',
+                story_id='s', profile=profile)
+    if sentences == 17:
+        with pytest.raises(QualityRejected) as caught:
+            guardian.review_and_fix(**args)
+        assert len([c for c in calls if c['mode'] == 'language']) == 16
+        assert len([c for c in calls if c['mode'] == 'global']) == 3
+        assert caught.value.review.approved_text.count('roses and') == 1
+        return
+    result = guardian.review_and_fix(**args)
+    assert result.status == 'approved'
+    assert result.approved_text == text.replace('roses and', 'roses, and')
+    focused = [c for c in calls if c['mode'] == 'language']
+    assert len(focused) == sentences
+    assert all(c['candidate_text'].count('roses and') == 1 for c in focused)
+    assert all(c['candidate_text'] == result.approved_text for c in calls[-2:])
+    # Nove frases exigem segunda rodada e nova revisão integral entre reparos.
+    assert len([c for c in calls if c['mode'] == 'global']) == (3 if sentences == 9 else 2)
 
 
 @pytest.mark.parametrize("config,expected", [({}, 1), ({"max_repair_attempts": 0}, 0)])

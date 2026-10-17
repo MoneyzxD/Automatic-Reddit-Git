@@ -648,7 +648,7 @@ def test_estilo_languagetool_nao_corrige_nem_reprova_texto(tmp_path, perfil_femi
 
 @pytest.mark.parametrize("category", ["GRAMMAR", "MISC", "REPETITIONS"])
 def test_categoria_languagetool_nao_estilistica_continua_bloqueando(tmp_path, perfil_feminino, category):
-    finding = LanguageIssue("GRAMMAR_RULE", category, "Concordância incorreta.", (), 0, 1, "I")
+    finding = LanguageIssue("GRAMMAR_RULE", category, "Concordância incorreta.", (), 0, 1, "A")
     guardian = guardian_fake(tmp_path, lt=FakeLanguageTool([(finding,)]))
     with pytest.raises(QualityRejected) as caught:
         revisar(guardian, perfil_feminino, final_gate=True)

@@ -560,3 +560,50 @@ A mesma sonda reconstituída respondeu200 após a compactação:6761tokens de
 entrada e17de saída. Sua revisão vazia não prova correção dos achados; estes
 continuam bloqueando e exigem reparo/revisão completa no pipeline. A geração
 e publicação automática de mídia nova ainda dependem da próxima execução.
+
+### Revisão gramatical sem progresso no roteiro inteiro
+
+Run39051605109, main/a6d2544, passou1.346 testes reais sem skips. Todas as
+chamadas Groq responderam200; revisão chunk/global ficou em6690tokens de
+entrada, abaixo do ITPM7000. Aplicou quatro patches na primeira rodada,
+mas rejeitou1wz5tdt EN com oito achados LT restantes. O workflow terminou
+success sem gerar mídia: não é prova de recuperação. Production/seq172 tem
+94IDs,18rejeições,11blobs e zero uploads pendentes; não reabrir essa rejeição.
+
+LanguageTool6.6 e Java17 oficiais foram preparados localmente, com SHA-256
+verificado, para diagnosticar o texto sanitizado de review.approved_text.
+candidate_text na quarentena é anterior aos patches e não reproduz a rodada
+final. A sanitização cria erros adicionais; eles foram excluídos da sonda
+dos oito achados originais, sem tentar reconstruir trechos redigidos.
+
+A mesma frase de73chars recebia revisão vazia até explicitar a convenção
+editorial de vírgula entre orações independentes, inclusive curtas/relacionadas.
+Depois recebeu um patch válido, aceito e sem achado remanescente no LT real.
+O pedido com todo o roteiro ainda retornava vazio. Isso motivou reparos por
+frases sinalizadas, mantendo a revisão factual/gramatical integral após
+aplicação e sem aprovação por sugestões LT automáticas.
+
+Cada proposta recebe só a janela editável e até600chars adjacentes por lado
+em read_only_context, para abreviações/quebras não retirarem a oração anterior.
+IDs cN continuam restritos à janela; o código deriva offsets locais/globais
+do mesmo texto-base. Contexto externo, âncoras ambíguas e sobreposições não
+autorizam ampliar o patch. Até oito janelas são propostas por rodada; demais
+achados continuam no LT integral. Mantêm-se duas rodadas de reparo e três
+tentativas por request: até48 tentativas HTTP dirigidas, além das revisões
+completas. Esse custo adicional é o limite deliberado para convergir sem
+reescrever/aprovar conteúdo sem revisão. Nenhum provedor/modelo/chave alterna.
+
+Regressões cobrem repetição/Unicode com offsets globais, frase externa
+preservada, nove frases em8+1 rodadas,17frases ainda bloqueadas após16reparos,
+abreviação/newline com contexto somente leitura e achado inválido antes da API.
+A fixture antiga de categoria LT apontava original I no span A de Agora;
+agora usa A, mantendo o teste de bloqueio gramatical com dado consistente.
+
+A sonda por frases no texto sanitizado fez sete requests para os oito achados,
+aplicou cinco patches e deixou três achados alvo no LT real, sem patches
+recusados. Não aprovou a história nem alterou produção. A sonda seguinte de
+uma frase com o contexto adjacente do contrato final manteve um patch aceito
+e zero achados remanescentes nessa frase. A suíte completa local passou
+1.354 testes, sem skips, com o LanguageTool real. Revisão independente não
+encontrou bloqueios. Ainda exige uma nova história elegível gerada/publicada;
+essas sondas não constituem prova ponta a ponta.
