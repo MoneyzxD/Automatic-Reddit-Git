@@ -157,6 +157,15 @@ class LanguageToolClient:
                     raise ValueError("campos de revisão inválidos")
             except (TypeError, KeyError, ValueError) as exc:
                 raise LanguageToolUnavailable("Achado inválido do LanguageTool") from exc
+            # O TODO da regra 6.6 reconhece "you you're" como caso pendente.
+            # Limite: objeto + sujeito após "told", en-US e essa regra apenas;
+            # não retirar nenhum pronome nem ignorar duplicações fora do contexto.
+            if (key == "en" and self._languages[key] == "en-US" and rule_id == "ENGLISH_WORD_REPEAT_RULE"
+                    and text[start:end].casefold() == "you you"
+                    and re.search(r"\btold[ \t]+$", text[:start], flags=re.IGNORECASE)
+                    and re.match(r"['’]re\b", text[end:], flags=re.IGNORECASE)):
+                logger.info("LanguageTool: falso positivo em told you you're desconsiderado")
+                continue
             # A regra 6.6 não distingue a locução adverbial do artigo em
             # "todas as vezes"; trocar por crase aqui introduz um erro.
             # Limite comprovado: só essa regra e esse contexto, nunca outros achados.

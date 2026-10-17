@@ -10,6 +10,33 @@ pytestmark = pytest.mark.skipif(not os.getenv("LANGUAGETOOL_URL"),
                                 reason="Runtime local de LanguageTool não configurado")
 
 
+@pytest.mark.parametrize("quote", ["I told you you’re not going.", "I told you you're not going."])
+def test_backend_real_confirma_repeticao_aparente_com_contracao(quote):
+    client = LanguageToolClient({})
+    with client._post(quote, "en-US") as response:
+        response.raise_for_status()
+        matches = response.json()["matches"]
+    assert any(m["rule"]["id"] == "ENGLISH_WORD_REPEAT_RULE" for m in matches)
+    assert not any(i.rule_id == "ENGLISH_WORD_REPEAT_RULE" for i in client.check(quote, "en"))
+    assert any(i.rule_id == "ENGLISH_WORD_REPEAT_RULE" for i in client.check("I miss you you.", "en"))
+
+
+def test_guardiao_real_preserva_pronomes_sem_perder_repeticao_incorreta(tmp_path):
+    import json
+    from types import SimpleNamespace
+    from stages.script_guardian import ScriptGuardian
+    from stages.narrator_profile import NarratorProfile
+    def semantic(**context):
+        return json.dumps({"facts": []} if context["mode"] == "facts" else {"approved": True, "issues": []})
+    guardian = ScriptGuardian({}, base_dir=tmp_path, semantic_reviewer=SimpleNamespace(review=semantic))
+    profile = NarratorProfile("pf", "s1", "male", "male", 1.0, "explicit", (), "1")
+    for text, expected in (("I told you you’re not going.", "approved"), ("I miss you you.", "rejected"),
+                           ("I told you you’re not going. I miss you you.", "rejected")):
+        review = guardian.review_and_fix(source_text=text, candidate_text=text, language="en",
+            stage="adaptation", story_id="s1", profile=profile)
+        assert review.status == expected and review.approved_text == text
+
+
 def test_regra_real_nao_introduz_crase_em_todas_as_vezes():
     client = LanguageToolClient({})
     client.health()

@@ -8,6 +8,39 @@ from requests.utils import select_proxy
 from stages.language_tool import LanguageIssue, LanguageToolClient, LanguageToolUnavailable
 
 
+@pytest.mark.parametrize("text,language,rule_id,expected", [
+    ("I told you you’re not going.", "en", "ENGLISH_WORD_REPEAT_RULE", 0),
+    ("I told you you're not going.", "en", "ENGLISH_WORD_REPEAT_RULE", 0),
+    ("She told YOU YOU’RE right.", "en", "ENGLISH_WORD_REPEAT_RULE", 0),
+    ("🧾 She told you you’re right.", "en", "ENGLISH_WORD_REPEAT_RULE", 0),
+    ("I told you you’re not going.", "pt", "ENGLISH_WORD_REPEAT_RULE", 1),
+    ("I told you you’re not going.", "en", "OTHER_RULE", 1),
+    ("I miss you you.", "en", "ENGLISH_WORD_REPEAT_RULE", 1),
+    ("I told you you should go.", "en", "ENGLISH_WORD_REPEAT_RULE", 1),
+    ("I told you you you’re right.", "en", "ENGLISH_WORD_REPEAT_RULE", 1),
+    ("I asked you you’re going.", "en", "ENGLISH_WORD_REPEAT_RULE", 1),
+    ("I told you you’really going.", "en", "ENGLISH_WORD_REPEAT_RULE", 1),
+])
+def test_repeticao_you_com_contracao_apos_told_e_contextual(session, text, language, rule_id, expected):
+    import re
+    match = re.search(r"you you", text, re.IGNORECASE)
+    offset = len(text[:match.start()].encode("utf-16-le")) // 2
+    resposta_check(session, {"matches": [{"offset": offset, "length": len(match.group()),
+        "message": "Possible typo: you repeated a word.", "replacements": [{"value": "you"}],
+        "rule": {"id": rule_id, "category": {"id": "MISC"}, "issueType": "duplication"}}]})
+    assert len(cliente(session).check(text, language)) == expected
+
+
+def test_repeticao_contextual_nao_esconde_duplicacao_real_no_mesmo_texto(session):
+    text = "I told you you're not going. I miss you you."
+    matches = [{"offset": start, "length": 7, "message": "Possible typo: you repeated a word.",
+        "replacements": [{"value": "you"}], "rule": {"id": "ENGLISH_WORD_REPEAT_RULE",
+        "category": {"id": "MISC"}}} for start in (text.index("you you"), text.rindex("you you"))]
+    resposta_check(session, {"matches": matches})
+    issues = cliente(session).check(text, "en")
+    assert len(issues) == 1 and issues[0].start == text.rindex("you you")
+
+
 @pytest.mark.parametrize("text,language,rule_id,start,length,expected", [
     ("A parentalidade importa.", "pt", "MORFOLOGIK_RULE_PT_BR", 2, 13, 0),
     ("A PARENTALIDADE importa.", "pt-br", "MORFOLOGIK_RULE_PT_BR", 2, 13, 0),

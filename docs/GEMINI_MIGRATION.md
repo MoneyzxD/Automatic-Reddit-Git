@@ -364,7 +364,7 @@ o prazo da API. `validacao_groq=true` seleciona Groq somente nesse disparo manua
 e executa uma história, nos idiomas escolhidos, com os gates e checkpoints
 normais. Não alterna modelos/chaves Groq para contornar cota. O modo Groq
 conserva fallbacks legados de geração; o aceite exige conferir respostas Groq
-reais e ausência desses fallbacks nos logs, além dos novos vídeos. Um run verde
+reais e ausência desses fallbacks de geração nos logs, além dos novos vídeos. Um run verde
 sozinho não prova isso. A seleção controla também os Secrets:
 Groq recebe somente chaves Groq; Gemini recebe somente sua chave e respeita a
 janela. O cron força Gemini e mantém a meta diária original.
@@ -413,3 +413,24 @@ foram enfraquecidos. Sonda sintética Groq isolada com os cinco padrões retorno
 cinco patches corretos. Isso prova somente a sonda, sem reproduzir todo o
 contexto da fonte ou provar mídia/upload. Testes relevantes dos gates,
 referências, patches e Gemini:420passes. Nova rodada real ainda necessária.
+
+### Falso positivo contextual confirmado na regra de repetição
+
+[Run38993909496](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38993909496)
+selecionou1x5ugmy EN e rejeitou adaptação por um único crítico LT: “you you”
+em “I told you you’re not going.” A frase é válida: o primeiro pronome é objeto
+de told e o segundo é sujeito de are. O
+[código oficial6.6](https://github.com/languagetool-org/languagetool/blob/v6.6/languagetool-language-modules/en/src/main/java/org/languagetool/rules/en/EnglishWordRepeatRule.java#L55)
+registra “you you're” como TODO. O Groq preservou corretamente a frase; não
+foram vistos os cinco erros da fonte anterior nessa rodada. Duas429 no ledger
+foram recuperadas pela terceira tentativa com a mesma chave/modelo. O perfil
+descartou evidência semântica inválida e usou a resolução determinística
+prevista no contrato; isso é distinto de gerar roteiro por templates.
+
+Production/seq145 preserva94IDs, todos os arquivos imutáveis e14 rejeitados
+anteriores; acrescenta a rejeição EN (agora15), sem nova mídia. A correção do
+cliente LT é limitada a en-US, ENGLISH_WORD_REPEAT_RULE, span exato “you you”
+imediatamente após told e seguido da contração 're/’re. Não altera o texto e
+mantém duplicações fora desse contexto, outros idiomas/regras e achados
+concomitantes. Quatro regressões falharam antes, com sete controles negativos
+preservados. Novas regressões CI verificam o backend6.6 e o guardião real.
