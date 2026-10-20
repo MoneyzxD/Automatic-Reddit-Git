@@ -749,7 +749,10 @@ class _GroqReviewer:
                 "crítico para aprovar. invalid_json/invalid_schema: corrija só formato. "
                 "missing_issue_fields: inclua os campos em cada issue, motivo real em reason "
                 "e inteiro ou null em start. "
-                "Sem achados, issues vazio. Falha crítica impede approved=true."
+                "Sem achados, issues vazio. Falha crítica impede approved=true. "
+                "Recusa exige um achado concreto: não retorne approved=false com todas as listas vazias. "
+                "Se retry_feedback indicar unexplained_rejection, justifique a recusa com um achado "
+                "sustentado; se não houver problema após revisar, retorne approved=true e listas vazias."
             )
         if registry is not None:
             instruction = instruction.replace(
@@ -1038,7 +1041,10 @@ class ScriptGuardian:
                                           source_reference_error=reference_error)
                 elif data is not None:
                     outcome = parse_semantic_review(raw)
-                    if outcome.status != "unavailable":
+                    if mode != "language" and outcome.status == "rejected" and not outcome.issues:
+                        # Recusa sem motivo não prova erro factual nem aprova o texto.
+                        failure = replace(failure, code="unexplained_rejection")
+                    elif outcome.status != "unavailable":
                         if mode == "language" and any(
                             issue.category not in {"grammar", "language"} or issue.source_quote
                             for issue in outcome.issues
@@ -1118,8 +1124,6 @@ class ScriptGuardian:
             issues.extend(outcome.issues)
             for patch in outcome.patches:
                 patches.append(_anchor_semantic_patch(chunk.text, patch, chunk.start))
-            if outcome.status == "rejected" and not outcome.issues:
-                issues.append(ReviewIssue("factual", "critical", "Revisão recusada sem justificativa"))
         outcome = self._request(
             mode="global", source_text=source_text, language=language, stage=stage,
             profile=asdict(profile), candidate_text=text, factual_context=factual_context,
@@ -1130,8 +1134,6 @@ class ScriptGuardian:
         issues.extend(outcome.issues)
         patches.extend(_anchor_semantic_patch(text, patch, scope="global")
                        for patch in outcome.patches)
-        if outcome.status == "rejected" and not outcome.issues:
-            issues.append(ReviewIssue("factual", "critical", "Revisão global recusada sem justificativa"))
         return list(dict.fromkeys(issues)), list(dict.fromkeys(patches))
 
     def _language_repairs(self, source_text, text, language, stage, profile, findings):

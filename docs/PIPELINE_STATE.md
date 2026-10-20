@@ -71,9 +71,25 @@ A revisão automática inicialmente bloqueou a transmissão avulsa; o operador
 autorizou especificamente esse conteúdo/destino antes da única chamada real.
 Sonda/transporte:68testes passaram; revisão independente sem bloqueios.
 
-Run39490485301 é a validação manual somente PT/Groq com publicação, já
-autorizada pelo operador para provar a restauração. Usa a retomada preservada
-e a correção do marcador, sem reabrir rejeitados; resultado em acompanhamento.
+Run39490485301 validou manualmente PT/Groq com publicação habilitada. A
+primeira parte passou e foi preservada; a descrição recebeu recusas vazias
+chunk/global (approved=false, issues vazias), que o código tratava como erros
+factuais e rejeição terminal. Workflow success, mas sem mídia ou upload: não
+é recuperação. Seq213 tem95IDs,20rejeições,13mídias, zero pendências. Os79
+arquivos imutáveis da seq207 e as19rejeições anteriores foram preservados.
+Essa vigésima rejeição também permanece fechada; não reabrir para testar.
+O único429 nesse run recuperou na tentativa seguinte; a recusa vazia foi o
+bloqueio final, não erro OAuth nem a advertência anterior do Google Translate.
+
+Recusa vazia em chunk/global agora recebe `unexplained_rejection`, pede motivo
+no mesmo orçamento de três tentativas e termina unavailable se persistir.
+Não transforma a recusa em aprovação nem inventa um achado factual. A resposta
+nova ainda precisa passar todos os gates. O modo language continua aceitando
+false/lista vazia como ausência de proposta segura, sem aprovar o roteiro.
+Três regressões falharam antes;382testes próximos e1.380da suíte completa
+passaram com LanguageTool real. A fixture de reprovação agora fornece um
+crítico explícito sem patch; expectativas de bloqueio/fila permanecem iguais.
+
 Gemini continua padrão do cron. Uma validação Groq não prova disponibilidade
 do Gemini nem continuidade automática nos três idiomas.
 

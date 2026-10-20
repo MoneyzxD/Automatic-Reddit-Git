@@ -230,6 +230,35 @@ def guardian_fake(tmp_path, semantic=None, lt=None, **config):
     )
 
 
+@pytest.mark.parametrize("mode", ["chunk", "global"])
+def test_recusa_vazia_persistente_e_indisponibilidade_sem_inventar_fato(tmp_path, mode):
+    from stages.script_guardian import _ReviewUnavailable
+    semantic = FakeSemanticReviewer([resposta(False, [])] * 3)
+    guardian = guardian_fake(tmp_path, semantic)
+    with pytest.raises(_ReviewUnavailable) as caught:
+        guardian._request(mode=mode, source_text="Fonte.", source_chunk="Fonte.",
+                          candidate_text="Resumo.", language="pt", stage="metadata")
+    assert caught.value.failure.code == "unexplained_rejection"
+    assert caught.value.failure.attempts == 3
+    assert len(semantic.calls) == 3
+
+
+def test_recusa_vazia_pede_justificativa_antes_de_aceitar_nova_revisao(tmp_path):
+    semantic = FakeSemanticReviewer([resposta(False, []), resposta(True, [])])
+    guardian = guardian_fake(tmp_path, semantic)
+    outcome = guardian._request(mode="chunk", source_text="Fonte.", source_chunk="Fonte.",
+                                candidate_text="Resumo.", language="pt", stage="metadata")
+    assert outcome.approved and len(semantic.calls) == 2
+    assert semantic.calls[1].retry_feedback == {"failure_code": "unexplained_rejection"}
+
+
+def test_recusa_vazia_de_reparo_gramatical_nao_vira_aprovacao(tmp_path):
+    semantic = FakeSemanticReviewer([resposta(False, [])])
+    outcome = guardian_fake(tmp_path, semantic)._request(
+        mode="language", source_text="Fonte.", candidate_text="Resumo.", language="pt", stage="metadata")
+    assert not outcome.approved and not outcome.issues and len(semantic.calls) == 1
+
+
 def test_guardiao_nao_introduz_crase_nem_reparo_no_contexto_do_incidente(
     tmp_path, perfil_feminino, monkeypatch,
 ):

@@ -115,7 +115,10 @@ def pipeline(monkeypatch, tmp_path):
                     and state.fail_text in context["candidate_text"]):
                 if state.outage:
                     raise RuntimeError("https://provider.test?secret=SECRET")
-                return json.dumps({"approved": False, "issues": []})
+                # Reprovação de conteúdo exige motivo; resposta vazia testa indisponibilidade.
+                return json.dumps({"approved": False, "issues": [dict(
+                    original="", replacement="", category="language", severity="critical",
+                    subject="text", reason="Checkpoint sintético reprovado", source_quote="")]})
             issues = []
             if "ERRADO" in context["candidate_text"] and context["mode"] == "chunk":
                 issues.append(dict(original="ERRADO", replacement="APROVADO", category="grammar",
