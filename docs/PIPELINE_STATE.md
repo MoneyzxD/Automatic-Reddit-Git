@@ -56,12 +56,32 @@ Suíte completa após esse reparo:1.372testes aprovados, sem skips, usando o
 backend real local. Comparação seq207/seq201:77arquivos imutáveis,95IDs e
 19rejeições anteriores preservados; nenhuma rejeição nova.
 
-Timeout da revisão continua60s até medir a hipótese de latência com uma
-chamada diagnóstica de180s. Houve respostas reais concluídas em mais de60s
-no run; isso sustenta a investigação, não comprova o timeout novo. A sonda
-local reconstituiu exatamente8411chars e o hash do candidato, sem chamada
-externa. A revisão automática bloqueou o envio avulso ao Gemini por exigir
-autorização específica desse roteiro/contexto; autorização foi solicitada.
+Timeout da revisão continua60s: o teste de180s não confirmou essa hipótese.
+Após autorização explícita para uma chamada com a primeira parte PT de1x6sq3x,
+o diagnóstico39490154464 retornou HTTP503 em9,11s, sem resposta completa.
+Não repetiu a chamada e não alterou estado operacional nem usou YouTube.
+Isso comprova indisponibilidade nessa chamada, não esgotamento de cota nem
+falha OAuth; aumentar timeout não elimina HTTP503.
+
+A preparação local conferiu exatamente8411chars e o hash original. Não
+enviou chamadas porque a chave Gemini existe só no Secret do Actions. O
+workflow diagnose_gemini_review fixa asset/SHA privados, modelo e namespace,
+faz uma chamada sem retry e só publica códigos/contagens/latência no log.
+A revisão automática inicialmente bloqueou a transmissão avulsa; o operador
+autorizou especificamente esse conteúdo/destino antes da única chamada real.
+Sonda/transporte:68testes passaram; revisão independente sem bloqueios.
+
+Run39490485301 é a validação manual somente PT/Groq com publicação, já
+autorizada pelo operador para provar a restauração. Usa a retomada preservada
+e a correção do marcador, sem reabrir rejeitados; resultado em acompanhamento.
+Gemini continua padrão do cron. Uma validação Groq não prova disponibilidade
+do Gemini nem continuidade automática nos três idiomas.
+
+O erro final da CLI agora inclui apenas code/http/mode/attempts tipificados
+quando disponíveis; outras indisponibilidades registram o tipo da exceção.
+Preserva código de saída2 e nunca imprime roteiro, contexto ou erro bruto.
+Regressões timeout/503 reproduziram RED com o log genérico anterior;
+98testes próximos e a suíte completa1.376testes passaram com LanguageTool real.
 
 As falhas dos dias18 e19 são distintas: Gemini429/resource_exhausted no
 encerramento PT e Gemini503 na tradução do título PT, respectivamente. O sucesso EN de

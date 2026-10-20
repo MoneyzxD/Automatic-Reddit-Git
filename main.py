@@ -1120,8 +1120,15 @@ def cli(argv: list[str] | None = None) -> int:
             config, args.lang, dry_run=args.dry_run,
             test_story=args.test_story, max_parts=args.max_parts,
         )
-    except (QualityUnavailable, StateError, LLMUnavailable):
-        logging.getLogger("pipeline.main").error("Dependência obrigatória indisponível; lote interrompido")
+    except (QualityUnavailable, StateError, LLMUnavailable) as error:
+        failure = getattr(error.review, "semantic_failure", None) if isinstance(error, QualityUnavailable) else None
+        logger = logging.getLogger("pipeline.main")
+        if failure:
+            # Somente diagnóstico tipificado; nunca roteiro, evidência ou erro HTTP bruto.
+            logger.error("Revisão obrigatória indisponível; codigo=%s; http=%s; modo=%s; tentativas=%s",
+                         failure.code, failure.http_status, failure.mode, failure.attempts)
+        else:
+            logger.error("Dependência obrigatória indisponível; tipo=%s; lote interrompido", type(error).__name__)
         return 2
     return 0
 

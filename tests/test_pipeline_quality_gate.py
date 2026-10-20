@@ -52,6 +52,21 @@ def test_dependencia_obrigatoria_indisponivel_retorna_codigo_2(monkeypatch, tmp_
     assert main.cli(["--test-story", "--lang", "pt"]) == 2
 
 
+@pytest.mark.parametrize("code,status", [("timeout", None), ("provider_error", 503)])
+def test_cli_expoe_falha_tipificada_sem_roteiro(monkeypatch, tmp_path, caplog, code, status):
+    from stages.script_guardian import SemanticFailure, ScriptReview
+    failure = SemanticFailure(code, status, "chunk", 3, 8411)
+    review = ScriptReview("unavailable", "ROTEIRO_PRIVADO", (), (), 1, False,
+                          "CONTEXTO_PRIVADO", semantic_failure=failure)
+    monkeypatch.setattr(main, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(main, "load_config", lambda: {})
+    monkeypatch.setattr(main, "run_pipeline", Mock(side_effect=QualityUnavailable(review)))
+    assert main.cli(["--lang", "pt"]) == 2
+    assert f"codigo={code}" in caplog.text and "modo=chunk" in caplog.text
+    assert f"http={status}" in caplog.text and "tentativas=3" in caplog.text
+    assert "PRIVADO" not in caplog.text
+
+
 def test_fixture_pipeline_nao_consulta_groq_real(pipeline, monkeypatch):
     import utils.groq_client as groq_client
     monkeypatch.setenv("GROQ_API_KEY_EN", "chave-sintetica-nao-usar")
