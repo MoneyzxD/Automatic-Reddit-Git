@@ -167,6 +167,123 @@ def test_falha_no_marker_conserva_head_anterior(snapshot_fixture):
     assert client.fetch_latest().snapshot_id == first.snapshot_id
 
 
+@pytest.mark.parametrize("phase", ["existing", "post"])
+@pytest.mark.parametrize("kind", ["media", "payload"])
+def test_blob_starter_nao_envenena_checkpoint(snapshot_fixture, tmp_path, phase, kind):
+    from utils.pipeline_snapshot import restore_snapshot
+    session = Session()
+    client = store(session)
+    snapshot = build(snapshot_fixture)
+    digest, path = next(iter(snapshot.media.items()))
+    name = f"media-{digest}.bin"
+    if kind == "payload":
+        path = snapshot.payload_path
+        name = f"payload-0-{hashlib.sha256(path.read_bytes()).hexdigest()}.tar.gz"
+    client.validate_target()
+    release = client._ensure_release(snapshot.manifest["run_id"])
+    original_request = session.request
+
+    def request(method, url, **kwargs):
+        response = original_request(method, url, **kwargs)
+        if method == "POST" and kwargs.get("params", {}).get("name") == name:
+            response.data.update(state="starter", digest=None)
+        return response
+
+    if phase == "existing":
+        asset_id = client._put_asset(release, name, path)
+        session.assets[asset_id]["info"].update(state="starter", digest=None)
+    else:
+        session.request = request
+    receipt = client.publish(snapshot)
+    confirmed_id = receipt["payload_id"] if kind == "payload" else receipt["media_ids"][digest]
+    assert session.assets[confirmed_id]["info"]["state"] == "uploaded"
+    assert any(a["info"]["name"] == name and a["info"]["state"] == "starter"
+               for a in session.assets.values())
+    # Recibo referencia a cópia íntegra; uma nova instância consegue restaurá-la.
+    restore_snapshot(store(session).fetch_latest(), tmp_path / "restored-starter")
+    assert client.publish(snapshot) == receipt
+    assert not any(method == "DELETE" for method, _, _ in session.calls)
+
+
+def test_marker_starter_permanece_bloqueado_sem_nome_alternativo(snapshot_fixture):
+    from utils.pipeline_state import StateError
+    session = Session()
+    client = store(session)
+    snapshot = build(snapshot_fixture)
+    client.publish(snapshot)
+    marker = next(a for a in session.assets.values() if a["info"]["name"].startswith("complete-"))
+    marker["info"].update(state="starter", digest=None)
+    before = len(session.assets)
+    with pytest.raises(StateError, match="Marker de conclusão inválido"):
+        client.publish(snapshot)
+    with pytest.raises(StateError, match="Marker de conclusão inválido"):
+        client.fetch_latest()
+    assert len(session.assets) == before
+
+
+def test_media_uploaded_divergente_nao_recebe_nome_alternativo(snapshot_fixture):
+    from utils.pipeline_state import StateError
+    session = Session()
+    client = store(session)
+    snapshot = build(snapshot_fixture)
+    client.publish(snapshot)
+    media = next(a for a in session.assets.values() if a["info"]["name"].startswith("media-"))
+    media["info"]["digest"] = "sha256:" + "0" * 64
+    second = replace(snapshot, manifest={**snapshot.manifest, "sequence": 1})
+    before = len(session.assets)
+    with pytest.raises(StateError, match="Hash remoto divergente"):
+        client.publish(second)
+    assert len(session.assets) == before
+
+
+@pytest.mark.parametrize("failure", ["starter", "502", "timeout"])
+def test_tentativas_de_blob_sao_limitadas_e_sem_marker(snapshot_fixture, failure):
+    from utils.pipeline_state import StateError
+    session = Session()
+    original = session.request
+
+    def request(method, url, **kwargs):
+        if method == "POST" and urlparse(url).hostname == "uploads.github.com":
+            if failure == "timeout":
+                session.calls.append((method, url, kwargs))
+                raise requests.Timeout("SYNTHETIC_TOKEN")
+            if failure == "502":
+                session.calls.append((method, url, kwargs))
+                return Response(502)
+            response = original(method, url, **kwargs)
+            response.data.update(state="starter", digest=None)
+            return response
+        return original(method, url, **kwargs)
+
+    session.request = request
+    with pytest.raises(StateError, match="tentativas limitadas"):
+        store(session).publish(build(snapshot_fixture))
+    posts = [kwargs for method, url, kwargs in session.calls
+             if method == "POST" and urlparse(url).hostname == "uploads.github.com"]
+    assert len(posts) == 3
+    assert all(not kwargs["params"]["name"].startswith("complete-") for kwargs in posts)
+
+
+def test_502_depois_de_receber_blob_recupera_na_mesma_execucao(snapshot_fixture):
+    session = Session()
+    original = session.request
+    failed = False
+
+    def request(method, url, **kwargs):
+        nonlocal failed
+        response = original(method, url, **kwargs)
+        if method == "POST" and urlparse(url).hostname == "uploads.github.com" and not failed:
+            failed = True
+            response.data.update(state="starter", digest=None)
+            return Response(502)
+        return response
+
+    session.request = request
+    snapshot = build(snapshot_fixture)
+    store(session).publish(snapshot)
+    assert store(session).fetch_latest().snapshot_id == snapshot.snapshot_id
+
+
 def test_ultimo_completo_corrompido_nao_volta_ao_anterior(snapshot_fixture):
     from utils.pipeline_state import StateError
     session = Session()

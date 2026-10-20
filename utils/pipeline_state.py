@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -179,14 +180,40 @@ class PrivateStateStore:
 
     def _put_asset(self, release: dict, name: str, path: Path) -> int:
         size, digest = path.stat().st_size, file_sha256(path)
-        existing = next((asset for asset in self._assets(release) if asset["name"] == name), None)
-        if existing is not None:
-            return self._check_asset(existing, name, size, digest)
-        with path.open("rb") as handle:
-            data = self._json("POST", f"https://uploads.github.com/repos/{self.repo}/releases/{release['id']}/assets",
-                              statuses=(201,), params={"name": name}, data=handle,
-                              headers={"Content-Type": "application/octet-stream", "Content-Length": str(size)})
-        return self._check_asset(data, name, size, digest)
+        # Só blobs admitem outra cópia: recibos usam IDs, não esses nomes.
+        # Marker incompleto continua bloqueado e exige reconciliação explícita.
+        blob = bool(re.fullmatch(rf"media-{_HASH}\.bin|payload-[0-9]+-{_HASH}\.tar\.gz", name))
+        for attempt in range(3 if blob else 1):
+            candidate = name if attempt == 0 else f"{name}-retry-{attempt}"
+            existing = next((asset for asset in self._assets(release) if asset["name"] == candidate), None)
+            if existing is None:
+                with path.open("rb") as handle:
+                    try:
+                        response = self._request(
+                            "POST", f"https://uploads.github.com/repos/{self.repo}/releases/{release['id']}/assets",
+                            params={"name": candidate}, data=handle,
+                            headers={"Content-Type": "application/octet-stream", "Content-Length": str(size)})
+                    except StateError:
+                        if not blob:
+                            raise
+                        continue
+                    try:
+                        if blob and response.status_code in {502, 503, 504}:
+                            continue
+                        if response.status_code != 201:
+                            raise StateError("API de estado recusou a operação")
+                        existing = response.json()
+                    except (ValueError, TypeError):
+                        raise StateError("Resposta da API de estado inválida") from None
+                    finally:
+                        response.close()
+            if (blob and isinstance(existing, dict) and _integer(existing.get("id"))
+                    and existing.get("name") == candidate and existing.get("state") == "starter"):
+                logging.getLogger(__name__).warning(
+                    "Upload de blob incompleto no GitHub; cópia não confirmada (%d/3)", attempt + 1)
+                continue
+            return self._check_asset(existing, candidate, size, digest)
+        raise StateError("Upload de estado não confirmado após tentativas limitadas")
 
     def _upload_media(self, release: dict, media: dict[str, Path]) -> dict[str, int]:
         return {digest: self._put_asset(release, f"media-{digest}.bin", path) for digest, path in media.items()}

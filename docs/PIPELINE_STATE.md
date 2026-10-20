@@ -3,6 +3,44 @@
 Status: integrado em main; bootstrap e publicação recuperada confirmados em 13/10.
 Teste unitário/fake HTTP não comprova persistência no GitHub nem upload real.
 
+## Incidente de upload incompleto em 20/10/2026
+
+Run39435225675 falhou antes da geração e novamente no checkpoint final com
+`Asset incompleto ou divergente`. A API privada confirmou um blob de179222bytes
+em `state=starter`, sem digest, desde14:05:14UTC. Reutilizar esse nome fazia
+todos os checkpoints seguintes da mesma release falharem. Não foi erro OAuth
+do YouTube. O GitHub documenta esse resíduo de upload no
+[endpoint de assets](https://docs.github.com/en/rest/releases/assets#upload-a-release-asset).
+
+Mídia e payload agora admitem até três nomes determinísticos por blob, mantendo
+o arquivo incompleto e todos os checkpoints anteriores. Só `uploaded` com
+tamanho e SHA-256 conferidos entra no recibo. HTTP502/503/504 e interrupção de
+rede também têm esse limite. Uma cópia `uploaded` divergente continua bloqueada;
+não é contornada como se fosse upload incompleto. Não há DELETE nem alteração
+de IDs já confirmados no YouTube. Três cópias incompletas exigem reconciliação.
+Markers `complete-N.json` mantêm o protocolo original: marker incompleto ou
+corrompido continua bloqueando, sem ignorar um possível head mais recente.
+
+Regressões locais reproduziram o erro antes da correção. A sonda real abaixo
+confirmou checkpoint, repetição idempotente, restauração e upload/download de
+179222bytes em `validation-storage-b4adf264be6b`, com dados sintéticos:
+
+```powershell
+python scripts/probe_state_storage.py --env-file ..\.env
+python -m pytest tests/test_pipeline_state.py -q
+```
+
+O caminho de `--env-file` deve apontar para o arquivo local que contém
+`PIPELINE_STATE_TOKEN`. O script cria namespace `validation-storage-*` exclusivo,
+nunca escreve em production nem publica vídeo. A sonda real não força uma
+falha upstream; o estado starter é reproduzido no transporte dos testes.
+Essas provas são de armazenamento, não de recuperação editorial/publicação.
+
+As falhas dos dias18 e19 são distintas: Gemini429/resource_exhausted no
+encerramento PT e Gemini503 na tradução PT, respectivamente. O sucesso EN de
+17/10 não prova continuidade nem funcionamento dos três idiomas. Registros
+anteriores abaixo são históricos.
+
 Atualização em 16/10: Gemini substitui Groq em todas as etapas de IA por decisão
 explícita do operador. Fluxo manual/agendado fixa Gemini, sem Secrets Groq nem
 fallback de geração para Ollama/regras/templates. Veja [migração](GEMINI_MIGRATION.md).
