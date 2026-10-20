@@ -93,6 +93,24 @@ crítico explícito sem patch; expectativas de bloqueio/fila permanecem iguais.
 Gemini continua padrão do cron. Uma validação Groq não prova disponibilidade
 do Gemini nem continuidade automática nos três idiomas.
 
+Run39493219101 não publicou: a fonte nova1x9nddb foi rejeitada na adaptação EN
+por COMMA_COMPOUND_SENTENCE persistente após reparo parcial. Não houve falha de
+API/schema nem patch recusado; não há bug de contexto comprovado nessa recusa.
+Seq217 preserva80arquivos imutáveis da seq213,95IDs e20rejeições anteriores;
+há21rejeições fechadas agora. Não reabrir essa fonte para forçar aceite.
+
+A validação manual Groq usava main.py uma vez e podia terminar success sem
+vídeo após recusa normal. Agora reutiliza generate_daily_batch.py --target1:
+até seis histórias com a configuração atual, pulando conteúdo rejeitado e
+parando imediatamente em indisponibilidade/código2. A meta é absoluta do dia,
+inclui pendentes/agendados existentes e admite uma parte excedente; pode não
+gerar nada se já satisfeita. Confirmar artefatos/IDs novos separadamente antes
+de afirmar geração ou publicação nova. Cron/meta diária3/Gemini e todos os
+gates permanecem iguais. Historia fixa/dry-run continuam uma única simulação.
+Dois testes falharam antes do ajuste no comando manual. Depois:70testes
+próximos e1.383da suíte completa passaram, sem skips, com LanguageTool real;
+revisão independente sem Critical/Important. Isso ainda não prova vídeo novo.
+
 O erro final da CLI agora inclui apenas code/http/mode/attempts tipificados
 quando disponíveis; outras indisponibilidades registram o tipo da exceção.
 Preserva código de saída2 e nunca imprime roteiro, contexto ou erro bruto.

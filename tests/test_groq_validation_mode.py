@@ -1,4 +1,7 @@
 from pathlib import Path
+import os
+import shutil
+import subprocess
 
 import pytest
 import yaml
@@ -68,5 +71,28 @@ def test_workflow_groq_manual_nao_usa_gemini_nem_altera_cron():
     assert env["GEMINI_API_KEY"] == "${{ steps.execution.outputs.llm_provider == 'gemini' && secrets.GEMINI_API_KEY || '' }}"
     assert '"$PIPELINE_LLM_PROVIDER" == "gemini"' in steps["generate"]["run"]
     assert '"$PIPELINE_LLM_PROVIDER" == "groq"' in steps["generate"]["run"]
-    assert "python main.py --lang $PIPELINE_LANGUAGES" in steps["generate"]["run"]
+    assert "python scripts/generate_daily_batch.py --target 1" in steps["generate"]["run"]
     assert "generate_daily_batch.py" in steps["generate"]["run"]
+
+
+@pytest.mark.parametrize("provider,expected", [
+    ("groq", ["scripts/generate_daily_batch.py --target 1 --lang pt"]),
+    ("gemini", ["scripts/check_gemini.py", "scripts/generate_daily_batch.py --lang pt"]),
+])
+def test_comando_real_do_workflow_exige_lote_no_groq_e_preserva_gemini(provider, expected):
+    bash = shutil.which("bash")
+    if not bash and Path("C:/Program Files/Git/bin/bash.exe").is_file():
+        bash = "C:/Program Files/Git/bin/bash.exe"
+    if not bash:
+        pytest.skip("Bash não instalado")
+    path = Path(__file__).resolve().parents[1] / ".github/workflows/pipeline.yml"
+    data = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    step = next(s for s in data["jobs"]["gerar-e-publicar"]["steps"] if s.get("id") == "generate")
+    environment = {**os.environ, "PIPELINE_LLM_PROVIDER": provider, "PIPELINE_LANGUAGES": "pt",
+                   "PIPELINE_DRY_RUN": "false", "PIPELINE_TEST_STORY": "false",
+                   "PIPELINE_GEMINI_CATALOG_ONLY": "false"}
+    # Só captura a chamada: não executa Python, API, geração ou publicação.
+    result = subprocess.run([bash, "-e", "-c", 'python() { printf "%s\\n" "$*"; };\n' + step["run"]],
+                            env=environment, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == expected

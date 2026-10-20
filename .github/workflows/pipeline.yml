@@ -26,7 +26,7 @@ on:
         default: false
         type: boolean
       validacao_groq:
-        description: "Validar uma história com Groq nesta execução; cron continua Gemini"
+        description: "Completar mínimo de 1 vídeo/idioma com Groq; cron continua Gemini"
         required: false
         default: false
         type: boolean
@@ -341,7 +341,8 @@ jobs:
           [[ "$PIPELINE_DRY_RUN" == "true" ]] && options+=(--dry-run)
           [[ "$PIPELINE_TEST_STORY" == "true" ]] && options+=(--test-story)
           if [[ "$PIPELINE_LLM_PROVIDER" == "groq" ]]; then
-            python main.py --lang $PIPELINE_LANGUAGES "${options[@]}"
+            python scripts/generate_daily_batch.py --target 1 \
+              --lang $PIPELINE_LANGUAGES "${options[@]}"
           else
             python scripts/generate_daily_batch.py \
               --lang $PIPELINE_LANGUAGES \

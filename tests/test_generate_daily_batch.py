@@ -7,6 +7,20 @@ from pathlib import Path
 from scripts import generate_daily_batch
 
 
+def test_meta_um_pula_recusa_de_conteudo_e_exige_video_sem_reabrir_fonte(monkeypatch):
+    count, calls = 0, []
+    monkeypatch.setattr(generate_daily_batch, "_contar_lote_do_dia", lambda langs: {"pt": count})
+    def story(languages, max_parts):
+        nonlocal count
+        calls.append((languages, max_parts))
+        if len(calls) == 2:
+            count = 1
+        return 0
+    monkeypatch.setattr(generate_daily_batch, "_executar_historia", story)
+    assert generate_daily_batch.preencher_lote(["pt"], 1, 6) == {"pt": 1}
+    assert calls == [(["pt"], 2), (["pt"], 2)]
+
+
 def test_indisponibilidade_codigo_2_para_lote_sem_tentar_historia_nova(monkeypatch):
     calls = []
     monkeypatch.setattr(generate_daily_batch, "setup_logging", lambda *args: None, raising=False)
