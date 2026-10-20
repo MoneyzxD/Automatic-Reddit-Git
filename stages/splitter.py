@@ -33,7 +33,7 @@ Logica:
       (sem "de Total" — apenas o numero da parte)
     - A ULTIMA parte (ou a unica parte, se a historia nao for dividida)
       recebe o HOOK DE ENCERRAMENTO (CTA) no final
-    - Partes intermediarias mantem o marcador "[Continua na Parte N...]"
+    - Partes intermediarias indicam em uma frase a continuidade na parte seguinte
 """
 import logging
 import math
@@ -58,7 +58,7 @@ PART_LABEL = {
 # Marcador de continuidade — usado apenas em partes que NAO sao a ultima
 CONTINUITY_MARKERS = {
     "pt": {
-        "end": "\n\n[Continua na Parte {next} de {total}...]",
+        "end": "\n\n[A história continua na parte {next} de {total}.]",
     },
     "en": {
         "end": "\n\n[Continued in Part {next} of {total}...]",

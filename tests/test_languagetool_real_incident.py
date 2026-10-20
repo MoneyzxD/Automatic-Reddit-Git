@@ -10,6 +10,15 @@ pytestmark = pytest.mark.skipif(not os.getenv("LANGUAGETOOL_URL"),
                                 reason="Runtime local de LanguageTool não configurado")
 
 
+def test_marcador_pt_do_splitter_nao_introduz_erro_de_acento():
+    from stages.splitter import CONTINUITY_MARKERS
+    client = LanguageToolClient({})
+    # O marcador do incidente confundia a análise morfológica de Continua.
+    assert any(f.rule_id == "DIACRITICS" for f in client.check("[Continua na Parte 2 de 2...]", "pt"))
+    marker = CONTINUITY_MARKERS["pt"]["end"].format(next=2, total=2)
+    assert not client.check(marker, "pt")
+
+
 def test_backend_real_nao_trata_fleetingly_como_substantivo_antes_de_mentioned():
     client = LanguageToolClient({})
     text = "It was a normal message that I fleetingly mentioned to a roommate."

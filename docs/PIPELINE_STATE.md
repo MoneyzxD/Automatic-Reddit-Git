@@ -36,8 +36,35 @@ nunca escreve em production nem publica vídeo. A sonda real não força uma
 falha upstream; o estado starter é reproduzido no transporte dos testes.
 Essas provas são de armazenamento, não de recuperação editorial/publicação.
 
+Integração: main/2527f53. Run39483244524 terminou success, com1.371testes
+sem skips e restauração/validação real de production (86arquivos,13mídias).
+A comparação da seq201 com a seq187 preservou72arquivos imutáveis,95IDs
+confirmados e19rejeições. Isso valida o armazenamento, não geração nova.
+
+Run39483902319 executou somente PT, com Gemini e publicação habilitada. O
+checkpoint final chegou à seq207 sem o erro de persistência, preservando95IDs,
+19rejeições e zero vídeos novos na fila. Encerramento e hook injetado foram
+aprovados e preservados, mas split_part/parte1 terminou unavailable por timeout
+Gemini em três tentativas (contexto8411chars). Nenhum upload foi feito. Não
+classificar a persistência corrigida como publicação restaurada.
+
+O marcador PT que o splitter inseria, `[Continua na Parte 2 de 2...]`, também
+produz DIACRITICS crítico no LanguageTool6.6. A reprodução real falhou antes
+do reparo. A frase `[A história continua na parte 2 de 2.]` passa sem achados,
+mantendo número/próxima parte e sem alterar filtros ou regras gramaticais.
+Suíte completa após esse reparo:1.372testes aprovados, sem skips, usando o
+backend real local. Comparação seq207/seq201:77arquivos imutáveis,95IDs e
+19rejeições anteriores preservados; nenhuma rejeição nova.
+
+Timeout da revisão continua60s até medir a hipótese de latência com uma
+chamada diagnóstica de180s. Houve respostas reais concluídas em mais de60s
+no run; isso sustenta a investigação, não comprova o timeout novo. A sonda
+local reconstituiu exatamente8411chars e o hash do candidato, sem chamada
+externa. A revisão automática bloqueou o envio avulso ao Gemini por exigir
+autorização específica desse roteiro/contexto; autorização foi solicitada.
+
 As falhas dos dias18 e19 são distintas: Gemini429/resource_exhausted no
-encerramento PT e Gemini503 na tradução PT, respectivamente. O sucesso EN de
+encerramento PT e Gemini503 na tradução do título PT, respectivamente. O sucesso EN de
 17/10 não prova continuidade nem funcionamento dos três idiomas. Registros
 anteriores abaixo são históricos.
 
