@@ -317,7 +317,8 @@ jobs:
           GROQ_API_KEY_PT: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_PT || '' }}
           GROQ_API_KEY_EN: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_EN || '' }}
           GROQ_API_KEY_ES: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_ES || '' }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          # Candidato fixo desta branch de validação; main mantém sua seleção.
+          GEMINI_MODEL: gemini-3.5-flash-lite
           PIPELINE_GEMINI_CATALOG_ONLY: ${{ inputs.gemini_catalog_only }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
