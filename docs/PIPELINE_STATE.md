@@ -132,6 +132,10 @@ Teste do endpoint falhou antes da expansão;71testes de transporte/sondas
 passaram, incluindo HTTP503 com uma única chamada e logs sem conteúdo/chave.
 Após reiniciar/aquecer o LanguageTool local que estava desligado, a suíte
 completa passou1.386testes sem skips em242,31s; revisão sem Critical/Important.
+Run39534880373 confirmou uma chamada sintética real em20/10 às23h46 de
+São Paulo: gemini-3.5-flash-lite, HTTP200,0,84s, JSON completo, approved e
+zero achados. Não confirma disponibilidade contínua nem roteiro real, mídia
+ou upload. O modelo do cron continua3.8; próximo gate é geração PT isolada.
 
 O erro final da CLI agora inclui apenas code/http/mode/attempts tipificados
 quando disponíveis; outras indisponibilidades registram o tipo da exceção.
