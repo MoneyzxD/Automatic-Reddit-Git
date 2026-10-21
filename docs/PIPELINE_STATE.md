@@ -111,6 +111,28 @@ Dois testes falharam antes do ajuste no comando manual. Depois:70testes
 próximos e1.383da suíte completa passaram, sem skips, com LanguageTool real;
 revisão independente sem Critical/Important. Isso ainda não prova vídeo novo.
 
+Run39497046104 completou as seis tentativas e falhou corretamente com pt=0/1.
+As seis fontes foram recusadas na adaptação EN ou tradução PT por gramática,
+termos/tradução e gênero pendentes após reparos; não houve indisponibilidade
+semântica terminal nesse lote. Seq239 mantém95IDs,27rejeições fechadas,
+13mídias históricas e zero pendências. Comparação seq239/seq217:82arquivos
+imutáveis,95IDs e21rejeições anteriores preservados. Nenhum vídeo PT novo.
+OAuth local PT também renovou e channels.list confirmou o canal correto com
+HTTP200 em20/10; isso não confirma o Secret usado pelo runner nem um upload.
+
+Compatibilidade adicional: gemini-3.5-flash-lite entrou na allowlist, mantendo
+default/cron3.8. A documentação oficial confirma modalidade gratuita e saída
+estruturada ([modelo](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite),
+[gratuidade](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite)).
+diagnose_gemini_public usa uma única chamada com exemplo sintético fixo de
+jantar/agradecimento, sem fonte real, estado privado ou credencial YouTube.
+Não repete a sonda autorizada de1x6sq3x. Disponibilidade/JSON de exemplo não
+equivalem à qualidade do guardião nem autorizam migração automática do cron.
+Teste do endpoint falhou antes da expansão;71testes de transporte/sondas
+passaram, incluindo HTTP503 com uma única chamada e logs sem conteúdo/chave.
+Após reiniciar/aquecer o LanguageTool local que estava desligado, a suíte
+completa passou1.386testes sem skips em242,31s; revisão sem Critical/Important.
+
 O erro final da CLI agora inclui apenas code/http/mode/attempts tipificados
 quando disponíveis; outras indisponibilidades registram o tipo da exceção.
 Preserva código de saída2 e nunca imprime roteiro, contexto ou erro bruto.

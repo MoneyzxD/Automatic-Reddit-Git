@@ -48,6 +48,14 @@ def create(**kwargs):
                                              {"role": "user", "content": "Fonte literal."}], **kwargs)
 
 
+def test_flash_lite_35_usa_endpoint_fixo_sem_trocar_para_outro_modelo(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    calls = fake_transport(monkeypatch)
+    assert create().choices[0].message.content == "Texto completo."
+    assert len(calls) == 1 and calls[0][0].endswith("/models/gemini-3.5-flash-lite:generateContent")
+    assert calls[0][1]["json"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
+
+
 def test_selecao_nao_reutiliza_chave_groq_com_gemini_ausente(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY")
     monkeypatch.setenv("GROQ_API_KEY_EN", "groq-privado")

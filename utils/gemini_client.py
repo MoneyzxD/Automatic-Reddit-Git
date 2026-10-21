@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _LOCK = threading.Lock()
 _NEXT_REQUEST_AT: dict[str, float] = {}
 # Catálogo confirmado na documentação oficial; não inclui modelos só pagos.
-_FREE_MODELS = {"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.8-flash"}
+_FREE_MODELS = {"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.5-flash-lite", "gemini-3.8-flash"}
 
 
 class GeminiError(RuntimeError):
