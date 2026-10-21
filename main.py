@@ -397,7 +397,7 @@ TEST_STORY_MALE = {
 # ← AQUI você escolhe qual historia rodar com --test-story:
 # TEST_STORY = TEST_STORY_SHORT   # 1 parte  (~2 min)  — teste rapido
 # TEST_STORY = TEST_STORY_SPLIT   # 3 partes (~17 min) — teste do splitter
-TEST_STORY = TEST_STORY_MALE      # 1 parte  (~4-5 min) — narrador masculino, tema diferente (nao traicao/divorcio)
+TEST_STORY = TEST_STORY_SHORT     # Sonda curta desta branch; produção mantém a seleção anterior.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
