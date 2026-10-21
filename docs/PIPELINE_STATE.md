@@ -137,6 +137,24 @@ São Paulo: gemini-3.5-flash-lite, HTTP200,0,84s, JSON completo, approved e
 zero achados. Não confirma disponibilidade contínua nem roteiro real, mídia
 ou upload. O modelo do cron continua3.8; próximo gate é geração PT isolada.
 
+Esse gate foi exercitado na branch gemini-flash-lite-validation, sem upload:
+run39535288717 (3dc0d6b, namespacevalidation-gemini35-20261020) aprovou a
+adaptação EN, mas recusou a tradução PT de test_male_001 após três rodadas,
+incluindo termo grego persistente; seq5, zero mídia/IDs. Run39536562114
+(eaf8a40, namespacevalidation-gemini35-short-20261021) usou a fixture curta
+test_001 já existente. Também aprovou adaptação e recusou tradução após três
+rodadas, com achado language pendente; seq5, zero mídia/IDs. Os dois workflows
+terminaram success porque recusa de conteúdo não é indisponibilidade. Isso
+não é recuperação editorial ou publicação. Ambos os estados rejeitados
+permanecem fechados e separados de production/seq239 (95IDs/27rejeições).
+
+A branch de validação fixa3.5-flash-lite e escolhe TEST_STORY_SHORT; não
+integrar essa seleção de teste em main. Main conserva vars.GEMINI_MODEL ou
+3.8 como default e TEST_STORY_MALE. A variável de repositório não foi alterada.
+185testes próximos passaram antes da sonda curta; os runners passaram a
+suíte completa/LT. Disponibilidade em uma frase não justificou promoção do
+modelo: a qualidade das traduções ainda bloqueia estes casos completos.
+
 O erro final da CLI agora inclui apenas code/http/mode/attempts tipificados
 quando disponíveis; outras indisponibilidades registram o tipo da exceção.
 Preserva código de saída2 e nunca imprime roteiro, contexto ou erro bruto.
