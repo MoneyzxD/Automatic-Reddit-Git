@@ -25,7 +25,7 @@ better-profanity>=0.7.0  # detecção de profanidade (gratuito)
 jinja2>=3.1.0            # templates de metadados e scripts
 
 # ── Geração de voz ───────────────────────────────────────────────────────
-edge-tts>=6.1.9          # Microsoft Edge TTS gratuito (neural, sem auth)
+edge-tts>=7.3.1          # Protocolo v2: versões antigas falham com HTTP 403
 gTTS>=2.4.0              # Google TTS gratuito (fallback)
 
 # ── Legendas ─────────────────────────────────────────────────────────────

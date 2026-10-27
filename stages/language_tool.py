@@ -190,6 +190,16 @@ class LanguageToolClient:
                             for word in re.finditer(r"\bparentalidade\b", text, flags=re.IGNORECASE))):
                 logger.info("LanguageTool: vocábulo parentalidade preservado no léxico pt-BR")
                 continue
+            # Em 6.6, "valia" é lido como substantivo feminino neste contexto
+            # monetário, apesar de ser o verbo valer com sujeito "cada um".
+            # Só a ocorrência comprovada; preservar a regra e outros contextos.
+            if (key == "pt" and self._languages[key] == "pt-BR"
+                    and rule_id == "GENERAL_GENDER_AGREEMENT_ERRORS"
+                    and text[start:end].casefold() == "um valia"
+                    and re.search(r"\bcada[ \t]+$", text[:start], flags=re.IGNORECASE)
+                    and re.match(r"[ \t]+\d+(?:[.,]\d+)?[ \t]+dólares\b", text[end:], flags=re.IGNORECASE)):
+                logger.info("LanguageTool: leitura verbal de valia preservada no contexto monetário")
+                continue
             issues.append(LanguageIssue(rule_id, category, message, replacements, start, end, text[start:end], issue_type))
         return tuple(issues)
 

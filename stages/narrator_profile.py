@@ -60,11 +60,16 @@ def source_sha256(title: str, original_text: str) -> str:
 _AGE = re.compile(
     r"\b(?:I|me)\s*(?:,\s*|am\s+|['’]m\s*)?"
     r"(?:\(\s*(?P<age>\d{1,3})\s*(?P<suffix>[MF])\s*\)|"
-    r"\(?\s*(?P<prefix>[MF])\s*\d{1,3}\b\s*\)?)", re.IGNORECASE,
+    # Exige separação antes de M/F: "Im 15" não declara gênero masculino.
+    r"\(?\s*(?<!\w)(?P<prefix>[MF])\s*\d{1,3}\b\s*\)?)", re.IGNORECASE,
 )
 _IDENTITY = re.compile(
     r"\bI(?:\s+am|['’]m)\s+(?:a\s+)?(?:\d{1,3}[- ]year[- ]old\s+)?"
     r"(?P<gender>man|woman|male|female)\b", re.IGNORECASE,
+)
+_GROUP_IDENTITY = re.compile(
+    r"\bwe(?:\s+are|['’]re)\s+(?:two|both)\s+(?P<gender>men|women|dudes)\b",
+    re.IGNORECASE,
 )
 # A expansão preserva a aposição, inclusive parênteses, sem inserir "am".
 _EXPANDED_AGE = re.compile(
@@ -116,13 +121,20 @@ def _narrator_assertion(source: str, start: int, end: int) -> bool:
 
 def _explicit_evidence(source: str) -> list[NarratorEvidence]:
     evidence = []
-    for pattern in (_AGE, _IDENTITY, _EXPANDED_AGE):
+    for pattern in (_AGE, _IDENTITY, _EXPANDED_AGE, _GROUP_IDENTITY):
         for match in pattern.finditer(source):
             if not _narrator_assertion(source, match.start(), match.end()):
                 continue
+            if pattern is _GROUP_IDENTITY:
+                # "Nós dois" inclui o narrador, mas hipóteses e discurso
+                # indireto não são autoidentificação factual do grupo.
+                before = re.split(r"[.!?;\n]", source[:match.start()])[-1]
+                if re.search(r"\b(?:if|whether|suppose|imagine|wish|hope|maybe|asked|asking|said|say|says|saying|told)\b",
+                             before, flags=re.IGNORECASE):
+                    continue
             groups = match.groupdict()
             gender = groups.get("gender") or groups.get("suffix") or groups.get("prefix")
-            gender = "female" if gender.lower() in {"f", "woman", "female"} else "male"
+            gender = "female" if gender.lower() in {"f", "woman", "women", "female"} else "male"
             evidence.append(NarratorEvidence(
                 "explicit", match.group(), match.start(), gender, 1.0, "narrator", "rules",
             ))

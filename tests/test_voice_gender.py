@@ -1,3 +1,4 @@
+import json
 from unittest.mock import Mock
 
 import pytest
@@ -73,6 +74,28 @@ def test_force_gtts_respeita_permissao_explicita(allowed, monkeypatch, tmp_path)
     monkeypatch.setattr(voice, "_gtts_generate", gtts)
     assert voice.generate("Texto", "pt", tmp_path / "voz.mp3", narrator_gender="male") is False
     assert gtts.call_count == int(allowed)
+
+
+@pytest.mark.parametrize("timings", [
+    [{"word": "Texto", "start": 0.45, "duration": 0.6}],
+    [],
+])
+def test_gtts_autorizado_exige_tempos_do_audio(timings, monkeypatch, tmp_path):
+    voice = VoiceGenerator({**CONFIG, "force_gtts": True,
+                            "allow_uncontrolled_gender_fallback": True})
+    audio_path = tmp_path / "voz.mp3"
+    monkeypatch.setattr(voice, "_gtts_generate", Mock(return_value=True))
+    transcriber = Mock(return_value=timings)
+    monkeypatch.setattr("stages.voice.extract_word_timestamps_whisper", transcriber,
+                        raising=False)
+
+    assert voice.generate("Texto", "pt", audio_path, narrator_gender="female") is bool(timings)
+    transcriber.assert_called_once_with(audio_path, language="pt", reference_text="Texto")
+    json_path = voice.get_boundaries_path(audio_path)
+    if timings:
+        assert json.loads(json_path.read_text(encoding="utf-8")) == timings
+    else:
+        assert not json_path.exists()
 
 
 def test_batch_valida_todas_as_partes_antes_de_gerar(monkeypatch, tmp_path):

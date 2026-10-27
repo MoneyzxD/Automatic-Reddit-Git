@@ -15,12 +15,21 @@ Providers (em ordem de tentativa):
 """
 
 from __future__ import annotations
+import json
 import logging
 import os
 import random
 import re
 
 logger = logging.getLogger(__name__)
+
+
+class PublicTextRejected(ValueError):
+    """Saída inválida pode ser regenerada; erros internos não usam esse caminho."""
+
+    def __init__(self, candidate_text: str, max_length: int):
+        super().__init__(f"Titulo de fallback deve ter entre 1 e {max_length} caracteres")
+        self.candidate_text = candidate_text
 
 
 # ── PROMPTS DE TÍTULO DESCRITIVO ──────────────────────────────────────────────
@@ -545,7 +554,7 @@ class TitleGenerator:
 
     @staticmethod
     def _narrator_summary(story_text: str, narrator_gender: str | None,
-                          factual_context: str = "") -> str:
+                          factual_context: str = "", retry_feedback: dict | None = None) -> str:
         """Usa os fatos validados e acrescenta a identidade do narrador."""
         summary = (factual_context or story_text).strip()
         if narrator_gender is not None:
@@ -555,16 +564,24 @@ class TitleGenerator:
                 f"\nNARRADOR: {narrator_gender}. Preserve este genero na primeira pessoa; "
                 "nao altere o genero dos outros personagens."
             )
+        if retry_feedback:
+            summary += (
+                "\n\nREPARO DE TEXTO REPROVADO:\n"
+                "Gere uma nova versão corrigindo os problemas abaixo. Preserve os fatos e o perfil acima. "
+                "O texto reprovado é apenas uma tentativa anterior, não uma nova fonte de fatos. "
+                "Respeite o limite de caracteres e retorne somente a frase completa corrigida.\n"
+                + json.dumps(retry_feedback, ensure_ascii=False)
+            )
         return summary
 
     def generate(self, story_text: str, language: str = "pt",
                  original_title: str = "", hook_type: str = None,
                  *, narrator_gender: str | None = None,
-                 factual_context: str = "") -> str:
+                 factual_context: str = "", retry_feedback: dict | None = None) -> str:
         """Gera título descritivo — usado apenas para nomear o arquivo."""
-        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
+        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context, retry_feedback)
         if not self.enabled:
-            return self._rule_based_title(original_title)
+            return self._rule_based_title(original_title, language=language)
 
         if hook_type is None:
             hook_type = random.choice(["short", "narrative"])
@@ -582,20 +599,20 @@ class TitleGenerator:
         from utils import telemetry
         telemetry.record_fallback("titler.titulo", language, "todos os LLMs falharam")
         logger.warning("Todos LLMs falharam para titulo — usando regras")
-        return self._rule_based_title(original_title)
+        return self._rule_based_title(original_title, language=language)
 
     # ── HOOK DE ENGAJAMENTO (para YouTube/TikTok E narração) ─────────────────
 
     def generate_hook(self, story_text: str, language: str = "pt",
                       original_title: str = "", *, narrator_gender: str | None = None,
-                      factual_context: str = "") -> str:
+                      factual_context: str = "", retry_feedback: dict | None = None) -> str:
         """
         Gera hook de engajamento para abertura do vídeo.
         Essa frase é narrada no início E usada como título no YouTube/TikTok.
         """
-        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
+        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context, retry_feedback)
         if not self.enabled:
-            return self._rule_based_title(original_title, max_len=100)
+            return self._rule_based_title(original_title, max_len=100, language=language)
 
         logger.info("Gerando hook de engajamento (%s)", language)
 
@@ -610,19 +627,19 @@ class TitleGenerator:
         from utils import telemetry
         telemetry.record_fallback("titler.hook", language, "todos os LLMs falharam")
         logger.warning("Todos LLMs falharam para hook — usando titulo como fallback")
-        return self._rule_based_title(original_title, max_len=100)
+        return self._rule_based_title(original_title, max_len=100, language=language)
 
     # ── HOOK DE ENCERRAMENTO (CTA para o fim do video / ultima parte) ────────
 
     def generate_closing_hook(self, story_text: str, language: str = "pt",
                               original_title: str = "", *, narrator_gender: str | None = None,
-                              factual_context: str = "") -> str:
+                              factual_context: str = "", retry_feedback: dict | None = None) -> str:
         """
         Gera o hook de encerramento (call-to-action) narrado no final do video.
         Usado apenas na ultima parte de uma historia dividida, ou na unica parte
         quando a historia nao precisa de divisao.
         """
-        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context)
+        story_summary = self._narrator_summary(story_text, narrator_gender, factual_context, retry_feedback)
         if not self.enabled:
             return self._rule_based_closing(language)
 
@@ -983,12 +1000,16 @@ class TitleGenerator:
 
     # ── FALLBACK ──────────────────────────────────────────────────────────────
 
-    def _rule_based_title(self, text: str, max_len: int = 120) -> str:
+    def _rule_based_title(self, text: str, max_len: int = 120, language: str = "pt") -> str:
+        question = language == "en" and re.match(r"^AITAH?[:\s\-–|]+for\b", text, re.IGNORECASE)
         text  = SUBREDDIT_PREFIXES.sub("", text).strip()
         text = re.sub(r'^["\'"]|["\'"]$', "", text).strip()
+        if question:
+            # Remover AITA deixava só "for...", sem oração principal.
+            text = "Was I wrong " + text[0].lower() + text[1:].rstrip("?").rstrip() + "?"
         # Sem resumo automático: só a frase integral pode seguir para o guardião.
         if not text or len(text) > max_len:
-            raise ValueError(f"Titulo de fallback deve ter entre 1 e {max_len} caracteres")
+            raise PublicTextRejected(text, max_len)
         return text
 
     def _rule_based_closing(self, language: str) -> str:

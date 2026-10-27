@@ -196,6 +196,171 @@ def test_sem_necessidade_de_reparo_dirigido_nao_consume_chamada_extra(tmp_path, 
     assert not any(c["mode"] == "language" for c in calls)
 
 
+@pytest.mark.parametrize("other_patch", [False, True])
+def test_achado_semantico_sem_correcao_recebe_reparo_dirigido(tmp_path, other_patch):
+    original = "Meu pai diz que eu estava certo em dizer não."
+    corrected = original.replace("certo", "certa")
+    candidate = original + (" Estou errada.." if other_patch else "")
+    calls, checked = [], []
+
+    class LT:
+        def health(self, **kwargs):
+            return SimpleNamespace(version="6.6", locales=("pt-BR", "en-US", "es"))
+        def check(self, text, language):
+            checked.append(text)
+            return ()
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            if context["mode"] == "facts":
+                return json.dumps({"facts": []})
+            text = context["candidate_text"]
+            issues = []
+            if original in text:
+                issues.append(grammar_patch("estava certo", "estava certa") if context["mode"] == "language"
+                              else grammar_patch(original, ""))
+            if "errada.." in text and context["mode"] != "language":
+                issues.append(grammar_patch("errada..", "errada."))
+            return json.dumps({"approved": not issues, "issues": issues})
+
+    guardian = ScriptGuardian({}, base_dir=tmp_path, languagetool=LT(), semantic_reviewer=Reviewer())
+    profile = NarratorProfile("pf", "s", "female", "female", 1.0, "explicit", (), "1")
+    result = guardian.review_and_fix(source_text="I am a woman. Dad says I was right to refuse.",
+        candidate_text=candidate, language="pt", stage="translation", story_id="s", profile=profile)
+    expected = candidate.replace(original, corrected).replace("errada..", "errada.")
+    assert result.status == "approved" and result.approved_text == expected
+    focused = [call for call in calls if call["mode"] == "language"]
+    assert len(focused) == 1 and focused[0]["candidate_text"].strip() == original
+    assert checked == [candidate, expected]
+    assert [call["mode"] for call in calls[-2:]] == ["chunk", "global"]
+    assert all(call["candidate_text"] == expected for call in calls[-2:])
+
+
+def test_achado_semantico_ambiguo_nao_inventa_ancora_para_reparo(tmp_path, monkeypatch):
+    # Isola só a ancoragem semântica; o CI exige LT mesmo se a configuração o desabilitar.
+    monkeypatch.delenv("LANGUAGETOOL_REQUIRED", raising=False)
+    monkeypatch.delenv("PIPELINE_ENV", raising=False)
+    calls = []
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            if context["mode"] == "facts":
+                return json.dumps({"facts": []})
+            return json.dumps({"approved": False, "issues": [grammar_patch("certo", "")]})
+    guardian = ScriptGuardian({"languagetool_enabled": False, "languagetool_required": False}, base_dir=tmp_path,
+                              semantic_reviewer=Reviewer())
+    profile = NarratorProfile("pf", "s", "female", "female", 1.0, "explicit", (), "1")
+    with pytest.raises(QualityRejected):
+        guardian.review_and_fix(source_text="Dad says I was right.", candidate_text="Certo, certo, certo.",
+            language="pt", stage="translation", story_id="s", profile=profile)
+    assert not any(call["mode"] == "language" for call in calls)
+
+
+@pytest.mark.parametrize("outcome", ["approved", "rejected", "unavailable", "persistent"])
+def test_virgula_pt_sem_proposta_do_llm_e_candidata_revisada(tmp_path, outcome):
+    # Trecho do incidente real 1xebjyt: só a segunda ocorrência recebeu o achado.
+    text = ("Ela disse que só tem $50 na conta dela. Eu disse a ela que não posso "
+            "me dar ao luxo de pagar todas as despesas dela quando formos para Nova York.")
+    start = text.index("dela quando")
+    corrected = text[:start] + text[start:].replace("dela quando", "dela, quando", 1)
+    calls, checked = [], []
+
+    class LT:
+        def health(self, **kwargs):
+            return SimpleNamespace(version="6.6", locales=("pt-BR", "en-US", "es"))
+
+        def check(self, candidate, language):
+            checked.append(candidate)
+            if candidate == text or outcome == "persistent":
+                return (LanguageIssue("VERB_COMMA_CONJUNCTION", "PUNCTUATION", "Separe com vírgulas.",
+                    ("dela,",), start, start + 4, "dela"),)
+            return ()
+
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            if context["mode"] == "facts":
+                return json.dumps({"facts": []})
+            if context["candidate_text"] == corrected and context["mode"] == "global":
+                if outcome == "unavailable":
+                    raise TimeoutError()
+                if outcome == "rejected":
+                    return json.dumps({"approved": False, "issues": [grammar_patch("dela,", "")]})
+            return json.dumps({"approved": True, "issues": []})
+
+    guardian = ScriptGuardian({"semantic_max_attempts": 1}, base_dir=tmp_path,
+        languagetool=LT(), semantic_reviewer=Reviewer())
+    profile = NarratorProfile("pf", "1xebjyt", "female", "female", 0.0, "stable_tiebreak", (), "1")
+    args = dict(source_text="I cannot afford all her expenses when we go to New York.",
+        candidate_text=text, language="pt", stage="translation", story_id="1xebjyt", profile=profile)
+    if outcome == "approved":
+        result = guardian.review_and_fix(**args)
+        assert result.approved_text == corrected and result.attempts == 2
+        assert len(result.patches) == 1 and result.patches[0].start == start
+        assert checked == [text, corrected]
+        assert [call["mode"] for call in calls[-2:]] == ["chunk", "global"]
+        assert all(call["candidate_text"] == corrected for call in calls[-2:])
+    else:
+        with pytest.raises(QualityUnavailable if outcome == "unavailable" else QualityRejected):
+            guardian.review_and_fix(**args)
+
+
+def test_virgula_so_do_incidente_en_testa_sugestao_sem_mudar_palavras(tmp_path):
+    text = "She wants to stay in an all‑inclusive family hotel for seven days so the child can have entertainment."
+    corrected = text.replace(" so", ", so")
+    checked, calls = [], []
+    class LT:
+        def health(self, **kwargs):
+            return SimpleNamespace(version="6.6", locales=("pt-BR", "en-US", "es"))
+        def check(self, candidate, language):
+            checked.append(candidate)
+            if candidate == text:
+                start = candidate.index(" so")
+                return (LanguageIssue("COMMA_COMPOUND_SENTENCE_2", "PUNCTUATION", "Use a comma before so.",
+                    (", so",), start, start+3, " so"),)
+            return ()
+    class Reviewer:
+        def review(self, **context):
+            calls.append(context)
+            return json.dumps({"facts": []} if context["mode"] == "facts"
+                              else {"approved": True, "issues": []})
+    guardian = ScriptGuardian({}, base_dir=tmp_path, languagetool=LT(), semantic_reviewer=Reviewer())
+    profile = NarratorProfile("pf", "1wv6wzv", "female", "female", 1.0, "explicit", (), "1")
+    result = guardian.review_and_fix(source_text=text, candidate_text=text, language="en",
+        stage="adaptation", story_id="1wv6wzv", profile=profile)
+    assert result.status == "approved" and result.approved_text == corrected
+    assert checked == [text, corrected] and result.attempts == 2
+    assert [c["mode"] for c in calls[-2:]] == ["chunk", "global"]
+
+
+@pytest.mark.parametrize("language,rule,replacement,repairs", [
+    ("pt", "VERB_COMMA_CONJUNCTION", "dela,", 0),
+    ("en", "VERB_COMMA_CONJUNCTION", "dela,", 3),
+    ("pt", "OTHER", "dela,", 3),
+    ("pt", "VERB_COMMA_CONJUNCTION", "dele,", 3),
+    ("pt", "VERB_COMMA_CONJUNCTION", "dela?", 3),
+])
+def test_candidata_de_virgula_nao_amplia_regra_idioma_conteudo_ou_orcamento(
+        tmp_path, language, rule, replacement, repairs):
+    class LT:
+        def health(self, **kwargs):
+            return SimpleNamespace(version="6.6", locales=("pt-BR", "en-US", "es"))
+        def check(self, text, language):
+            return (LanguageIssue(rule, "PUNCTUATION", "Vírgula.", (replacement,), 0, 4, "dela"),)
+    class Reviewer:
+        def review(self, **context):
+            return json.dumps({"facts": []} if context["mode"] == "facts"
+                              else {"approved": True, "issues": []})
+    guardian = ScriptGuardian({"max_repair_attempts": repairs}, base_dir=tmp_path,
+        languagetool=LT(), semantic_reviewer=Reviewer())
+    profile = NarratorProfile("pf", "s", "female", "female", 1.0, "explicit", (), "1")
+    with pytest.raises(QualityRejected) as caught:
+        guardian.review_and_fix(source_text="Her expenses.", candidate_text="dela quando formos.",
+            language=language, stage="translation", story_id="s", profile=profile)
+    assert caught.value.review.approved_text == "dela quando formos."
+
+
 @pytest.mark.parametrize("mode", ["chunk", "global", "language"])
 def test_achados_repetidos_chegam_ancorados_aos_blocos_nativos(monkeypatch, mode):
     from utils import environment, llm_client

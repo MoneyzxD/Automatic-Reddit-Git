@@ -4,6 +4,41 @@ from types import SimpleNamespace
 
 import pytest
 
+
+@pytest.mark.parametrize("text,expected", [
+    ("I went to a cafe with Steve, just me and him, we're two dudes both 44m.", "male"),
+    ("We're both women, and we went to a cafe.", "female"),
+    ('Steve said: "We are two men." I stayed home.', "unknown"),
+    ("If we're two men, would that change anything?", "unknown"),
+    ("I don't think we're both men.", "unknown"),
+    ("People say we're both women.", "unknown"),
+    ("People keep saying we're both women.", "unknown"),
+    ("We are two nurses.", "unknown"),
+    ("We're not both men.", "unknown"),
+])
+def test_identidade_de_grupo_inclui_narrador_sem_inferir_profissao(text, expected):
+    from stages.narrator_profile import NarratorProfileResolver
+    profile = NarratorProfileResolver({}, semantic_enabled=False).resolve(
+        story_id="group-identity", title="Cafe", original_text=text)
+    assert profile.source_gender == expected
+    if expected != "unknown":
+        assert profile.narration_gender == expected and profile.decision_method == "explicit"
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Im 15 weeks pregnant.", "unknown"),
+    ("Im 28 years old.", "unknown"),
+    ("I M15 live here.", "male"),
+    ("I, M15, live here.", "male"),
+    ("I (15M) live here.", "male"),
+    ("I am F28 and work here.", "female"),
+])
+def test_im_sem_apostrofo_nao_vira_marcador_masculino(text, expected):
+    from stages.narrator_profile import NarratorProfileResolver
+    profile = NarratorProfileResolver({}, semantic_enabled=False).resolve(
+        story_id="im-not-male", title="Work", original_text=text)
+    assert profile.source_gender == expected
+
 from stages.gender_detector import GenderDetector
 from stages.narrator_profile import (
     NarratorEvidence, NarratorProfileResolver, load_profile, save_profile,

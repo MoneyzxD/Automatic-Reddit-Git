@@ -216,10 +216,24 @@ class ScriptTranslator:
             return None
 
     def _translate_chunk_gemini(self, chunk: str, source: str, target: str) -> str | None:
+        return self._translate_chunk_llm(chunk, source, target)
+
+    def _llm_translation_provider(self) -> str | None:
+        provider = env.llm_provider()
+        if provider == "gemini":
+            return "Gemini"
+        if provider == "groq" and self.config.get("groq_translation") is True:
+            return "Groq"
+        return None
+
+    def _translate_chunk_llm(self, chunk: str, source: str, target: str) -> str | None:
         """Tradução direta; preserva sentinelas, fatos e o contrato de idioma local."""
         from utils.llm_client import tracked_llm
         from utils.gemini_client import GeminiError
+        provider = self._llm_translation_provider() or "LLM"
         try:
+            options = ({"model": self.config.get("groq_model", "qwen/qwen3.8-27b")}
+                       if provider == "Groq" else {})
             response = tracked_llm(env.llm_api_key(target), "translator", timeout=60).chat.completions.create(
                 messages=[
                     {"role": "system", "content": (
@@ -232,12 +246,15 @@ class ScriptTranslator:
                         "Não traduzir os marcadores; o código os restaura depois."
                     )},
                     {"role": "user", "content": chunk},
-                ], temperature=0, max_tokens=4096,
+                ], temperature=0, max_tokens=2048 if provider == "Groq" else 4096, **options,
             )
+            if provider == "Groq" and getattr(response.choices[0], "finish_reason", None) != "stop":
+                logger.warning("Tradução Groq incompleta (%s→%s)", source, target)
+                return None
             return response.choices[0].message.content
         except Exception as error:
             detail = str(error) if isinstance(error, GeminiError) else type(error).__name__
-            logger.warning("Gemini falhou na tradução (%s→%s): %s", source, target, detail)
+            logger.warning("%s falhou na tradução (%s→%s): %s", provider, source, target, detail)
             return None
 
     @staticmethod
@@ -378,12 +395,13 @@ class ScriptTranslator:
         waits = self.config.get("retry_waits", self.TRANSLATE_RETRY_ESPERA)
         last_status = "unavailable"
         last_error = "Provedores indisponíveis"
-        gemini = env.llm_provider() == "gemini"
-        methods = (("Gemini", self._translate_chunk_gemini),) if gemini else (
+        llm_provider = self._llm_translation_provider()
+        llm_method = self._translate_chunk_gemini if llm_provider == "Gemini" else self._translate_chunk_llm
+        methods = ((llm_provider, llm_method),) if llm_provider else (
             ("Google", self._translate_chunk_google), ("MyMemory", self._translate_chunk_mymemory))
         # O cliente Gemini já controla até duas tentativas com espera limitada.
         # Não empilhar o retry legado nem alternar provedores após erro/recusa.
-        for attempt in range(1 if gemini else self.TRANSLATE_MAX_TENTATIVAS):
+        for attempt in range(1 if llm_provider else self.TRANSLATE_MAX_TENTATIVAS):
             if attempt:
                 time.sleep(waits[attempt - 1])
             for provider, method in methods:
@@ -415,7 +433,7 @@ class ScriptTranslator:
             protected = self.glossary.prepare(text, source, target)
         except GlossaryIntegrityError as exc:
             return TranslationResult("rejected", None, None, source_lang, target_lang, (), str(exc))
-        limit = self.CHUNK_SIZE if env.llm_provider() == "gemini" else self.MYMEMORY_CHUNK_SIZE
+        limit = self.CHUNK_SIZE if self._llm_translation_provider() else self.MYMEMORY_CHUNK_SIZE
         chunks = self._split_chunks(protected.text, chunk_size=limit)
         results = []
         for index, chunk in enumerate(chunks):
@@ -468,8 +486,8 @@ class ScriptTranslator:
             cache_path = script_path.with_suffix(".cache.json")
             expected = {"source_sha256": source_hash, "source_lang": source_key,
                         "target_lang": lang_key, "glossary_version": self.glossary.version}
-            if env.llm_provider() == "gemini":
-                expected["translation_provider"] = "Gemini"
+            if self._llm_translation_provider():
+                expected["translation_provider"] = self._llm_translation_provider()
             if not force and script_path.is_file() and cache_path.is_file():
                 try:
                     metadata = json.loads(cache_path.read_text(encoding="utf-8"))

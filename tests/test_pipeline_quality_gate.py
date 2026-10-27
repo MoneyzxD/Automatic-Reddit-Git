@@ -145,7 +145,7 @@ def pipeline(monkeypatch, tmp_path):
                         lambda self, text, source, target: localized[target] + " ERRADO.")
     monkeypatch.setattr(translator.ScriptTranslator, "_translate_chunk_mymemory", lambda *args: None)
     monkeypatch.setattr(naturalizer.ScriptNaturalizer, "_groq_rewrite",
-                        lambda self, text, language, gender: text + " Pensei ERRADO.")
+                        lambda self, text, language, gender, **kwargs: text + " Pensei ERRADO.")
     for name in ("_groq_title", "_groq_hook", "_groq_closing"):
         monkeypatch.setattr(titler.TitleGenerator, name, lambda *args: "Minha irmã disse ERRADO?")
     monkeypatch.setattr(metadata.MetadataGenerator, "_description_via_groq",
@@ -272,6 +272,157 @@ def test_metadados_reprovados_impedem_audio_render_export_e_fila(pipeline):
     assert report["stage"] == "metadata"
     assert report["profile_id"]
     assert report["source_sha256"]
+
+
+@pytest.mark.parametrize("stage,method", [
+    ("title", "generate"), ("opening_hook", "generate_hook"),
+    ("closing_hook", "generate_closing_hook"),
+])
+def test_texto_publico_reprovado_e_regenerado_com_motivo_antes_da_midia(
+    pipeline, monkeypatch, stage, method,
+):
+    from stages import titler
+
+    rejected = "for refusing to lend money to my sister after she insulted my job"
+    corrected = "Was I wrong to refuse my sister a loan after she insulted my job?"
+    pipeline.fail, pipeline.fail_text = stage, rejected
+    generations = []
+
+    def generate(self, **kwargs):
+        generations.append(kwargs)
+        assert not pipeline.audios
+        return corrected if kwargs.get("retry_feedback") else rejected
+
+    monkeypatch.setattr(titler.TitleGenerator, method, generate)
+    main.run_pipeline(pipeline.config, ["en"], test_story=True)
+
+    assert len(generations) == 2
+    feedback = generations[1]["retry_feedback"]
+    assert feedback["rejected_text"] == rejected
+    assert feedback["issues"][0]["message"] == "Checkpoint sintético reprovado"
+    assert generations[0]["story_text"] == generations[1]["story_text"]
+    assert generations[0]["narrator_gender"] == generations[1]["narrator_gender"]
+    assert len(pipeline.audios) == 1
+    assert rejected not in pipeline.audios[0][0]
+    reviewed = [c["candidate_text"] for c in pipeline.calls if c["stage"] == stage]
+    assert rejected in reviewed and corrected in reviewed
+
+
+def test_regeneracao_publica_tem_limite_e_nao_aprova_repeticao(pipeline, monkeypatch):
+    from stages import titler
+
+    rejected = "for refusing to lend money to my sister after she insulted my job"
+    pipeline.fail, pipeline.fail_text = "opening_hook", rejected
+    generations = []
+
+    def generate(self, **kwargs):
+        generations.append(kwargs)
+        return rejected
+
+    monkeypatch.setattr(titler.TitleGenerator, "generate_hook", generate)
+    main.run_pipeline(pipeline.config, ["en"], test_story=True)
+
+    assert len(generations) == 3
+    assert pipeline.audios == pipeline.renders == []
+    report = json.loads((pipeline.root / "data/quarantine/s1/en_opening_hook.json").read_text(encoding="utf-8"))
+    assert report["review"]["status"] == "rejected"
+
+
+@pytest.mark.parametrize("mode", ["repair", "reject", "unavailable"])
+def test_naturalizacao_recusada_regenera_so_essa_etapa_com_limite(pipeline, monkeypatch, mode):
+    from stages.naturalizer import ScriptNaturalizer
+    rejected = "CANDIDATA BLOQUEADA."
+    corrected = "Eu trabalho como enfermeira e recusei emprestar dinheiro à minha irmã."
+    pipeline.fail, pipeline.fail_text = "naturalization", rejected
+    pipeline.outage = mode == "unavailable"
+    generations = []
+
+    def rewrite(self, text, language, gender, *, retry_feedback=None):
+        generations.append((text, language, gender, retry_feedback))
+        assert not pipeline.audios
+        return corrected if mode == "repair" and retry_feedback else rejected
+
+    monkeypatch.setattr(ScriptNaturalizer, "_groq_rewrite", rewrite)
+    if mode == "unavailable":
+        with pytest.raises(QualityUnavailable):
+            main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    else:
+        main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    assert len(generations) == {"repair": 2, "reject": 3, "unavailable": 1}[mode]
+    assert len({g[:3] for g in generations}) == 1
+    if mode == "repair":
+        assert generations[1][3]["rejected_text"] == rejected
+        assert generations[1][3]["issues"][0]["message"] == "Checkpoint sintético reprovado"
+        assert len(pipeline.audios) == 1 and rejected not in pipeline.audios[0][0]
+        assert any(c["stage"] == "naturalization" and c["candidate_text"] == corrected for c in pipeline.calls)
+    else:
+        assert pipeline.audios == pipeline.renders == []
+
+
+def test_indisponibilidade_na_revisao_nao_regenera_texto_publico(pipeline, monkeypatch):
+    from stages import titler
+
+    pipeline.fail, pipeline.outage = "opening_hook", True
+    generate = Mock(return_value="Minha irmã disse APROVADO?")
+    monkeypatch.setattr(titler.TitleGenerator, "generate_hook", generate)
+    with pytest.raises(QualityUnavailable):
+        main.run_pipeline(pipeline.config, ["en"], test_story=True)
+    assert generate.call_count == 1
+    assert pipeline.audios == pipeline.renders == []
+
+
+@pytest.mark.parametrize("initial_invalid", [False, True])
+def test_saida_fora_do_limite_durante_regeneracao_continua_no_orcamento(
+    pipeline, monkeypatch, initial_invalid,
+):
+    from stages import titler
+
+    rejected = "for refusing to lend money to my sister after she insulted my job"
+    corrected = "Was I wrong to refuse my sister a loan?"
+    pipeline.fail, pipeline.fail_text = "opening_hook", rejected
+    generations = []
+
+    def generate(self, **kwargs):
+        generations.append(kwargs)
+        index = len(generations)
+        if index == (1 if initial_invalid else 2):
+            raise titler.PublicTextRejected("A" * 101, 100)
+        if index == 1:
+            return rejected
+        return corrected
+
+    monkeypatch.setattr(titler.TitleGenerator, "generate_hook", generate)
+    main.run_pipeline(pipeline.config, ["en"], test_story=True)
+
+    assert len(generations) == (2 if initial_invalid else 3)
+    assert "100" in generations[-1]["retry_feedback"]["issues"][0]["message"]
+    assert generations[-1]["retry_feedback"]["rejected_text"] == "A" * 101
+    assert len(pipeline.audios) == 1
+    assert pipeline.audios[0][0].startswith(corrected)
+
+
+def test_limite_publico_persistente_esgota_orcamento_sem_midia(pipeline, monkeypatch):
+    from stages import titler
+
+    generate = Mock(side_effect=titler.PublicTextRejected("A" * 101, 100))
+    monkeypatch.setattr(titler.TitleGenerator, "generate_hook", generate)
+    main.run_pipeline(pipeline.config, ["en"], test_story=True)
+    assert generate.call_count == 3
+    assert pipeline.audios == pipeline.renders == []
+    assert (pipeline.root / "data/quarantine/s1/en_opening_hook.json").exists()
+
+
+def test_erro_interno_da_regeneracao_nao_vira_recusa_de_conteudo(pipeline, monkeypatch):
+    from stages import titler
+
+    rejected = "for refusing to lend money to my sister after she insulted my job"
+    pipeline.fail, pipeline.fail_text = "opening_hook", rejected
+    generate = Mock(side_effect=[rejected, ValueError("Erro interno sintético")])
+    monkeypatch.setattr(titler.TitleGenerator, "generate_hook", generate)
+    with pytest.raises(ValueError, match="Erro interno sintético"):
+        main.run_pipeline(pipeline.config, ["en"], test_story=True)
+    assert generate.call_count == 2
+    assert pipeline.audios == pipeline.renders == []
 
 
 def test_retomada_nao_gera_pt_duas_vezes(pipeline):

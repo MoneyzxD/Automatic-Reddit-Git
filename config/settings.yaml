@@ -140,6 +140,10 @@ naturalizer:
   groq_model: openai/gpt-oss-120b      # reescrita viral — precisa do modelo grande
   ollama_url: http://localhost:11434/api/generate
   ollama_model: llama3.2
+translator:
+  # Tradução direta já validada no teste PT; Gemini mantém seu caminho próprio.
+  groq_translation: true
+  groq_model: qwen/qwen3.8-27b
 narrator_profile:
   enabled: true
   groq_model: openai/gpt-oss-20b

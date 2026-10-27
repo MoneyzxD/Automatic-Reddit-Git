@@ -1,14 +1,14 @@
 """
 word_timing.py
 ==============
-Gera audio via edge-tts v7.x e extrai timestamps word-level reais
-usando faster-whisper com CUDA.
+Gera audio via edge-tts v7.x e conserva os timestamps reais da voz.
 
 Arquitetura:
     PRIMARIO:  edge-tts v7.x  -> voz natural PT-BR/ES/EN
-    TIMING:    faster-whisper -> timestamps reais por palavra (CUDA)
+    TIMING:    WordBoundary do edge-tts -> tempos reais por palavra
+    ALTERNATIVA: faster-whisper CUDA -> CPU quando os tempos nativos faltarem
     VOZ:       VoiceGenerator controla alternativas e permissão de gTTS
-    FALLBACK2: estimativa     -> se whisper tambem falhar
+    Sem tempos reais, a geração de mídia falha em vez de estimar sincronização.
 
 Estilo ASS:
     - Palavra por palavra, centralizada
@@ -25,6 +25,7 @@ import asyncio
 import difflib
 import json
 import logging
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -135,13 +136,24 @@ async def _generate_audio_edge_tts(
         logger.error("edge-tts nao instalado: pip install edge-tts")
         return False
 
-    audio_chunks = []
+    audio_chunks, boundaries = [], []
+    boundaries_path = audio_path.with_name(audio_path.stem + "_boundaries.json")
 
     try:
-        communicate = edge_tts.Communicate(text, voice, rate=rate, pitch="+0Hz")
+        # O JSON anterior pode conter estimativas de outro áudio com o mesmo nome.
+        boundaries_path.unlink(missing_ok=True)
+        communicate = edge_tts.Communicate(text, voice, rate=rate, pitch="+0Hz", boundary="WordBoundary")
         async for chunk in communicate.stream():
             if chunk.get("type") == "audio":
                 audio_chunks.append(chunk["data"])
+            elif chunk.get("type") == "WordBoundary":
+                start, duration = float(chunk["offset"]) / 10_000_000, float(chunk["duration"]) / 10_000_000
+                word = chunk["text"].strip()
+                if (not word or not math.isfinite(start) or not math.isfinite(duration)
+                        or start < 0 or duration <= 0 or (boundaries and start < boundaries[-1]["start"])):
+                    raise ValueError("Tempos de palavras inválidos no serviço de voz")
+                boundaries.append({"word": word, "start": start, "duration": duration,
+                                   "timing_source": "edge_tts"})
 
         if not audio_chunks:
             logger.error("edge-tts nao retornou audio")
@@ -151,6 +163,9 @@ async def _generate_audio_edge_tts(
         with open(audio_path, "wb") as f:
             for chunk in audio_chunks:
                 f.write(chunk)
+        if boundaries:
+            save_word_boundaries(boundaries, boundaries_path)
+            logger.info("Tempos nativos do edge-tts: %d palavras", len(boundaries))
 
         logger.info("Audio gerado via edge-tts: %s", audio_path.name)
         return True
@@ -266,6 +281,18 @@ def _repair_corrupted_words(word_boundaries: list, reference_text: str) -> list:
     return word_boundaries
 
 
+def _transcribe_word_boundaries(model, audio_path: Path, whisper_lang: str) -> list:
+    """Consome toda a transcrição; falha tardia descarta tempos parciais."""
+    segments, _ = model.transcribe(
+        str(audio_path), language=whisper_lang, word_timestamps=True,
+        vad_filter=True, vad_parameters=dict(min_silence_duration_ms=300),
+    )
+    return [{"word": word.word.strip(), "start": float(word.start),
+             "duration": max(0.10, float(word.end) - float(word.start))}
+            for segment in segments if segment.words is not None
+            for word in segment.words if word.word.strip()]
+
+
 def extract_word_timestamps_whisper(
     audio_path: Path,
     language: str = "pt",
@@ -279,6 +306,7 @@ def extract_word_timestamps_whisper(
 
     language: "pt" | "en" | "es"
     """
+    global _whisper_model
     model = _get_whisper_model()
     if model is None:
         return []
@@ -288,40 +316,22 @@ def extract_word_timestamps_whisper(
     whisper_lang = lang_map.get(language, "pt")
 
     try:
-        segments, info = model.transcribe(
-            str(audio_path),
-            language=whisper_lang,
-            word_timestamps=True,
-            vad_filter=True,          # remove silencio — melhora precisao
-            vad_parameters=dict(
-                min_silence_duration_ms=300,
-            ),
-        )
-
-        word_boundaries = []
-        for segment in segments:
-            if segment.words is None:
-                continue
-            for word in segment.words:
-                clean = word.word.strip()
-                if not clean:
-                    continue
-                word_boundaries.append({
-                    "word":     clean,
-                    "start":    float(word.start),
-                    "duration": max(0.10, float(word.end) - float(word.start)),
-                })
-
-        logger.info(
-            "Whisper extraiu %d word timestamps de %s",
-            len(word_boundaries), audio_path.name,
-        )
-        word_boundaries = _repair_corrupted_words(word_boundaries, reference_text)
-        return word_boundaries
-
-    except Exception as e:
-        logger.error("Whisper falhou em %s: %s", audio_path.name, e)
-        return []
+        word_boundaries = _transcribe_word_boundaries(model, audio_path, whisper_lang)
+    except Exception as error:
+        if getattr(getattr(model, "model", None), "device", None) != "cuda":
+            logger.error("Whisper falhou em %s: %s", audio_path.name, type(error).__name__)
+            return []
+        # CUDA pode carregar o modelo e falhar só ao consumir os segmentos.
+        logger.warning("Whisper CUDA falhou durante transcrição (%s); repetindo em CPU", type(error).__name__)
+        try:
+            from faster_whisper import WhisperModel
+            _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+            word_boundaries = _transcribe_word_boundaries(_whisper_model, audio_path, whisper_lang)
+        except Exception as cpu_error:
+            logger.error("Whisper CPU falhou em %s: %s", audio_path.name, type(cpu_error).__name__)
+            return []
+    logger.info("Whisper extraiu %d word timestamps de %s", len(word_boundaries), audio_path.name)
+    return _repair_corrupted_words(word_boundaries, reference_text)
 
 
 # ── PIPELINE PRINCIPAL ────────────────────────────────────────────────────────
@@ -338,9 +348,10 @@ def generate_audio_with_timestamps(
 
     Fluxo:
         1. edge-tts v7.x  -> gera audio natural
-        2. faster-whisper -> timestamps reais por palavra (CUDA)
+        2. WordBoundary do edge-tts -> tempos reais do próprio áudio
+        3. faster-whisper -> tempos reais quando o serviço não os fornecer
         3. Se edge-tts falhar -> retorna falha ao controlador de voz
-        4. Se whisper falhar  -> estimativa por silabas
+        4. Sem tempos reais -> falha de mídia, sem estimativa silenciosa
 
     Retorna: (sucesso_audio: bool, word_boundaries: list)
     """
@@ -351,14 +362,17 @@ def generate_audio_with_timestamps(
         logger.error("edge-tts falhou; alternativa de voz deve respeitar genero e permissao")
         return False, []
 
-    # Timestamps reais via Whisper
+    boundaries = load_word_boundaries(audio_path.with_name(audio_path.stem + "_boundaries.json"))
+    if boundaries:
+        logger.info("Sincronização usando os tempos nativos da voz")
+        return True, boundaries
+
+    # Whisper é alternativa de tempos reais; CUDA indisponível repete em CPU.
     boundaries = extract_word_timestamps_whisper(audio_path, language=language, reference_text=text)
 
-    # Fallback de timing: estimativa por silabas
     if not boundaries:
-        logger.warning("Whisper nao retornou boundaries — usando estimativa por silabas")
-        duration   = _get_audio_duration(audio_path) or (len(text.split()) * 0.35)
-        boundaries = estimate_word_timestamps(text, duration)
+        logger.error("Sem tempos reais de palavras; áudio não aprovado para legendar")
+        return False, []
 
     return True, boundaries
 

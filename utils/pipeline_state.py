@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -69,11 +70,20 @@ class PrivateStateStore:
         if not signed:
             headers.update(Authorization=f"Bearer {self._token}", **{"X-GitHub-Api-Version": "2022-11-28"})
         headers.update(kwargs.pop("headers", {}))
-        try:
-            return self.session.request(method, url, headers=headers, timeout=(15, 60), verify=True,
-                                        allow_redirects=False, **kwargs)
-        except requests.RequestException:
-            raise StateError("API de estado privado indisponível") from None
+        attempts = 3 if method == "GET" else 1
+        for attempt in range(attempts):
+            try:
+                return self.session.request(method, url, headers=headers, timeout=(15, 60), verify=True,
+                                            allow_redirects=False, **kwargs)
+            except requests.RequestException as error:
+                if attempt + 1 == attempts:
+                    raise StateError("API de estado privado indisponível") from None
+                # Só leituras idempotentes; POST continua com confirmação própria.
+                wait = 2 * (attempt + 1)
+                logging.getLogger(__name__).warning(
+                    "Falha de transporte na leitura privada (%s); tentativa %d/%d em %ds",
+                    type(error).__name__, attempt + 2, attempts, wait)
+                time.sleep(wait)
 
     def _json(self, method: str, url: str, *, statuses=(200,), **kwargs):
         response = self._request(method, url, **kwargs)

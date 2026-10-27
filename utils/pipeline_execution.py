@@ -9,12 +9,16 @@ from utils.pipeline_state import StateError
 def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = "normal",
                       validation_namespace: str = "", dry_run: bool = False,
                       only_generate: bool = False, test_story: bool = False,
-                      gemini_catalog_only: bool = False, groq_validation: bool = False) -> dict:
+                      gemini_catalog_only: bool = False, groq_validation: bool = False,
+                      configured_provider: str = "gemini") -> dict:
     if event not in {"workflow_dispatch", "schedule"} or not re.fullmatch(r"[0-9]+", run_id):
         raise StateError("Evento ou identidade de execução inválidos")
     if state_action not in {"normal", "generate", "publish", "bootstrap", "verify", "inventory"}:
         raise StateError("Ação de estado inválida")
-    if gemini_catalog_only and (state_action != "normal" or not only_generate or dry_run or groq_validation):
+    if type(configured_provider) is not str or configured_provider not in {"groq", "gemini"}:
+        raise StateError("Provedor configurado inválido")
+    if gemini_catalog_only and (state_action != "normal" or not only_generate or dry_run or groq_validation
+                               or configured_provider != "gemini"):
         raise StateError("Consulta Gemini exige execução normal isolada, sem geração/publicação")
     if validation_namespace and not re.fullmatch(r"validation-[a-z0-9-]{1,80}", validation_namespace):
         raise StateError("Namespace de validação inválido")
@@ -50,7 +54,7 @@ def resolve_execution(*, event: str, ref: str, run_id: str, state_action: str = 
             raise StateError("Publicação permitida somente em main/production")
         namespace, operation = "production", "restore"
     return {"namespace": namespace, "state_action": state_action, "state_operation": operation,
-            "llm_provider": "groq" if groq_validation else "gemini",
+            "llm_provider": "groq" if groq_validation else configured_provider,
             "generate": state_action in {"normal", "generate"}, "publish": state_action in {"normal", "publish"} and not preview,
             "dry_run": dry_run, "test_story": test_story, "required": not dry_run and state_action != "inventory"}
 
@@ -78,7 +82,8 @@ def main() -> int:
                     validation_namespace=os.getenv("INPUT_VALIDATION_NAMESPACE", ""), dry_run=_flag("INPUT_DRY_RUN"),
                     only_generate=_flag("INPUT_ONLY_GENERATE"), test_story=_flag("INPUT_TEST_STORY"),
                     gemini_catalog_only=_flag("INPUT_GEMINI_CATALOG_ONLY"),
-                    groq_validation=_flag("INPUT_GROQ_VALIDATION"))
+                    groq_validation=_flag("INPUT_GROQ_VALIDATION"),
+                    configured_provider=os.getenv("INPUT_LLM_PROVIDER", "gemini"))
         languages = list(dict.fromkeys(os.getenv("INPUT_LANGUAGES", "pt en es").split()))
         if not languages or any(language not in {"pt", "pt-br", "en", "es"} for language in languages):
             raise StateError("Idiomas inválidos")

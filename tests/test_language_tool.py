@@ -318,6 +318,25 @@ def test_crase_do_incidente_depende_da_regra_e_do_contexto(session, text, langua
     assert len(cliente(session).check(text, language)) == expected
 
 
+@pytest.mark.parametrize("text,language,rule,expected", [
+    ("Descobri que cada um valia 150 dólares.", "pt", "GENERAL_GENDER_AGREEMENT_ERRORS", 0),
+    ("😀 Cada um valia 150 dólares.", "pt-br", "GENERAL_GENDER_AGREEMENT_ERRORS", 0),
+    ("Isso tem um valia enorme.", "pt", "GENERAL_GENDER_AGREEMENT_ERRORS", 1),
+    ("Cada um valia muito.", "pt", "GENERAL_GENDER_AGREEMENT_ERRORS", 1),
+    ("Cada um valia 150 dólares.", "en", "GENERAL_GENDER_AGREEMENT_ERRORS", 1),
+    ("Cada um valia 150 dólares.", "pt", "OTHER", 1),
+])
+def test_valia_verbo_do_incidente_nao_e_tratado_como_substantivo(session, text, language, rule, expected):
+    start = text.index("um valia")
+    resposta_check(session, {"matches": [{
+        "offset": len(text[:start].encode("utf-16-le")) // 2, "length": 8,
+        "message": "Possível erro de concordância.",
+        "replacements": [{"value": "uma valia"}, {"value": "um, valia"}],
+        "rule": {"id": rule, "category": {"id": "GRAMMAR"}},
+    }]})
+    assert len(cliente(session).check(text, language)) == expected
+
+
 @pytest.mark.parametrize("payload", [
     None,
     {},

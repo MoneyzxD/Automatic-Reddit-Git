@@ -2,6 +2,7 @@
 from dataclasses import replace
 import hashlib
 import json
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -92,6 +93,41 @@ class Session:
 def store(session=None, namespace="validation-test"):
     from utils.pipeline_state import PrivateStateStore
     return PrivateStateStore(REPO, "SYNTHETIC_TOKEN", namespace, session=session or Session())
+
+
+def test_leitura_recupera_falha_de_transporte_sem_vazar_detalhes(monkeypatch, caplog):
+    import utils.pipeline_state as state
+    session = Session()
+    original = session.request
+    attempts = []
+    waits = []
+    def request(method, url, **kwargs):
+        attempts.append(method)
+        if len(attempts) < 3:
+            raise requests.Timeout("SYNTHETIC_TOKEN signed-url")
+        return original(method, url, **kwargs)
+    session.request = request
+    monkeypatch.setattr(time, "sleep", waits.append)
+    store(session).validate_target()
+    assert attempts == ["GET", "GET", "GET"]
+    assert waits == [2, 4]
+    assert "SYNTHETIC_TOKEN" not in caplog.text
+    assert "signed-url" not in caplog.text
+
+
+@pytest.mark.parametrize("method,expected", [("GET", 3), ("POST", 1)])
+def test_repeticao_de_transporte_e_limitada_e_nao_repete_post(monkeypatch, method, expected):
+    import utils.pipeline_state as state
+    calls = []
+    session = Session()
+    def request(*args, **kwargs):
+        calls.append(args[0])
+        raise requests.ConnectionError("SYNTHETIC_TOKEN")
+    session.request = request
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    with pytest.raises(state.StateError, match="API de estado privado indisponível"):
+        store(session)._request(method, f"https://api.github.com/repos/{REPO}")
+    assert len(calls) == expected
 
 
 @pytest.mark.parametrize("private,name", [(False, REPO), (True, "MoneyzxD/Other"), ("true", REPO)])

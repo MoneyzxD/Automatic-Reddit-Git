@@ -7,7 +7,7 @@ Stack gratuita:
     Primario : edge-tts v7.x (voz natural)
     Fallback : voz Edge do mesmo genero; gTTS somente por permissao explicita
 
-Timestamps: faster-whisper CUDA via word_timing.py
+Timestamps: tempos nativos do edge-tts; alternativa faster-whisper CUDA/CPU.
 
 Selecao de voz por genero:
     male / female obrigatorio, com vozes separadas por genero.
@@ -20,7 +20,7 @@ from typing import Literal
 
 from stages.word_timing import (
     generate_audio_with_timestamps,
-    estimate_word_timestamps,
+    extract_word_timestamps_whisper,
     save_word_boundaries,
 )
 
@@ -93,8 +93,7 @@ class VoiceGenerator:
         narrator_gender: Literal["male", "female"],
     ) -> tuple[bool, list]:
         """
-        Gera audio via edge-tts v7.x e extrai timestamps word-level reais
-        usando faster-whisper com CUDA.
+        Gera audio e usa tempos nativos das palavras, com Whisper como alternativa.
         Retorna (sucesso, boundaries).
         """
         voice, fallback_voice = self._select_voice(language, narrator_gender)
@@ -128,9 +127,9 @@ class VoiceGenerator:
 
         Fluxo producao:
             1. edge-tts v7.x  -> audio natural
-            2. faster-whisper -> timestamps word-level reais (CUDA)
+            2. tempos nativos -> timestamps word-level reais (Whisper como alternativa)
             3. gTTS           -> fallback somente com permissao explicita
-            4. estimativa     -> fallback se whisper falhar
+            4. Whisper        -> tempos reais obrigatorios para o audio gTTS
         """
         self._validate_gender(narrator_gender)
         if self.force_gtts and not self.allow_uncontrolled_gender_fallback:
@@ -154,9 +153,13 @@ class VoiceGenerator:
 
         if not success and self.allow_uncontrolled_gender_fallback:
             success = self._gtts_generate(text, language, output_path)
-            if success and not boundaries:
-                duration   = self._get_mp3_duration(output_path)
-                boundaries = estimate_word_timestamps(text, duration)
+            if success:
+                boundaries = extract_word_timestamps_whisper(
+                    output_path, language=language, reference_text=text
+                )
+                success = bool(boundaries)
+                if not success:
+                    logger.error("Audio gTTS sem tempos reais; geracao interrompida")
 
         # Salvar timestamps
         if boundaries:

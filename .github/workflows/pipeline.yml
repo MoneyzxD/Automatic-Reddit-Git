@@ -26,7 +26,7 @@ on:
         default: false
         type: boolean
       validacao_groq:
-        description: "Completar mínimo de 1 vídeo/idioma com Groq; cron continua Gemini"
+        description: "Validar mínimo de 1 vídeo/idioma com Groq; rotina usa o provedor configurado"
         required: false
         default: false
         type: boolean
@@ -104,7 +104,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Instalar FFmpeg
-        timeout-minutes: 8
+        timeout-minutes: 10
         run: |
           set -Eeuo pipefail
           phase=timer
@@ -133,7 +133,9 @@ jobs:
           # pra fora do card (visto num run real, hook de 2 frases).
           phase=install
           echo "Preparação FFmpeg: fase=$phase"
-          timeout --kill-after=10s 180s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y ffmpeg fonts-dejavu-core
+          # No run40351541446,180s interromperam o download de94MB do mirror.
+          # Mantém lock/rede limitados, com margem para download e configuração.
+          timeout --kill-after=10s 300s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y ffmpeg fonts-dejavu-core
           phase=ffmpeg
           echo "Preparação FFmpeg: fase=$phase"
           timeout --kill-after=5s 10s ffmpeg -version | sed -n '1p'
@@ -206,6 +208,7 @@ jobs:
           INPUT_TEST_STORY: ${{ inputs.historia_teste }}
           INPUT_GEMINI_CATALOG_ONLY: ${{ inputs.gemini_catalog_only }}
           INPUT_GROQ_VALIDATION: ${{ inputs.validacao_groq }}
+          INPUT_LLM_PROVIDER: ${{ vars.PIPELINE_LLM_PROVIDER || 'gemini' }}
           INPUT_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}
           INPUT_LEGACY_CACHE_RUN_ID: ${{ inputs.legacy_cache_run_id }}
         run: python -m utils.pipeline_execution
@@ -310,8 +313,9 @@ jobs:
           PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
           DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
           PIPELINE_ENV: runner
-          # Gemini permanece padrão; Groq somente na validação manual autorizada.
+          # Escolha explícita por execução; não alterna provedor por erro ou cota.
           PIPELINE_LLM_PROVIDER: ${{ steps.execution.outputs.llm_provider }}
+          PIPELINE_GROQ_VALIDATION: ${{ inputs.validacao_groq || 'false' }}
           GEMINI_API_KEY: ${{ steps.execution.outputs.llm_provider == 'gemini' && secrets.GEMINI_API_KEY || '' }}
           GROQ_API_KEY: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY || '' }}
           GROQ_API_KEY_PT: ${{ steps.execution.outputs.llm_provider == 'groq' && secrets.GROQ_API_KEY_PT || '' }}
@@ -340,7 +344,7 @@ jobs:
           options=()
           [[ "$PIPELINE_DRY_RUN" == "true" ]] && options+=(--dry-run)
           [[ "$PIPELINE_TEST_STORY" == "true" ]] && options+=(--test-story)
-          if [[ "$PIPELINE_LLM_PROVIDER" == "groq" ]]; then
+          if [[ "$PIPELINE_GROQ_VALIDATION" == "true" ]]; then
             python scripts/generate_daily_batch.py --target 1 \
               --lang $PIPELINE_LANGUAGES "${options[@]}"
           else

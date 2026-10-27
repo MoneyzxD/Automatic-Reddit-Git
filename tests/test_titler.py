@@ -100,6 +100,36 @@ def test_fallback_preserva_frase_inteira_decimal_e_interrogacao():
     ) == title
 
 
+def test_fallback_do_incidente_preserva_pergunta_completa_em_ingles():
+    original = "AITA for refusing to lend money to my sister after she insulted my job"
+    hook = TitleGenerator({"enabled": False}).generate_hook("Story", "en", original)
+    assert hook == "Was I wrong for refusing to lend money to my sister after she insulted my job?"
+    assert len(hook) <= 100
+
+
+@pytest.mark.parametrize("method,remote", [
+    ("generate", "_groq_title"), ("generate_hook", "_groq_hook"),
+    ("generate_closing_hook", "_groq_closing"),
+])
+def test_regeneracao_recebe_rejeicao_sem_perder_fatos_e_perfil(monkeypatch, method, remote):
+    generator = TitleGenerator({})
+    captured = []
+    def generate(original, summary, language, *args):
+        captured.append(summary)
+        return "Was I wrong to refuse the loan?"
+    monkeypatch.setattr(generator, remote, generate)
+    feedback = {"rejected_text": "for refusing the loan", "issues": [
+        {"category": "grammar", "message": "This sentence does not start with an uppercase letter."}]}
+    assert getattr(generator, method)(
+        "I refused the loan.", "en", "AITA for refusing the loan", narrator_gender="female",
+        factual_context="I refused the loan after the insult.", retry_feedback=feedback,
+    ) == "Was I wrong to refuse the loan?"
+    assert "I refused the loan after the insult." in captured[0]
+    assert "NARRADOR: female" in captured[0]
+    assert feedback["rejected_text"] in captured[0]
+    assert feedback["issues"][0]["message"] in captured[0]
+
+
 @pytest.mark.parametrize("language", ["pt", "en", "es"])
 def test_prompt_hook_pede_limite_do_titulo_youtube(language):
     from stages.titler import HOOK_PROMPTS

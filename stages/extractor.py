@@ -1,14 +1,14 @@
 """
 extractor.py
 ============
-Extrai histórias do Reddit sem API key.
+Extrai histórias reais do Reddit e de seu arquivo público gratuito.
 
 Fontes (em ordem de prioridade):
-    1. Reddit JSON público  — reddit.com/r/{sub}/top.json
+    1. Reddit JSON autenticado — reddit.com/r/{sub}/top.json
     2. old.reddit.com       — fallback URL alternativa
-    3. PullPush.io          — substituto comunitário ao Pushshift (gratuito)
+    3. Arctic Shift        — arquivo público; métricas originais obrigatórias
 
-Não requer autenticação — apenas User-Agent correto.
+O cookie fica restrito aos hosts do Reddit; o arquivo não recebe credenciais.
 """
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ import json
 import time
 import random
 import logging
+import math
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -26,15 +28,14 @@ logger = logging.getLogger(__name__)
 
 class RedditExtractor:
     """
-    Extrai histórias do Reddit via JSON público e PullPush.io.
-    Sem necessidade de API key ou autenticação.
+    Extrai histórias via sessão Reddit ou arquivo público sem API key.
     """
 
     REDDIT_URLS = [
         "https://www.reddit.com",
         "https://old.reddit.com",
     ]
-    PULLPUSH_URL = "https://api.pullpush.io/reddit/search/submission"
+    ARCTIC_SHIFT_URL = "https://arctic-shift.photon-reddit.com/api/posts/search"
 
     def __init__(self, config: dict):
         self.config     = config
@@ -110,54 +111,81 @@ class RedditExtractor:
 
         return []
 
-    # ── FONTE 2: PullPush.io (substituto ao Pushshift) ───────────────────
+    # ── FONTE 2: Arctic Shift (arquivo público gratuito) ─────────────────
 
-    def _fetch_pullpush(
-        self, subreddit: str, limit: int = 25
+    def _fetch_arctic_shift(
+        self, subreddit: str, time_filter: str = "month", limit: int = 50
     ) -> list:
         """
-        Busca posts via PullPush.io (gratuito, mantido pela comunidade).
-        Endpoint: api.pullpush.io/reddit/search/submission
+        Consulta modesta do arquivo sem transmitir sessão Reddit.
+        Espera dois dias para as métricas amadurecerem; não inventa votos/ratio.
         """
-        sub    = subreddit.removeprefix("r/")
+        sub = subreddit.removeprefix("r/")
+        windows = {"week": "7d", "month": "30d", "year": "365d", "all": None}
+        if time_filter not in windows:
+            # O arquivo não tem métricas maduras na janela de hora/dia.
+            return []
         params = {
             "subreddit": sub,
-            "sort":      "score",
-            "sort_type": "score",
-            "size":      limit,
-            "score":     ">500",
-            "selftext":  "self",  # apenas posts com texto
+            "limit": min(max(int(limit), 1), 100),
+            "sort": "desc",
+            "before": "2d",
         }
+        if windows[time_filter]:
+            params["after"] = windows[time_filter]
+        resp = None
         try:
             resp = requests.get(
-                self.PULLPUSH_URL, params=params, timeout=20,
+                self.ARCTIC_SHIFT_URL, params=params, timeout=30, allow_redirects=False,
                 headers={"User-Agent": "RedditStories/1.0"},
             )
             if resp.status_code == 200:
-                data  = resp.json()
-                posts = data.get("data", [])
+                data = resp.json()
+                posts = data.get("data", []) if isinstance(data, dict) else []
+                if not isinstance(posts, list):
+                    return []
                 if posts:
-                    logger.info(f"PullPush: {len(posts)} posts de r/{sub}")
-                    # Normalizar para o mesmo formato do Reddit JSON
                     normalized = []
                     for p in posts:
+                        if not isinstance(p, dict):
+                            continue
+                        ratio = p.get("upvote_ratio")
+                        if (not isinstance(p.get("id"), str)
+                                or not re.fullmatch(r"[a-z0-9]{1,16}", p["id"])
+                                or not isinstance(p.get("subreddit"), str)
+                                or p["subreddit"].casefold() != sub.casefold()
+                                or not isinstance(p.get("title"), str)
+                                or not isinstance(p.get("selftext"), str)
+                                or p.get("removed_by_category")
+                                or type(ratio) not in {int, float}
+                                or not math.isfinite(ratio) or not 0 <= ratio <= 1
+                                or any(type(p.get(key)) is not int or p[key] < 0
+                                       for key in ("score", "num_comments"))
+                                or not self.extract_story_text(p)):
+                            continue
                         normalized.append({
-                            "id":           p.get("id", ""),
-                            "title":        p.get("title", ""),
-                            "selftext":     p.get("selftext", ""),
-                            "score":        p.get("score", 0),
-                            "upvote_ratio": p.get("upvote_ratio", 0.85),
-                            "num_comments": p.get("num_comments", 0),
+                            "id":           p["id"],
+                            "title":        p["title"],
+                            "selftext":     p["selftext"],
+                            "score":        p["score"],
+                            "upvote_ratio": ratio,
+                            "num_comments": p["num_comments"],
                             "created_utc":  p.get("created_utc", 0),
-                            "permalink":    p.get("permalink", ""),
+                            "permalink":    f"/r/{sub}/comments/{p['id']}/",
                             "subreddit":    sub,
+                            "source_provider": "arctic_shift",
+                            "source_retrieved_utc": p.get("retrieved_on"),
                         })
+                    logger.info("Arctic Shift: %d posts íntegros de r/%s", len(normalized), sub)
                     return normalized
-                logger.warning(f"PullPush: resposta OK mas 0 posts para r/{sub}")
+                logger.warning("Arctic Shift: resposta OK mas 0 posts para r/%s", sub)
             else:
-                logger.warning(f"PullPush: HTTP {resp.status_code} para r/{sub}")
-        except requests.RequestException as e:
-            logger.warning(f"PullPush falhou para r/{sub}: {e}")
+                logger.warning("Arctic Shift: HTTP %d para r/%s", resp.status_code, sub)
+        except (requests.RequestException, ValueError, TypeError) as error:
+            logger.warning("Arctic Shift indisponível para r/%s: %s", sub, type(error).__name__)
+        finally:
+            if resp is not None:
+                resp.close()
         return []
 
     # ── FETCH COM FALLBACK ────────────────────────────────────────────────
@@ -167,16 +195,15 @@ class RedditExtractor:
     ) -> list:
         """
         Busca posts de um subreddit com fallback automático.
-        1. Reddit JSON → 2. PullPush.io
+        1. Reddit JSON → 2. Arctic Shift
         """
         # Fonte primária: Reddit JSON público
         posts = self._fetch_reddit_json(subreddit, time_filter, limit)
         if posts:
             return posts
 
-        # Fallback: PullPush.io
-        logger.info(f"Reddit JSON falhou para {subreddit} — tentando PullPush.io")
-        posts = self._fetch_pullpush(subreddit, limit=min(limit, 25))
+        logger.info("Reddit JSON falhou para %s — tentando Arctic Shift", subreddit)
+        posts = self._fetch_arctic_shift(subreddit, time_filter, limit)
         return posts
 
     # ── PROCESSAMENTO ─────────────────────────────────────────────────────
@@ -210,7 +237,7 @@ class RedditExtractor:
         word_count = len(text.split())
         payload = {
             "id":           story_id,
-            "subreddit":    subreddit.lstrip("r/"),
+            "subreddit":    subreddit.removeprefix("r/"),
             "title":        post.get("title", "").strip(),
             "text":         text,
             "score":        int(post.get("score", 0)),
@@ -221,6 +248,9 @@ class RedditExtractor:
             "url":          "https://reddit.com" + post.get("permalink", ""),
             "word_count":   word_count,
         }
+        if post.get("source_provider") == "arctic_shift":
+            payload["source_provider"] = "arctic_shift"
+            payload["source_retrieved_utc"] = post.get("source_retrieved_utc")
 
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)

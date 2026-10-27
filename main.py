@@ -56,6 +56,7 @@ load_dotenv()
 import yaml
 from stages.narrator_profile import NarratorProfile
 from stages.script_guardian import QualityRejected, QualityUnavailable, ScriptReview, ReviewIssue
+from stages.titler import PublicTextRejected
 from utils.llm_client import LLMUnavailable
 from utils.pipeline_state import StateError
 
@@ -781,22 +782,44 @@ def run_pipeline(
         for language in list(active_languages):
             finish_language(language, status, reason_code)
 
-    def checkpoint(source, candidate, language, stage, part=None):
+    def checkpoint(source, candidate, language, stage, part=None, *, regenerate_candidate=None):
         key = f"{stage}_part{part}" if part is not None else stage
         cached = load_approved_step(BASE_DIR, story_id, language, key, source_hash, profile.profile_id)
         input_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
         if cached and cached.get("input_sha256") == input_hash:
             return ScriptReview("approved", cached["text"], (), (), 0, False,
                                 cached.get("factual_context", ""))
-        candidate = candidate() if callable(candidate) else candidate
-        context.update(source_text=source, candidate_text=candidate, language=language,
-                       stage=stage, part_number=part)
-        review = guardian.review_and_fix(
-            source_text=source, candidate_text=candidate, language=language,
-            stage=stage, story_id=story_id, profile=profile, part=part,
-        )
-        if review.status != "approved":
-            raise (QualityUnavailable if review.status == "unavailable" else QualityRejected)(review)
+        initial_candidate = candidate
+        generations = 3 if regenerate_candidate is not None else 1
+        for generation in range(generations):
+            try:
+                candidate = ((initial_candidate() if callable(initial_candidate) else initial_candidate)
+                             if generation == 0 else regenerate_candidate(candidate, review))
+                context.update(source_text=source, candidate_text=candidate, language=language,
+                               stage=stage, part_number=part)
+                review = guardian.review_and_fix(
+                    source_text=source, candidate_text=candidate, language=language,
+                    stage=stage, story_id=story_id, profile=profile, part=part,
+                )
+            except PublicTextRejected as error:
+                if regenerate_candidate is None:
+                    raise
+                candidate = error.candidate_text
+                context.update(source_text=source, candidate_text=candidate, language=language,
+                               stage=stage, part_number=part)
+                review = ScriptReview("rejected", candidate, (
+                    ReviewIssue("language", "critical", str(error), origin="generation"),
+                ), (), 0, False, "")
+            except QualityRejected as error:
+                review = error.review
+            if review.status == "approved":
+                break
+            if review.status == "unavailable":
+                raise QualityUnavailable(review)
+            if generation + 1 == generations:
+                raise QualityRejected(review)
+            logger.warning("Texto reprovado em %s (%s); regenerando somente esta etapa (%d/2)",
+                           stage, language, generation + 1)
         save_script_trace(scripts_dir, story_id, language, stage, review.approved_text)
         save_approved_step(BASE_DIR, story_id, language, key, {
             "source_sha256": source_hash, "profile_id": profile.profile_id, "input_sha256": input_hash,
@@ -886,8 +909,15 @@ def run_pipeline(
                 review = checkpoint(clean_script, translate_candidate, lang, "translation")
                 approved_translation = review.approved_text
                 expanded_translation = expand_acronyms_translated(approved_translation, lang)
+                def regenerate_naturalization(previous, rejected):
+                    return naturalizer.naturalize(expanded_translation, lang, narrator_gender, retry_feedback={
+                        "rejected_text": rejected.approved_text or previous,
+                        "issues": [{"category": issue.category, "message": issue.message,
+                                    "original": issue.original} for issue in rejected.issues],
+                    })
                 review = checkpoint(approved_translation,
-                                    lambda: naturalizer.naturalize(expanded_translation, lang, narrator_gender), lang, "naturalization")
+                                    lambda: naturalizer.naturalize(expanded_translation, lang, narrator_gender),
+                                    lang, "naturalization", regenerate_candidate=regenerate_naturalization)
                 lang_script, lang_facts = review.approved_text, review.factual_context
                 durable_checkpoint("localized_script_approved")
 
@@ -908,13 +938,22 @@ def run_pipeline(
                     raise
                 title_args = dict(story_text=validated_story, language=lang, original_title=translated_title,
                                   narrator_gender=narrator_gender, factual_context=lang_facts)
-                title_for_lang = checkpoint(
-                    derived_source, lambda: title_gen.generate(**title_args, hook_type=random.choice(["short", "narrative"])),
-                    lang, "title").approved_text
-                hook_for_lang = checkpoint(
-                    derived_source, lambda: title_gen.generate_hook(**title_args), lang, "opening_hook").approved_text
-                closing_hook_for_lang = checkpoint(
-                    derived_source, lambda: title_gen.generate_closing_hook(**title_args), lang, "closing_hook").approved_text
+
+                def public_text(method, stage, **extra):
+                    def regenerate(previous, rejected):
+                        return method(**title_args, **extra, retry_feedback={
+                            "rejected_text": rejected.approved_text or previous,
+                            "issues": [{"category": issue.category, "message": issue.message,
+                                        "original": issue.original} for issue in rejected.issues],
+                        })
+                    return checkpoint(
+                        derived_source, lambda: method(**title_args, **extra), lang, stage,
+                        regenerate_candidate=regenerate,
+                    ).approved_text
+
+                title_for_lang = public_text(title_gen.generate, "title", hook_type=random.choice(["short", "narrative"]))
+                hook_for_lang = public_text(title_gen.generate_hook, "opening_hook")
+                closing_hook_for_lang = public_text(title_gen.generate_closing_hook, "closing_hook")
                 lang_script = checkpoint(
                     derived_source, inject_title_as_hook(validated_story, hook_for_lang),
                     lang, "injected_hook").approved_text

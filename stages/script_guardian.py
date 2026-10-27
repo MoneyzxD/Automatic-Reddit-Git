@@ -1218,13 +1218,49 @@ class ScriptGuardian:
                     source_text, text, language, stage, profile, factual_context, lt_findings)
                 issues.extend(semantic_issues)
                 if attempt < self.max_repairs:
-                    if lt_findings and not semantic_patches and not glossary_patches:
-                        # Sem resposta útil no review geral, uma proposta dirigida.
-                        # Não substitui indisponibilidade nem aprova sem nova revisão.
+                    directed_findings = list(lt_findings) if not semantic_patches and not glossary_patches else []
+                    for issue in semantic_issues:
+                        # Um erro sem proposta não deve impedir pedir um reparo pontual,
+                        # inclusive quando outra frase já recebeu correção nesta rodada.
+                        if (issue.category not in {"grammar", "language"} or not issue.original
+                                or text.count(issue.original) != 1
+                                or any(p.original == issue.original and p.replacement and not p.anchor_error
+                                       for p in semantic_patches + glossary_patches)):
+                            continue
+                        start = text.index(issue.original)
+                        end = start + len(issue.original)
+                        if any(f["start"] == start and f["end"] == end for f in directed_findings):
+                            continue
+                        directed_findings.append({"finding_id": f"semantic{len(directed_findings)}",
+                            "rule_id": "SEMANTIC_LANGUAGE", "original": issue.original,
+                            "message": issue.message, "start": start, "end": end, "replacements": ()})
+                    if directed_findings:
+                        # A proposta segue os mesmos gates e exige nova revisão integral.
                         focused_issues, focused_patches = self._language_repairs(
-                            source_text, text, language, stage, profile, lt_findings)
+                            source_text, text, language, stage, profile, directed_findings)
                         issues.extend(focused_issues)
                         semantic_patches.extend(focused_patches)
+                    # Incidentes PT/EN: o LLM devolveu vazio para vírgulas do LT.
+                    # Só duas regras e inserção literal de uma vírgula, sem mudar
+                    # palavras. A candidata exige nova revisão LT/semântica integral.
+                    if not semantic_patches and not glossary_patches:
+                        for finding in lt_findings[:8]:
+                            original = finding["original"]
+                            replacement = None
+                            if (language == "pt" and finding["rule_id"] == "VERB_COMMA_CONJUNCTION"
+                                    and original and not original.endswith(",")
+                                    and not text[finding["end"]:].lstrip().startswith(",")
+                                    and original + "," in finding["replacements"]):
+                                replacement = original + ","
+                            elif (language == "en" and finding["rule_id"] == "COMMA_COMPOUND_SENTENCE_2"
+                                    and re.fullmatch(r"[ \t]+(?:and|but|so)", original, flags=re.IGNORECASE)
+                                    and not text[:finding["start"]].rstrip().endswith(",")
+                                    and "," + original in finding["replacements"]):
+                                replacement = "," + original
+                            if replacement:
+                                semantic_patches.append(TextPatch(original, replacement,
+                                    "grammar", "critical", "texto", "Testar vírgula sugerida pelo LT",
+                                    "", finding["start"]))
                     result = validate_and_apply_patches(text, glossary_patches + semantic_patches,
                                                         source_text, profile)
                     accepted, rejected = result.applied, result.rejected

@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +13,32 @@ def translator_with(monkeypatch, google, memory=None):
     monkeypatch.setattr(translator, "_translate_chunk_google", google)
     monkeypatch.setattr(translator, "_translate_chunk_mymemory", memory or (lambda *_: None))
     return translator
+
+
+@pytest.mark.parametrize("finish_reason,expected", [("stop", "approved"), ("length", "unavailable")])
+def test_traducao_groq_explicita_usa_llm_e_nao_motor_anonimo(monkeypatch, finish_reason, expected):
+    from utils import environment
+    from utils import llm_client
+    monkeypatch.setattr(environment, "llm_provider", lambda: "groq")
+    monkeypatch.setattr(environment, "llm_api_key", lambda language: "SYNTHETIC_KEY")
+    translator = ScriptTranslator({"groq_translation": True, "delay": 0})
+    calls = []
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="Fui à loja."), finish_reason=finish_reason)])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(llm_client, "tracked_llm", lambda *args, **kwargs: client)
+    monkeypatch.setattr(translator, "_translate_chunk_google", lambda *_: pytest.fail("motor anônimo não deve ser chamado"))
+    monkeypatch.setattr(translator, "_translate_chunk_mymemory", lambda *_: pytest.fail("motor anônimo não deve ser chamado"))
+    result = translator.translate("I went to the store.", "en", "pt")
+    assert result.status == expected
+    assert len(calls) == 1
+    assert calls[0]["model"] == "qwen/qwen3.8-27b"
+    if expected == "approved":
+        assert result.provider == "Groq"
+        assert result.require_text() == "Fui à loja."
+    else:
+        assert result.text is None
 
 
 def test_um_chunk_vazio_reprova_traducao_inteira(monkeypatch):

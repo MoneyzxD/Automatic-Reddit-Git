@@ -1,5 +1,346 @@
 # PROJECT_HANDOFF.md
 
+## Retomada automática em validação — 27/10/2026
+
+O operador autorizou integrar as correções e restaurar a rotina dos três idiomas.
+Veja [registro de implantação](docs/RESTORATION_20261027.md) para configuração,
+provas e pendências atuais. Groq passa a ser seleção explícita da rotina via
+`PIPELINE_LLM_PROVIDER`; Gemini continua disponível. A meta normal permanece3.
+O fallback gratuito Arctic Shift recuperou20posts reais localmente após o403;
+não recebe cookie, não inventa métricas e mantém filtros/perfil/dedupe/gates.
+Suíte completa com LanguageTool obrigatório:1.472aprovados em75,02s.
+Revisão independente sem Critical/Important. Ainda validar no runner.
+PT/EN OAuth válidos; ES aguarda login do operador. Nenhuma fonte rejeitada
+ou upload confirmado foi reaberto nesta implantação.
+
+## Teste PT concluído — 27/10/2026
+
+Vídeo público: **https://youtu.be/H2XqpcQM_50**, publicado às **18h57 de São Paulo**.
+A API autenticada confirmou `public/processed` no canal PT esperado, e o oEmbed
+anônimo retornou HTTP200. Foi enviado um único arquivo; para cumprir a decisão
+do operador de publicar imediatamente, o mesmo ID foi antecipado do horário
+calculado de 19h17. Não gerar nem enviar novamente esta história.
+
+Execução93277 terminou com código0. Pasta:
+`data/state/testes_pipeline_completo_pt/20261027_180920`. Fonte real **1x4uvxk**,
+282 palavras, filtro85,30, coletada pelo Chrome autenticado com recibo e SHA.
+Perfil preservou `source_gender=unknown` e voz feminina pelo desempate estável;
+gravidez e relacionamento não foram usados para declarar identidade.
+
+O MP4 final tem1080×1920 e92,276s. Whisper small local reconheceu280/286 palavras
+correspondentes: diferença mediana43ms e p90 de110ms em relação aos tempos nativos.
+Os270 eventos ASS não se sobrepõem e seus inícios correspondem às palavras nativas.
+O corpo passou por reparos e revisão integral; a descrição usou template após
+truncamento do Groq e também foi aprovada. Consumo registrado:94.247 tokens em42 chamadas.
+
+Checkpoint privado **40351541446-1-305** confirmado. O payload foi baixado e lido
+independentemente: preserva os95 IDs anteriores e acrescenta somente este, total96,
+com horário real `2026-10-27T21:57:22Z`. A reconciliação95883 terminou com código0.
+Workflow `pipeline.yml` está `active`; `PIPELINE_AUTOMATION_ENABLED=true` foi
+conferido após o término. O aviso de fila parcial corresponde à outra plataforma,
+não a falha do YouTube; seu estado é `uploaded` e o ID confirmado deve ser preservado.
+
+Provas locais em `data/logs/` desta pasta: `resultado_publicacao.json`,
+`comparacao_mp4_final.json`, `publicacao_imediata.json` e
+`confirmacao_estado_publicacao.json`. O MP4 permanece em
+`data/exports/pt/1x4uvxk_38c7b54483c2_1cea9f22756a/`.
+
+Correções preparadas incluem recuperação de leitura privada, tradução Groq opt-in,
+reparos de vírgula com nova revisão, exceção contextual de `valia`, regeneração
+limitada da naturalização, identidade plural e correção de `Im15` confundido com
+marcador masculino. Revisões independentes concluídas. A validação conjunta final
+das áreas alteradas passou: **887 testes em47,41s**, sem falhas; `git diff --check`
+também passou. Sessões93277,95883 e36478 encerradas com código0; nenhum teste
+de geração/publicação desta rodada permanece em andamento.
+
+**Limites:** alterações continuam locais, sem commit/push. Este aceite é de um
+vídeo PT local com Groq; não comprova EN/ES nem a rodada agendada do Actions.
+A coleta HTTP do Reddit ainda retorna403, inclusive na sonda com o cabeçalho
+padrão. Gemini permanece configurado; sua última sonda retornou503. O aumento
+do timeout de instalação FFmpeg ainda precisa de prova no runner. O próximo
+trabalho é integrar/validar esses deltas no Actions e resolver a coleta automática.
+
+As seções abaixo são histórico: as execuções de geração nelas citadas já terminaram.
+
+## Teste ativo — 27/10/2026, 17h52 (São Paulo)
+
+**Exec18519 em andamento**, pasta `data/state/testes_pipeline_completo_pt/20261027_175152`.
+Comando da raiz: python testar_pipeline_completo_local.py --publicar --provider groq
+--reddit-post _export_repo_publico/data/state/teste_publicacao_pt/reddit_browser_20261027_1800/post_1wv6wzv.json
+--fora-da-janela. Acompanhar18519 antes de qualquer outro gravador. Autorização
+pública imediata mantém-se; token/canal PT e estado privado já conferidos.
+Fonte real1wv6wzv,263palavras, filtro71,97; autoidentificação me(26f) foi
+conferida offline antes de persistir. Captura nova do JSON100 autenticado noChrome1,
+íntegra com SHA e recibo; HTTP automático ainda não restaurado.
+
+Reconciliação51571 terminou com sucesso: checkpoint**290**,1wvm7u7/PT
+processing→rejected por assisted_profile_conflict, perfiloriginal/dedupe95IDs
+intactos,sem partes/filas/upload. Workflow/var foram reativados antes do teste
+atual,que pausa novamente enquanto escreve. Nunca retomar essa fonte rejeitada.
+Revisão encontrou2P2 e ambos foram corrigidos: say/saying também são discurso
+indireto,135testesperfilpassaram; script de reconciliação recusa Python-O antes
+de imports/estado,provaexecutada. Revisão independente confirmou fechamento.
+As demais correções/testes abaixo seguem válidos; nenhum commit/push nesta rodada.
+
+## Retomada — 27/10/2026, 17h45 (São Paulo)
+
+**64522 não está mais em execução**: interrupção da sessão às00h54 encerrou
+o processo sem finally. ConferênciaCIM não encontrou Python/Java deste teste.
+Último checkpoint local289; workflow continua disabled_manually/varfalse.
+Nenhum MP4/upload novo.1wvm7u7/PT permanece processing; perfil persistido
+unknown/female é incompatível com `we're two dudes both44m` na fonte.
+Não retomar essa fonte com o perfil incorreto nem substituir o perfil imutável.
+
+Correção no resolver: autoidentificação plural we are/we're two/both
+men/women/dudes, fora de citação/hipóteses/discursoindireto.7casos novos,
+2redantes;214testes perfil/voz/gates passaram. Perfis existentes intactos.
+Revisão independente pedida a public_text_review, junto da reconciliação.
+
+Preparado script único `data/state/teste_publicacao_pt/encerrar_tentativa_1wvm7u7.py`:
+semflag sóconfere; --aplicar pretende processing→rejected por assisted_profile_conflict,
+conservando fonte/perfil/95IDs e sem batch/upload, checkpoint antes de reativar
+workflow/var originais. Primeira leitura67504 passou as provas anteriores e
+falhou SQL por nome da tabela; corrigido para pipeline_parts, nenhuma mutação feita.
+**Ainda não executar --aplicar sem concluir revisão e conferir resultados.**
+
+Sonda mínima Gemini agora retornou503 (sem história/credencial na saída).
+Próximo teste permanece Groq, com outra fonte íntegra e perfil conferido antes
+de persistir. As correções anteriores continuam locais, semcommit/push.
+
+## Execução atual — 27/10/2026, 00h52 (São Paulo)
+
+**Exec64522 em andamento**, pasta `data/state/testes_pipeline_completo_pt/20261027_005135`.
+Fonte real **1wvm7u7**,273palavras, filtro81,21, captura original Chrome/recibo
+em `data/state/teste_publicacao_pt/reddit_browser_20261027_0047/post_1wvm7u7.json`.
+Comando da raiz: python testar_pipeline_completo_local.py --publicar --provider groq
+--reddit-post _export_repo_publico/data/state/teste_publicacao_pt/reddit_browser_20261027_0047/post_1wvm7u7.json
+--fora-da-janela. Acompanhar64522; não iniciar outro gravador. Operador mantém
+autorização de publicação pública assim que pronta. Helper permite agora
+150–300palavras somente para a amostra local; filtros/limites de produção intactos.
+
+96190 terminou sem mídia/upload, checkpoint287 confirmado;1x70tea/PT rejected
+e permanece fechado, como1wvcl31/1xebjyt. Tradução PT foi aprovada na retomada,
+mas naturalização bloqueou por LT GENERAL_GENDER_AGREEMENT_ERRORS em
+`cada um valia150dólares`:6.6 lê valia como substantivo feminino e sugere
+uma valia/um, valia; Groq chunk/global/language não propôs mudança.
+Probe com instrução de reformular também devolveu no-op; prompt não foi alterado.
+
+Correção contextual restrita no cliente LT: somente essa regra, pt-BR, span
+um valia, precedente cada e subsequente número+dólares.415testes passaram,
+2redantes, revisão limpa. LT6.6 real confirma achado bruto e filtro contextual.
+Adicionada regeneração da naturalização em main/naturalizer: reutiliza o
+checkpoint de3gerações já existente nos títulos, feedback da candidata/achados,
+mesma tradução/perfil, cache somente após revisão integral aprovada. Indisponibilidade
+não regenera.166testes quality/guardian/naturalizer/Gemini e9controles dohelper
+passaram;2redantes; revisão independente limpa. Tudo ainda local/semcommit/push.
+
+Conferência adicional preparada em `data/state/teste_publicacao_pt/conferir_mp4_final.py`:
+quando houver MP4, chama Whisper small CPU local_files_only, compara fala do
+MP4 com tempos nativos/ASS e escreve comparacao_mp4_final.json. Ainda não foi
+executada nesta fonte porque a mídia não existe. OAuth PT válido,95IDs preservados.
+Coleta HTTP automática continua403; amostra veio do navegador autenticado.
+Correção timeoutFFmpeg está só local, não comprovada em CI.
+
+## Retomada atual — 27/10/2026, 00h20 (São Paulo)
+
+Exec **96190 em andamento** (retomada de7238), pasta `data/state/testes_pipeline_completo_pt/20261027_002017`.
+Fonte real1x70tea,183palavras, filtro75,48, captura íntegra do Chrome autenticado
+em `data/state/teste_publicacao_pt/reddit_browser_20261027_0020/post_1x70tea.json`.
+Comando da raiz: python testar_pipeline_completo_local.py --publicar --provider groq
+--reddit-post _export_repo_publico/data/state/teste_publicacao_pt/reddit_browser_20261027_0020/post_1x70tea.json
+--fora-da-janela --resume20261027_002017. Acompanhar96190 primeiro; nunca iniciar outro gravador.
+Este teste usa semantic_max_completion_tokens1024 só em memória; produção2048 intacta.
+
+A tentativa6679 terminou sem mídia/upload: tradução PT real Groq200, mas LT
+VERB_COMMA_CONJUNCTION exigiu `dela,` em `despesas dela quando formos para Nova York`.
+Revisões chunk/global/language devolveram vazio, e o crítico do LT bloqueou.
+Checkpoint277 confirmado; workflow/var active/true conferidos antes do teste atual.
+95IDs preservados;1wvcl31/PT e1xebjyt/PT continuam rejected, não reabrir.
+
+Correção estreita no guardião: quando LLM/glossário não propõem patches, só PT
+e só essa regra podem testar a sugestão literal original+vírgula como candidata.
+Orçamento existente e nova checagem LT+chunk+global obrigatórios; nenhum gate
+ou regra desativado.409testes passaram,2falhas red antes, revisão independente limpa.
+LT6.6 real confirmou remoção do crítico no candidato do incidente; isso ainda
+não prova geração/publicação real. A fonte1x65oqv foi recusada pelo filtro57,8
+somente no diagnóstico, não registrada. Nada commitado/enviado nesta rodada.
+
+Correção CI local posterior: instalação FFmpeg180→300s, step8→10min, após
+timeout124 real no download do mirror; lock/rede/retries/traps preservados.
+8testes do shell/controlador passaram,1red antes, revisão independente limpa.
+Não foi enviado nem comprovado no runner. Na execução7238, adaptação e fatos
+EN responderam200 com teto semântico1024. A chamada facts da tradução PT
+recebeu429OTPM nas3tentativas a61s;7238 terminou QualityUnavailable semmídia/upload.
+Uma sonda mínima respondeu200 e a reprodução exata facts com os mesmos
+source_units/modelo/chave/teto também respondeu200. Sem números de quota na
+falha original, não presumir limite específico.96190 retoma a mesma fonte
+unavailable com a adaptação aprovada; não reabre rejected nem reinicia fonte.
+
+## Teste real atual — 26/10/2026, 23h55 (São Paulo)
+
+Sessão exec **6679 em andamento**, pasta
+`data/state/testes_pipeline_completo_pt/20261026_235446`, fonte real **1xebjyt**
+(208 palavras, filtros72,22). Primeiro acompanhar essa sessão; não iniciar outra.
+Comando da raiz: python testar_pipeline_completo_local.py --publicar --provider groq
+--reddit-post _export_repo_publico/data/state/teste_publicacao_pt/reddit_browser_20261026_2353/post_1xebjyt.json
+--fora-da-janela. Token PT confirmado; operador autorizou publicação pública
+assim que pronta, fora da janela. Cron/workflow ficam pausados durante o teste.
+
+Tentativa anterior47749 terminou na tradução PT: rejected,1grammar crítico,
+nenhum batch/upload. Checkpoint272 preserva95IDs e essa rejeição permanece fechada.
+Quarentena detalhada não chegou a ser escrita porque o checkpoint de rejeição
+falhou antes da notificação; relatório de qualidade preserva contagem/reparos.
+A pilha mostrou requests.RequestException no GET do recibo privado, não Groq/YT.
+Workflow e variável voltaram a active/true ao terminar a tentativa anterior.
+
+Correção local produtiva: PrivateStateStore repete só GET após falha de
+transporte, até3tentativas, esperas2/4s e log só da classe; POST/TLS/allowlist/
+hashes intactos.126testes state/snapshot/checkpoints passaram, red antes.
+Modo Groq ainda traduzia por Google/MyMemory; Google falhou e a candidata
+legada foi reprovada. ScriptTranslator ganhou opt-in groq_translation=True,
+ligado só pelo helper real --provider groq; usa o mesmo cliente/prompt com
+modelo fixo, bloqueia truncamento e mantém idioma/sentinelas/gates/cache.
+Gemini e legado sem opt-in preservados.137testes translator/Gemini passaram,
+duas regressões red antes; revisão independente limpa das duas correções.
+
+Nova captura veio de JSON real de100posts no Chrome autenticado; arquivo/recibo
+preservam texto/metadados e hash, sem modhash/cookie. HTTP Python continua403.
+Outra candidata1x9rm0q ficou só em diagnóstico, recusada pelo filtro59,3;
+não foi registrada no DB. Não reduzir filtros para usá-la.
+Controles do helper:9provas passaram novamente com DB congelado no payload267,
+pois o banco da primeira pasta avançou para rejected. Nenhum vídeo novo até aqui.
+Mudanças ainda locais; nada foi commitado/enviado nesta restauração atual.
+
+## Teste real em andamento — 26/10/2026, 23h17 (São Paulo)
+
+PT renovado às 22h58: refresh e channels.list confirmaram o canal esperado;
+metadado do Secret YOUTUBE_TOKEN_PT confirma atualização às 01h58Z de 27/10.
+Token novo também foi copiado para secrets/ de produção, que continua ignorado;
+data/oauth_token_status.json recebeu só a data PT e ainda não foi enviado ao Git.
+
+Operador autorizou explicitamente publicar este teste assim que pronto, fora
+da janela normal. Helper da raiz agora aceita --reddit-post com captura/recibo
+e hash, mantendo texto, filtros e estados rejeitados; --fora-da-janela altera
+só a janela em memória, preservando teto, intervalo e antecedência. Plano de
+cada transporte registra horário/opções efetivos e proveniência do recibo.
+Quatro provas locais passaram; revisão independente sem achados pendentes.
+
+Execução real iniciada: pasta data/state/testes_pipeline_completo_pt/20261026_230559,
+sessão exec 32171. **Primeiro acompanhar essa sessão; não iniciar outra em paralelo.**
+Comando usado na raiz: python testar_pipeline_completo_local.py --publicar
+--provider groq --reddit-post _export_repo_publico/data/state/teste_publicacao_pt/reddit_browser_20261026_2242/post_1wvcl31.json
+--fora-da-janela. Se precisar retomar, acrescentar --resume 20261026_230559 somente
+depois de conferir término, estado privado e ausência de envio incerto.
+
+Workflow pipeline.yml está disabled_manually e variável de automação false
+durante este teste para excluir concorrência. O finally do helper restaura
+ambos após checkpoint seguro; se houver estado/envio incerto, reconciliar antes.
+Restaurou os 95 IDs e o primeiro checkpoint já foi confirmado na release do
+run40351541446/attempt1. Fonte real 1wvcl31, coleta assistida pelo Chrome;
+coleta HTTP automática continua403. Groq confirmou perfil e adaptação com200;
+revisões recebem429 intermitente e recuperam com200. Cadência existente de61s.
+Atualização às 23h31: sessão32171 terminou com StateError após adaptação EN
+aprovada. Finally confirmou checkpoint267 e reativou workflow/automação.
+Head remoto267 confere com last_saved local, 95IDs, zero batch da fonte e
+zero uploading. Só 1wvcl31/PT ficou processing; não tratar como rejected.
+Helper ganhou diagnóstico seguro da localização/etapa do erro e recuperação
+assistida --recuperar-processamento, somente junto de --resume/captura original.
+Confere raw original/hash, fonte/perfil/cache, único processing e ausência de
+batch/upload antes da transição processing→unavailable; checkpoint guardado
+antes de retomar. Nove provas isoladas com cópias reais passaram; revisão limpa.
+Às 23h33 a flag foi executada junto das opções anteriores e --resume20261026_230559:
+sessão exec **47749 em andamento**. Recuperação confirmada e fonte/perfil
+retomados. O workflow volta a estar pausado durante essa sessão. Primeiro
+acompanhar47749, não repetir a execução. Nenhum vídeo novo gerado/publicado.
+
+Log real do Actions40351541446 foi conferido: update do apt terminou, mas
+install de ffmpeg/fonts atingiu timeout de180s, exit124. Tentava baixar94,1MB
+do mirror azure.archive.ubuntu.com. Não foi erro de chave/API nessa execução.
+Nenhuma correção de CI foi aplicada ainda; manter separado do teste local.
+
+## Teste local até publicação solicitado — 2026-10-26
+
+O operador confirmou a sincronização e pediu o teste real até publicação
+pública. A preparação não publicou nem alterou a automação: variable continua
+`true` e workflow `active`. OAuth PT ainda retorna `invalid_grant`; foi solicitado
+login pelo helper **da raiz** `scripts/reautenticar_youtube.py --lang pt --github`.
+
+Estado mais recente conferido: production/run40197727209/attempt1/seq264,
+95 IDs confirmados, zero pendentes/incertos, 13 blobs. PT tem 11 estados
+rejeitados e nenhuma retomada elegível; não reabri-los. Controle/recibo privados
+estão em `data/state/teste_publicacao_pt/20261026_173735`.
+Reddit real devolveu403 nos dois hosts, com bloqueio por segurança da rede;
+PullPush devolveu429. Cookie da raiz presente e com expiração em08/03/2027;
+validade do cookie não comprovou acesso. Foi perguntado se o navegador local
+consegue abrir o Reddit com a conta conectada. Sonda curta GroqPT respondeu200;
+Gemini3.8 respondeu503. Isso não comprova chamadas longas do guardião.
+
+Helper local preparado na raiz: `testar_pipeline_completo_local.py`.
+`--preflight --provider groq` para no OAuth antes de qualquer efeito externo.
+`--publicar --provider groq` foi preparado, mas **ainda não foi executado**.
+Usa fonte real curta íntegra, filtros/gates normais, estado privado verificado,
+fila e Uploader; verifica o ID público/processado no canal PT. Para excluir
+o gravador Actions durante o teste, desabilita temporariamente o workflow,
+confere que os runs anteriores terminaram e restaura o estado anterior após
+checkpoint seguro. Cada checkpoint também verifica exclusão e head remoto.
+Retomadas preservam a fonte/hash e IDs enviados, sem repetir o transporte.
+Revisão independente e verificações offline dos controles passaram; não são
+prova de geração/publicação real. O teste aguarda OAuth PT e acesso ao Reddit.
+
+Comparação local às 22h43: após renovar o cookie da raiz, página comum e JSON
+continuaram com HTTP 403 pelo Python. No Chrome já autenticado, a página e **o mesmo
+endpoint JSON** abriram sem desafio. Isso localiza a diferença no acesso do
+cliente, mas ainda não comprova a causa exata nem restaura a coleta automática.
+Uma fonte pública íntegra foi preservada por leitura do JSON exibido no navegador:
+`data/state/teste_publicacao_pt/reddit_browser_20261026_2242/post_1wvcl31.json`.
+São 165 palavras, score 73,48 nos filtros normais, sem ocorrência no baseline
+das 17h37. `diagnostico.json` registra hash, método e limites desta evidência;
+nenhum modhash/cookie foi salvo na captura. O helper completo ainda usa coleta
+HTTP; essa captura é uma entrada assistida preservada, não integração concluída.
+Às 22h45 o token PT ainda era o arquivo de 16/10; operador disse que fará a
+renovação agora. Nenhum vídeo publicado ou estado remoto alterado nesta comparação.
+
+A falha agendada40351541446 de26/10 ocorreu em **Instalar FFmpeg**, antes de
+Python/restore/geração. Por isso não há release privada desse run; não atribuir
+essa falha específica ao LLM ou YouTube. Nenhuma correção do workflow foi feita
+nesta preparação local.
+
+## Validação local de mídia — 2026-10-26
+
+As correções abaixo ainda são locais; não comprovam recuperação do cron.
+O teste EN gerou MP4, mas descartava os tempos nativos do Edge e estimava as
+legendas após falha CUDA por `cublas64_12.dll` ausente. Agora conserva
+`WordBoundary` do próprio áudio; Whisper repete em CPU se CUDA falhar durante
+a transcrição. Sem tempos reais, a voz falha, inclusive no gTTS autorizado.
+`edge-tts>=7.3.1` também corrige o HTTP403 reproduzido na versão 7.2.8.
+
+EN corrigido: `data/state/testes_sincronia/en_20261026_141524/video_en_sincronizado.mp4`.
+Transcrição independente em CPU do MP4 final encontrou 98,8% das palavras e
+diferença mediana de 36 ms nos inícios (p90=77 ms). São medidas de alinhamento,
+não revisão humana; um frame em 25,45 s também confirmou a legenda esperada.
+O helper da raiz `testar_video_en_local.py` aceita `--lang pt`, usa estado
+isolado e não publica. A primeira tentativa PT parou na tradução: a revisão
+apontou concordância sem propor patch. O reparo dirigido existente agora recebe
+também achados semânticos gramaticais literais únicos sem proposta, dentro do
+mesmo orçamento e com revisão completa posterior. 328 testes dos gates, 151 dos
+contratos semânticos e 23 de voz/tempos passaram; revisão independente sem achados.
+O teste completo PT em `data/state/testes_locais_pt/20261026_143207_255391`
+terminou indisponível na revisão global da tradução, após três HTTP429 do Groq.
+Não alcançou áudio; o reparo gramatical ainda não tem aceite real desse fluxo.
+Uma sonda pública Gemini3.8 em seguida terminou em timeout de 30 s.
+
+O helper da raiz `testar_sincronia_pt_local.py` verifica somente mídia com texto
+fixo público, sem LLM/DB/fila/upload. MP4 PT real gerado em
+`data/state/testes_sincronia/pt_20261026_144316/video_pt_sincronizado.mp4`.
+Whisper em CPU no MP4 encontrou 48/48 palavras, mediana de 32 ms e p90 de 98 ms;
+os 40 eventos ASS estão alinhados aos tempos nativos e não se sobrepõem.
+Isso comprova a sincronização da amostra, não a geração completa do roteiro PT.
+
+O operador autorizou teste público posterior, mas pediu continuar só os testes
+locais e renovar o token PT depois; refresh PT retornou `invalid_grant`.
+Não publicar a história sintética nem alterar namespace para contornar esse gate.
+Os resultados históricos abaixo não substituem este estado atual.
+
 ## Publicação restabelecida — 2026-10-13
 
 Confiabilidade integrada em main. Run
@@ -31,6 +372,22 @@ mais precisas, não uma aprovação automática. Ainda exige rodada real verde a
 dos agentes de crescimento/manutenção.
 
 Antecedentes abaixo são históricos e não substituem esta seção.
+## Nota local preservada — 2026-10-13, antes do reparo do guardião
+
+Código de confiabilidade integrado em main/0838bfd. Bootstrap e restauração de
+production confirmados, com 84 IDs históricos preservados e 31 histórias/91 partes.
+Run [38344600714](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38344600714)
+terminou success: sete vídeos enviados (PT3/EN2/ES2), zero falhas de upload.
+Owner API confirmou os sete IDs processados nos canais corretos e os horários;
+quatro já estavam públicos na conferência. EN/ES mantêm pendência de capa403.
+Run normal [38425392437](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/38425392437)
+foi disparado para completar a meta3/idioma, com restauração de estado pós-upload.
+Resultado em acompanhamento. Cron09UTC e automação continuam habilitados.
+Status/evidências atuais: [RELIABILITY_STATUS](docs/RELIABILITY_STATUS.md).
+Operação de restore/publicar somente: [PIPELINE_STATE](docs/PIPELINE_STATE.md).
+
+As retomadas e notas locais abaixo foram preservadas como histórico; suas
+declarações de implantação/OAuth pendentes não substituem o estado atual acima.
 
 ## Retomada prioritária — 2026-10-09
 
@@ -198,6 +555,181 @@ propostas privadas preparadas; sete possíveis uploads manuais seguem bloqueados
 Não repetir remendos de prompt/modelo, trocar chave nem liberar main sem gates.
 Verify37244536054 passou em outro runner:809testes19.15s/7arquivos/mídiazero.
 Não houve bootstrap production, rodada normal, upload ou implementação de agentes.
+### Notas locais preservadas
+
+## Continuação atual — 2026-10-05
+
+Atualização2026-10-06: run37408357221/1947aee4 falhou por HTTP429 na revisão da
+adaptaçãoEN/chunk/trêstentativas/contexto16695. 959testes18.93s/LT/restore/save
+passaram, semmídia/upload. Cópia privada verificada; production intacto.
+Consulta curta localEN HTTP200/TPM8000 não prova igualdade com SecretActions.
+Usage/Limits da conta EN do runner solicitado ao operador; watch encerrado,
+sem novo dispatch/troca de chave/main. Status da worktree orienta continuação.
+
+Rodada real Qwen `37379031931`/`ac74819` terminou failure22:15:58UTC;
+API reconferida em 2026-10-06. Tradução PT aprovada, naturalização PT rejeitada
+por alteração da sequência de evento e ES revisão HTTP429. Sem mídia/upload;
+checkpoint final preservado. Reconciliação local conserva 84 IDs/7 pendentes;
+credencial limitada local configurada em2026-10-06. Verify37407149313/af2f6f4
+passou no Actions:955testes/restoreLinux/11blobs, sem geração/publicação ou
+headproduction. Consulte status/ledger da worktree para validação corrente;
+os monitores e a ausência da credencial nos antecedentes já foram encerrados.
+Correções e evidências atuais estão na worktree `pipeline-reliability`, em
+`docs/RELIABILITY_STATUS.md` e no ledger do plano. Main/bootstrap/rodada normal/
+agentes continuam posteriores aos gates reais. Não usar gh amplo no bootstrap.
+Os parágrafos abaixo são antecedentes, inclusive os monitores já encerrados.
+
+Próxima candidata enviada: `ac74819`, branch/worktree `pipeline-reliability`.
+Qwen3.8 fixo apenas no guardião, schema/gates/chaves/cadência preservados.
+896 testes/33 avisos/50.94s na reconferência; compile/diff e revisão independente
+passaram. Sonda longa real retornou três avisos gramaticais em três chamadas,
+sem erro JSON registrado; não comprova geração completa. Actions permanece em
+incidente: monitor ativo e dispatch PT/EN/ES sem upload somente após recuperação,
+namespace `validation-reliability-20261005-source`. Espera condicional sessão
+86228: confere SHA ac74819 antes de um único dispatch e acompanha com gh watch;
+nenhum outro dispatch enquanto ativa. Consulte status/ledger da
+worktree; mídia/bootstrap/main/rodada normal/agentes ainda não concluídos.
+
+Retomada posterior: run37370371919/b030bd6 terminou failure sem qualquer etapa
+ou runner (runner_id0): hosted runner não adquirido após várias tentativas.
+GitHub Status API indica Actions major_outage/investigating20:47UTC. Aguardar
+recuperação antes de outro dispatch; não atribuir esse resultado ao pipeline.
+Sonda alternativa de saída também não comprovou estabilidade no trecho longo,
+portanto não incorporada. Código/gates/modelo/produção preservados.
+
+Última continuação: código `8628ed9` enviado só em `pipeline-reliability`;
+separa narrativa do JSON factual nos gates derivados e diagnostica referências
+recusadas com subtipo enum, sem valores/IDs. 888 testes/33 avisos/45.19s,
+compile/diff check e revisão independente passaram. Run `37363161214` iniciou
+PT/EN/ES real sem upload, namespace novo `validation-reliability-20261005-source`.
+Terminou failure/10m11s: adaptação aprovada, tradução PT com três HTTP400 de
+JSON/geração vazia; sem mídia/upload, gates derivados não exercitados. Prova
+curta real passou. Comparação longa sanitizada posteriormente autorizada e
+executada: 20B/120B retornaram JSON parseável e rejeição factual, sem reproduzir
+HTTP400. Somente status/contagens retidos; não comprova erro do original nem
+vantagem do 120B. Consultar ledger/status da worktree para próximo diagnóstico;
+não liberar main/bootstrap/agentes. Prepared antigo exige reconciliação.
+Run main37349810900 falhou na adaptação EN; diagnóstico antigo não preservou HTTP.
+Os registros abaixo são antecedentes.
+
+Retome na worktree `.worktrees/pipeline-reliability`; código enviado `3d65d84`.
+Operador aprovou diagnóstico estrutural de JSON recusado, sem conteúdo privado
+ou mudança de schema/gates. 859 testes e revisão independente passaram. Run
+`37331951705` falhou por TPM/429; o diagnóstico agora preserva recusas JSON
+intermediárias mesmo após sucesso/cota. Run `37333981612` comprovou a captura:
+cinco achados sem `reason`/`start` obrigatórios, HTTP400 preservado antes de
+HTTP429/TPM final. 859 testes/19.52s, LT/restore/save passaram. Nenhuma mídia,
+publicação/reset ou integração em main. Correção autorizada alinhou o exemplo
+de emissão ao schema e adicionou cadência por recarga TPM entre etapas/clientes;
+schema/gates/chaves/orçamento intactos. 873 testes locais e revisão independente
+passaram. Run `37338112115` aprovou tradução/naturalização PT, sem HTTP429
+registrado; título falhou por reason ausente nas três tentativas. Nenhuma mídia.
+Retry agora recebe nomes reason/start ausentes, sem valores/índices ou fabricação
+de motivos. 879 testes locais e revisão independente passaram. Run `37341313520`
+terminou failure/34m20s: 879 testes/18.09s, LT e estado passaram; recusas JSON
+recuperadas, nenhum HTTP429 registrado. Sem mídia/upload. PT/título e ES/meta2
+rejeitados por achados factuais; EN/título parou em invalid_source_reference/3,
+HTTP ausente e subtipo não capturado. Investigar esses bloqueios antes de novo
+dispatch/remendo. Testes não são aceite real; main/bootstrap/agentes pendentes.
+Resultado e limites ficam no `docs/RELIABILITY_STATUS.md` dessa worktree.
+Operador confirmou nenhuma publicação manual. Consulta ownerAPI e logs
+anteriores sustentam reconciliação: 84 IDs históricos mantidos, sete pendentes,
+91 kits e 56 tentativas de capa encerrados somente na cópia local. Snapshot e
+restauração local passaram com 30 histórias/91 partes; originais preservados.
+Nenhum head/importação production, integração main ou agente novo.
+
+Run 37320307156 passou testes/LT/restore/save final; geração global EN falhou
+por nonliteral_evidence/3, não HTTP429. Código a3b7f3a corrige o retry sem
+feedback mantendo os gates; 812 testes locais e revisão independente passaram.
+Run 37322711750 terminou verde, sem vídeo: repetição estilística LT tratada
+como erro gramatical gerou ciclo. 12a48bf corrige categoria/avisos mecânicos;
+823 testes locais e revisão passaram. Run 37324808064 aprovou adaptação EN,
+mas PT/tradução falhou por HTTP400 json_validate_failed/1, sem mídia. 484a912
+permite somente esse retry no orçamento atual; 832 testes/revisão passaram.
+Run 37326768456 passou 832 testes/17.14s, LT e restore/save, mas falhou
+PT/tradução: HTTP400/json_validate_failed após três tentativas. JSON válido/693
+caracteres, campo incompatível desconhecido; nenhum vídeo/upload. Retry limitado
+não resolveu a recusa. Retomar pela discussão do contrato e diagnóstico
+estrutural sanitizado, antes de outro remendo/dispatch; manter gates intactos.
+Token específico de estado está no Actions, não no .env local; configuração
+solicitada sem segredo no chat ou uso da credencial ampla gh. Cron legado
+continua habilitado; isso não libera a branch nova. Para resultado e próximos
+gates, leia `docs/RELIABILITY_STATUS.md` e o ledger dessa worktree.
+
+## Última retomada — 2026-10-04 à noite
+
+Continue na worktree `.worktrees/pipeline-reliability`, branch enviada `6d59557`
+(código da captura em `8be51cb`). Leia seu
+`docs/RELIABILITY_STATUS.md` e ledger antes de agir. Capturas privadas
+37238541263/37238543218 comprovaram perda de 28 histórias/91 partes no DB cache
+recente; filas/84 IDs preservados, sete MP4 pendentes recuperados. Fontes dos
+dois incidentes também recuperadas com hash original conferido. Validação nova
+37237857551 ainda falhou antes de mídia por HTTP400; reprodução de uma fonte
+falhou por citação não literal, inclusive com modelo maior. Suíte: 773 testes passaram.
+Contrato factual precisa de revisão aprovada; nenhuma integração em main,
+bootstrap production ou rodada normal nova foi realizada. Documentos dirty
+deste checkout continuam pertencendo ao operador e devem ser preservados.
+
+## Trabalho atual não integrado — retomada 2026-10-04
+
+O plano de confiabilidade foi aprovado e está implementado na branch local
+`pipeline-reliability`, worktree `.worktrees/pipeline-reliability`, base
+`23f7f9c`, último commit enviado `12dd591` (código validado: `c36554a`). Retome nessa worktree pelo ledger
+`.superpowers/sdd/2026-10-03-pipeline-reliability/progress.md`; tarefas 1–6
+estão completas e a tarefa 7 ainda tem gates operacionais pendentes. Não
+recomeçar o plano nem sobrescrever os documentos pendentes deste checkout.
+
+A revisão independente apontou quatro falhas, reproduzidas e corrigidas:
+sidecars SQLite no restore, fila legada sumida virando vazia, aliases de paths
+Windows e continuação após upload incerto. Suíte final local: **745 testes
+passando**, 29 avisos de depreciação, 90.80s; compilação e diff check passaram.
+Nenhum teste novo equivale a geração/Groq/YouTube real.
+
+`MoneyzxD/Automatic-Reddit-State` foi criado privado, e a variable
+`PIPELINE_STATE_REPO` foi configurada em `Automatic-Reddit-Git`. Consulta apenas
+de nomes dos Secrets em 2026-10-04 confirmou `PIPELINE_STATE_TOKEN` ausente.
+O operador precisa cadastrar um token fine-grained limitado ao repo privado,
+Contents read/write, como esse Secret no repo de produção; nunca enviar o
+valor no chat. Depois: bootstrap reconciliado, geração PT/EN/ES isolada sem
+upload, segundo run de restore/verify e somente então liberação de main.
+Em seguida, o operador cadastrou o Secret e autorizou push/validação. Consulta
+de nomes confirmou seu cadastro às 16:20:22 UTC; valor não acessado. A branch
+`pipeline-reliability` foi enviada com commit `a91f475`, e o run `37216781914`
+iniciou validação PT/EN/ES no namespace `validation-reliability-20261004`, com
+história de teste e publicação desativada. A investigação das falhas atuais
+foi registrada no backlog dessa branch, para depois destes ajustes.
+Não houve merge em main nem mudança da automação de produção. Os agentes
+de manutenção/crescimento permanecem fora da entrega. Leia as instruções
+operacionais em `.worktrees/pipeline-reliability/docs/PIPELINE_STATE.md`.
+
+Atualização operacional: o Secret limitado comprovou escrita/restauração real
+nos runs 37217438115 e 37218385352; testes e LanguageTool passaram. Geração
+parou antes de mídia por Groq HTTP400/json_validate_failed, modo facts, uma
+tentativa. Schema estrito não resolveu a chamada real. Suíte local atual:
+759 testes passando. Run 37219383922 está validando diagnóstico sanitizado
+adicional, sem resposta bruta nos logs nem publicação. Produção/main continuam
+intactos; bootstrap reconciliado e geração/verify reais ainda são pendências.
+
+O run 37219383922 confirmou JSON válido, não erro de sintaxe. Probe isolado
+mostrou rótulos fora do enum e uma citação com capitalização alterada. Prompt
+de fatos/feedback agora pedem categorias válidas e cópia exata; schema e gate
+não foram flexibilizados. Fixture de integração agora impede Groq real em
+testes, mesmo com chave no ambiente. Suíte isolada: 763 passed/30 warnings em
+49.76s. Último probe local recebeu 429 acima do orçamento de espera; chamadas
+locais pararam. Run 37221057489 verifica a correção real no Actions, sem upload.
+
+Resultado 37221057489: testes/LT/restore/save passaram, mas Groq respondeu
+rate_limit/HTTP429 em facts após uma tentativa. Nenhuma mídia ou publicação.
+Não repetir geração até a cota permitir. Run 37221464481 está verificando
+somente o estado privado em outro runner, sem Groq/geração/upload. T7 ainda
+não concluída; ajuste semântico, mídia e bootstrap reconciliado de produção
+seguem pendentes. Falhas antigas de main permanecem no backlog da branch.
+
+Verify 37221464481 concluído com sucesso em outro runner, commit c36554a:
+estado de controle/fonte/perfil restaurado/verificado, sem Groq ou publicação.
+Não é prova de mídia/upload. Retomada: esperar cota permitir geração real,
+depois inspecionar mídia PT/EN/ES e reconciliar bootstrap de produção. T7
+continua pendente; não repetir tarefas concluídas nem apagar heads/caches.
 
 ## Estado integrado
 
@@ -235,8 +767,8 @@ etapa. Veja os comandos e distribuições suportadas no README.
 - OAuth YouTube em Testing, renovado manualmente a cada sete dias com alertas.
 - Cron 09:00 UTC, meta inicial de três vídeos por idioma e uma parte excedente
   possível para o dia seguinte; progressão da meta depende de decisão manual.
-- TikTok com kit Telegram e postagem manual, condicionado à aprovação externa
-  para uma eventual API automática.
+- TikTok mantém o desenho de kit Telegram/postagem manual, atualmente
+  desabilitado por configuração; uma API automática depende de aprovação externa.
 - Normalização de idioma no ponto de entrada; correções cirúrgicas sustentadas
   pela fonte, em vez de reescrita global ou promoção automática de regras.
 
@@ -247,12 +779,23 @@ reprovações, sem expor segredos. O artifact `logs-<run_id>` os preserva por
 14 dias. Propostas de glossário exigem teste e revisão humana antes de entrar
 em `config/contextual_glossary.yaml`.
 
-Revisão independente de toda a branch, fast-forward/push e verificação do
-runner real são passos de release posteriores à documentação/regressão local.
-Não interpretar teste unitário verde como execução do LanguageTool real nem
-como publicação bem-sucedida. O erro 413 legado continua sem confirmação
+## Release concluído e evidência
+
+Em 2026-10-02, a revisão/correção final e integração/push foram concluídos;
+`main` recebeu `30a0a0c7fdae31610099816b802c4d49f3041740`. A
+[validação no Actions](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37064703594)
+terminou com sucesso: LanguageTool 6.6 real aquecido em PT-BR/en-US/es,
+533 testes passando e dry-run PT/ES/EN. Publicação foi pulada deliberadamente;
+o processo de fundo foi encerrado pelo passo de limpeza.
+Resultado/logs desse run foram reconferidos em leitura em 2026-10-03.
+
+Isso comprova infraestrutura/testes e simulação, não uma nova renderização
+com revisão semântica real nem upload nessa validação. Oracle continua sem
+execução real verificada. O erro 413 legado continua sem confirmação
 operacional específica (ver `KNOWN_ISSUES.md`); análise de TPM usa telemetria
 existente antes de justificar outro provedor ou mudança de orçamento.
+
+## Antecedentes da recuperação
 
 ## Confiabilidade em implementação — 2026-10-03
 
@@ -356,3 +899,38 @@ restore e verificação passaram; geração/publicação/checkpoint final foram
 pulados conforme o modo. Isso comprova a recuperação do estado salvo de
 controle/fonte/perfil, NÃO geração de mídia ou upload. Retomar quando a cota
 permitir a prova semântica real; não reiniciar tarefas 1–6 nem descartar heads.
+## Próxima fase: preparação de crescimento (2026-10-03)
+
+Foram preparados [AI_WORKFLOW](docs/AI_WORKFLOW.md) e
+[YOUTUBE_GROWTH_AGENT](docs/YOUTUBE_GROWTH_AGENT.md), com roteamento de skills,
+baseline informado pelo operador, pontos de observação e proposta de coleta,
+memória privada e experimentos independentes por idioma.
+É preparação documental: nenhum coletor/agente, workflow novo, dependência
+ou mudança editorial foi implementado. O próximo passo é revisar a arquitetura
+com o operador, depois obter dados reais dos canais e especificar o MVP.
+Não reiniciar o plano de narrador já integrado para realizar essa fase.
+
+## Incidente real e prioridade de confiabilidade (2026-10-03)
+
+O [run agendado 37128480329](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/37128480329)
+falhou em `30a0a0c`: 533 testes e LanguageTool passaram, mas a revisão da
+adaptação EN de `1wfduc8` terminou `unavailable`. Publicação foi pulada.
+O relatório não preserva a classe da falha; retries do SDK não comprovam 429.
+
+Reprodução isolada confirmou que HTTP 429 e JSON inválido produzem a mesma
+mensagem genérica e que uma história inserida sem partes exportadas já é
+considerada duplicada. Baseline local: 89 testes passando nas áreas de
+guardião, lote diário e fila. Nenhum serviço Groq, render ou upload foi
+testado nessa reprodução.
+
+O operador autorizou avançar primeiro em confiabilidade e depois nos agentes.
+A [spec de confiabilidade](docs/superpowers/specs/2026-10-03-pipeline-reliability-design.md)
+registra diagnóstico/retry, retomada por idioma e recuperação privada de estado.
+O desenho e a criação de `MoneyzxD/Automatic-Reddit-State` privado foram
+aprovados. O [plano de implementação](docs/superpowers/plans/2026-10-03-pipeline-reliability.md)
+está preparado e aguarda revisão/confirmação do método de execução. Nenhuma
+correção de código nem criação externa foi realizada nessa preparação.
+A credencial limitada ao armazenamento privado será fornecida pelo operador
+na implantação; não reutilizar implicitamente a credencial ampla do gh.
+Depois vêm implementação/regressões, bootstrap reconciliado e validação real
+sem publicação antes da liberação normal.

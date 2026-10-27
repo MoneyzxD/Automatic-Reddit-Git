@@ -117,3 +117,12 @@ def test_workflow_limita_preparacao_sem_ignorar_falha_do_step():
     step = _step()
     assert 1 <= int(step.get("timeout-minutes", "0")) <= 10
     assert step.get("continue-on-error", "false") == "false"
+
+
+def test_instalacao_tem_margem_para_download_do_incidente_sem_exceder_step():
+    # Run40351541446: mirror Azure ainda baixava os94MB quando venceu180s.
+    step = _step()
+    assert "timeout --kill-after=10s 300s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get" in step["run"]
+    # Timers20, chrome10, update120, install300, ffmpeg10, fontes10;
+    # inclui kill-after e margem para shell/diagnóstico.
+    assert int(step["timeout-minutes"]) * 60 >= 550
