@@ -1,0 +1,23 @@
+name: Verificar coleta real do Reddit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coleta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Instalar clientes já usados pelo extrator
+        run: python -m pip install 'requests>=2.31.0' 'pyyaml>=6.0'
+      - name: Consultar a fonte sem gerar ou publicar vídeos
+        env:
+          REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
+        run: python scripts/check_reddit.py
