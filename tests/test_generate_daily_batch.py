@@ -63,6 +63,23 @@ def test_estado_inseguro_codigo_2_continua_parando_todos_idiomas(monkeypatch):
     assert calls == [["pt"]]
 
 
+def test_recusa_de_conteudo_da_vez_aos_outros_idiomas(monkeypatch):
+    counts = dict(pt=0, en=0, es=0)
+    calls = []
+    monkeypatch.setattr(generate_daily_batch, "_contar_lote_do_dia",
+                        lambda langs: {lang: counts[lang] for lang in langs})
+    def story(langs, max_parts):
+        lang = langs[0]
+        calls.append(lang)
+        if lang != "pt":
+            counts[lang] = 3
+        return 0
+    monkeypatch.setattr(generate_daily_batch, "_executar_historia", story)
+    with pytest.raises(RuntimeError, match="Nao foi possivel completar"):
+        generate_daily_batch.preencher_lote(["pt", "en", "es"], 3, 2)
+    assert calls == ["pt", "en", "es", "pt"]
+
+
 def test_script_encontra_main_quando_executado_fora_da_raiz(tmp_path):
     script = Path(generate_daily_batch.__file__).resolve()
     ambiente = os.environ.copy()

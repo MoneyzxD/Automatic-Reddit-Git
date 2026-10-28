@@ -27,6 +27,10 @@ Variaveis reconhecidas:
     BACKGROUND_CACHE_DIR    Onde guardar downloads (default: temp do SO)
 
     PIPELINE_DB_PATH        Caminho do SQLite (default: <base>/db/pipeline.db)
+
+    PIPELINE_GROQ_WORKLOAD_LANGUAGE
+                            Interna do lote: pt|en|es, fixa no processo filho.
+                            Credencial da carga, mesmo quando o texto é inglês.
 """
 from __future__ import annotations
 
@@ -92,7 +96,12 @@ def llm_api_key(language: str = "", fallback: str = "") -> str:
     """Não mistura credenciais: Gemini nunca reutiliza uma chave Groq legada."""
     if llm_provider() == "gemini":
         return _env("GEMINI_API_KEY")
-    return groq_api_key(language) or fallback
+    workload = _env("PIPELINE_GROQ_WORKLOAD_LANGUAGE")
+    if workload and workload not in {"pt", "en", "es"}:
+        raise ValueError("Idioma da carga Groq inválido")
+    # O lote fixa uma chave por carga, inclusive ao ler a fonte em inglês.
+    # Não consulta cota nem tenta chave de outro idioma após uma falha.
+    return groq_api_key(workload or language) or fallback
 
 
 # ── REDDIT — COOKIE DE SESSAO LOGADA ────────────────────────────────────────

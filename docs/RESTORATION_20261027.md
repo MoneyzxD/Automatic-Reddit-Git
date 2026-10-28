@@ -2,12 +2,22 @@
 
 ## Atualização em28/10
 
+Complemento de isolamento: cada filho único recebe carga Groq fixa PT/EN/ES,
+inclusive para leitura e adaptação da fonte inglesa. O idioma do texto não
+direciona chamadas PT/ES à chave EN. Sem override, mantém a seleção legada;
+Gemini permanece independente. Isso corrige atribuição de orçamento, não prova
+a origem do429 anterior. Em empate de faltas, o lote favorece menos tentativas.
+Regressões reproduziram10falhas antes; suíte final**1.493aprovados em74,98s**,
+com revisão independente sem achados. O run40761430663 continua com9cdfc83.
+
 O Actions40596712855 terminou com sucesso e publicou EN1x9een7:
 https://youtu.be/U4WtiENWvjg. A verificação autenticada confirmou public/processed
 no canal EN correto; acesso anônimo oEmbed200. Coleta e FFmpeg passaram no runner.
 
-O cron40718225099 parou na naturalização ES por429/OTPM, com reserva2048 e saldo
-de entrada8000. Revisão de controle com texto ES já aprovado passou após a cota
+O cron40718225099 parou na naturalização ES por429/OTPM, com reserva2048 e
+cabeçalho TPM geral indicando8000. Esse cabeçalho não prova saldo de OTPM:
+a [Groq documenta limites separados de saída](https://console.groq.com/docs/rate-limits).
+Revisão de controle com texto ES já aprovado passou após a cota
 recompor; não é prova de defeito no YouTube ou limite estrutural de2048.
 
 O lote agora processa idiomas em série, com tentativas próprias. Indisponibilidade

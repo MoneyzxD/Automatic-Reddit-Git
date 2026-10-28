@@ -1,5 +1,29 @@
 # PROJECT_HANDOFF.md
 
+## Rodada real em andamento — 28/10/2026
+
+Ajuste posterior preparado/revisado: o lote fixa
+`PIPELINE_GROQ_WORKLOAD_LANGUAGE` no ambiente de cada filho único. Assim perfil,
+adapter e revisão EN da fonte também usam a chave fixa PT/EN/ES da execução,
+sem concentrar etapas comuns na chave EN. Não troca por cota; Gemini e fallback
+genérico preservados. Sem override, comportamento legado mantém-se. Em empate
+de vagas, o lote tenta quem teve menos tentativas: recusa PT dá vez a EN/ES.
+**1.493 testes aprovados**, LanguageTool real obrigatório,74,98s; revisão sem
+achados. O run abaixo usa9cdfc83 e não recebe esses dois deltas enquanto roda.
+
+**Run40761430663**, head9cdfc83, está executando produção com PT/EN/ES,
+meta normal3, Groq, extração real e publicação habilitada. Não é dry-run nem
+validacao_groq/meta1. Acompanho antes de lançar outro gravador. O workflow usa
+os três Secrets renovados em28/10. Link:
+https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40761430663
+
+Run40760967107 passou no modo verify, com o código novo, suíte e restauração
+privada reais. Não gerou ou publicou. O último snapshot conferido antes da
+rodada preserva97IDs; monitor somente leitura em
+data/state/restauracao_20261027/monitor_run.py aceita o runID e confere payload,
+estados, progresso e preservação dos97IDs sem baixar mídia. Nenhum gravador
+local de estado está ativo. A pasta é ignorada pelo Git.
+
 ## Retomada — 28/10/2026
 
 Run**40596712855** concluiu coleta, geração e upload EN no Actions, com fonte
@@ -9,7 +33,7 @@ esse upload. O snapshot do run40718225099 preserva**97 IDs**, incluindo esse
 vídeo e o PT H2XqpcQM_50. O estado partial da fila não invalida YouTube uploaded.
 
 O cron**40718225099** falhou em ES/naturalization, fonte1x6sq3x, com429/OTPM
-em três tentativas, mesmo com saldo de entrada8000. PT/EN dessa fonte já estão
+em três tentativas, mesmo com cabeçalho TPM geral indicando8000. PT/EN dessa fonte já estão
 rejected e continuam fechados; ES está unavailable/retomável. Revisão de controle
 da tradução ES aprovada, após recomposição da cota, passou em três chamadas com
 cap2048; isso não prova que2048seja sempre impossível nem uma falha do YouTube.

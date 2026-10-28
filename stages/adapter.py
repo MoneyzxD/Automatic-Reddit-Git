@@ -128,9 +128,8 @@ class StoryAdapter:
 
     def _groq_adapt(self, story: dict) -> dict | None:
         from utils import environment as env
-        # Adapter so processa o texto original em ingles (antes da traducao)
-        # — usa a chave do "en" pra separar seu consumo do dos outros
-        # idiomas, com fallback pra chave generica.
+        # A fonte continua em inglês; no lote a chave é fixa da carga PT/EN/ES.
+        # Fora do lote, conserva a chave EN e o fallback genérico legados.
         groq_key = env.llm_api_key("en", self.groq_key)
         if not groq_key:
             logger.debug("LLM remoto ignorado no adapter — chave não definida")

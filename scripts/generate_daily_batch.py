@@ -86,7 +86,12 @@ def _executar_historia(
         comando.append("--test-story")
     if len(idiomas) == 1 and not dry_run and not test_story:
         comando.append("--isolar-idioma")
-    return subprocess.run(comando, cwd=BASE_DIR, check=False).returncode
+    ambiente = os.environ.copy()
+    if len(idiomas) == 1:
+        ambiente["PIPELINE_GROQ_WORKLOAD_LANGUAGE"] = "pt" if idiomas[0] == "pt-br" else idiomas[0]
+    else:
+        ambiente.pop("PIPELINE_GROQ_WORKLOAD_LANGUAGE", None)
+    return subprocess.run(comando, cwd=BASE_DIR, check=False, env=ambiente).returncode
 
 
 def preencher_lote(
@@ -105,7 +110,8 @@ def preencher_lote(
                      and idioma not in indisponiveis | esgotados]
         if not elegiveis:
             break
-        idioma = max(elegiveis, key=lambda lang: meta - contagens[lang])
+        # Em empate, dá vez a quem tentou menos; uma recusa PT não retém EN/ES.
+        idioma = max(elegiveis, key=lambda lang: (meta - contagens[lang], -tentativas[lang]))
         if tentativas[idioma] >= max_tentativas:
             esgotados.add(idioma)
             continue
