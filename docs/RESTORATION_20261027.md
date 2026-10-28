@@ -1,5 +1,27 @@
 # Retomada automática — 27/10/2026
 
+## Atualização em28/10
+
+O Actions40596712855 terminou com sucesso e publicou EN1x9een7:
+https://youtu.be/U4WtiENWvjg. A verificação autenticada confirmou public/processed
+no canal EN correto; acesso anônimo oEmbed200. Coleta e FFmpeg passaram no runner.
+
+O cron40718225099 parou na naturalização ES por429/OTPM, com reserva2048 e saldo
+de entrada8000. Revisão de controle com texto ES já aprovado passou após a cota
+recompor; não é prova de defeito no YouTube ou limite estrutural de2048.
+
+O lote agora processa idiomas em série, com tentativas próprias. Indisponibilidade
+de serviço pausa o idioma, sem trocar chave/modelo, e os demais completam sua meta.
+Estado inseguro continua interrompendo todos. A flag interna --isolar-idioma,
+permitida só com um idioma, retorna4 para dependência e2 para StateError; sem ela
+a CLI continua retornando2 como antes. O lote ainda termina2 se houve dependência
+indisponível, preservando o alerta e a publicação das filas aprovadas.
+
+Groq reserva1024 nas revisões; extração de fatos e Gemini mantêm2048. Comprimento
+incompleto continua bloqueado. Os**1.481 testes** passaram com o LanguageTool real
+obrigatório em79,48s; revisão independente sem achados. Nova rodada real pendente
+da renovação dos tokens solicitada ao operador. Meta diária permanece3por idioma.
+
 O operador autorizou restaurar geração e publicação pública nos três idiomas.
 O aceite local PT é https://youtu.be/H2XqpcQM_50, sem repetição desse upload.
 Este documento acompanha a implantação; o aceite local não equivale ao cron.

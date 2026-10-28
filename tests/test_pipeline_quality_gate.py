@@ -52,6 +52,25 @@ def test_dependencia_obrigatoria_indisponivel_retorna_codigo_2(monkeypatch, tmp_
     assert main.cli(["--test-story", "--lang", "pt"]) == 2
 
 
+@pytest.mark.parametrize("state_error,expected", [(False, 4), (True, 2)])
+def test_cli_isolada_distingue_dependencia_de_estado(monkeypatch, tmp_path, state_error, expected):
+    from utils.pipeline_state import StateError
+    monkeypatch.setattr(main, "BASE_DIR", tmp_path)
+    monkeypatch.setattr(main, "load_config", lambda: {})
+    error = StateError("offline") if state_error else QualityUnavailable(SimpleNamespace(status="unavailable"))
+    monkeypatch.setattr(main, "run_pipeline", Mock(side_effect=error))
+    assert main.cli(["--lang", "es", "--isolar-idioma"]) == expected
+
+
+def test_cli_isolada_rejeita_varios_idiomas_antes_de_efeitos(monkeypatch):
+    run = Mock()
+    monkeypatch.setattr(main, "run_pipeline", run)
+    with pytest.raises(SystemExit) as error:
+        main.cli(["--lang", "pt", "en", "--isolar-idioma"])
+    assert error.value.code == 2
+    run.assert_not_called()
+
+
 @pytest.mark.parametrize("code,status", [("timeout", None), ("provider_error", 503)])
 def test_cli_expoe_falha_tipificada_sem_roteiro(monkeypatch, tmp_path, caplog, code, status):
     from stages.script_guardian import SemanticFailure, ScriptReview
@@ -764,7 +783,7 @@ def test_rejeicao_de_um_idioma_preserva_outros(pipeline):
     assert (pipeline.root / "data" / "exports" / "es").exists()
 
 
-def test_codigo_2_da_cli_interrompe_lote_sem_buscar_proxima_historia(pipeline, monkeypatch):
+def test_cli_isolada_interrompe_idioma_sem_buscar_proxima_historia(pipeline, monkeypatch):
     from stages import script_guardian
     from scripts import generate_daily_batch
     monkeypatch.setattr(main, "load_config", lambda: pipeline.config)
@@ -774,7 +793,7 @@ def test_codigo_2_da_cli_interrompe_lote_sem_buscar_proxima_historia(pipeline, m
         launches.append(command)
         return SimpleNamespace(returncode=main.cli(command[2:]))
     monkeypatch.setattr(generate_daily_batch.subprocess, "run", launch)
-    with pytest.raises(RuntimeError, match="codigo 2"):
+    with pytest.raises(RuntimeError, match="pt"):
         generate_daily_batch.preencher_lote(["pt"], meta=1, max_tentativas=6)
     assert len(launches) == 1
     assert pipeline.audios == []

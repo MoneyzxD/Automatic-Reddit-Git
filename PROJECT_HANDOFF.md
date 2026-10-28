@@ -1,5 +1,33 @@
 # PROJECT_HANDOFF.md
 
+## Retomada — 28/10/2026
+
+Run**40596712855** concluiu coleta, geração e upload EN no Actions, com fonte
+real **1x9een7**: https://youtu.be/U4WtiENWvjg. Confirmado em28/10 por API
+autenticada: public/processed, canal EN esperado e oEmbed anônimo200. Não repetir
+esse upload. O snapshot do run40718225099 preserva**97 IDs**, incluindo esse
+vídeo e o PT H2XqpcQM_50. O estado partial da fila não invalida YouTube uploaded.
+
+O cron**40718225099** falhou em ES/naturalization, fonte1x6sq3x, com429/OTPM
+em três tentativas, mesmo com saldo de entrada8000. PT/EN dessa fonte já estão
+rejected e continuam fechados; ES está unavailable/retomável. Revisão de controle
+da tradução ES aprovada, após recomposição da cota, passou em três chamadas com
+cap2048; isso não prova que2048seja sempre impossível nem uma falha do YouTube.
+
+Correção: lote executa um idioma por vez e pausa só a dependência afetada,
+continuando os demais. Flag interna opcional --isolar-idioma distingue serviço
+indisponível(código4) de StateError(código2, parada global). A CLI padrão e a
+saída final do lote preservam código2 de indisponibilidade. Não tenta nova fonte
+no idioma sem serviço. Meta3, excedente1, perfil/dedupe/gates seguem iguais.
+Revisões Groq reservam1024tokens; fatos e Gemini conservam2048. Resposta truncada
+continua bloqueada. Suíte completa**1.481 testes**, LanguageTool real obrigatório,
+em79,48s; revisão independente sem achados. Implantação/teste real em andamento.
+
+Operador pediu comando para renovar todos os tokens e recebeu da raiz:
+python scripts/reautenticar_youtube.py --all --github. Secret ES ainda17/10 na
+última conferência; aguardar renovação antes de disparar job com esse Secret.
+Não iniciar OAuth paralelo enquanto o operador conclui os logins.
+
 ## Retomada automática em validação — 27/10/2026
 
 O operador autorizou integrar as correções e restaurar a rotina dos três idiomas.

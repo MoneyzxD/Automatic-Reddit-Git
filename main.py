@@ -1138,6 +1138,8 @@ def cli(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Reddit Stories Pipeline v3")
     parser.add_argument("--lang",        nargs="+",      default=["pt"])
     parser.add_argument("--dry-run",     action="store_true")
+    parser.add_argument("--isolar-idioma", action="store_true",
+                        help="Com um idioma, distingue indisponibilidade de IA de erro de estado")
     parser.add_argument(
         "--test-story",
         action="store_true",
@@ -1151,6 +1153,8 @@ def cli(argv: list[str] | None = None) -> int:
         help="so renderiza a historia se ela couber inteira neste numero de partes",
     )
     args = parser.parse_args(argv)
+    if args.isolar_idioma and len(args.lang) != 1:
+        parser.error("A execução isolada exige exatamente um idioma")
 
     config = load_config()
     setup_logging(BASE_DIR / "data" / "logs")
@@ -1168,7 +1172,9 @@ def cli(argv: list[str] | None = None) -> int:
                          failure.code, failure.http_status, failure.mode, failure.attempts)
         else:
             logger.error("Dependência obrigatória indisponível; tipo=%s; lote interrompido", type(error).__name__)
-        return 2
+        # O lote pode prosseguir em outro idioma após falha de IA; incerteza
+        # de estado continua bloqueando todos. A CLI pública mantém código2.
+        return 4 if args.isolar_idioma and not isinstance(error, StateError) else 2
     return 0
 
 

@@ -171,6 +171,9 @@ script_quality:
   semantic_timeout_seconds: 60
   # Teto configurável só do JSON do guardião; length nunca autoriza aprovação.
   semantic_max_completion_tokens: 2048
+  # Revisões curtas reservam menos saída no Groq; fatos e Gemini mantêm2048.
+  # finish_reason=length continua bloqueado, sem aprovar JSON parcial.
+  groq_review_max_completion_tokens: 1024
   semantic_citation_ids: true         # copia citações fN do ledger/s0 da fonte; false restaura o transporte literal
   semantic_retry_wait_seconds: 15
   # Até 15min por espera: honra TPD curto sem refazer fatos/chunks já revisados.

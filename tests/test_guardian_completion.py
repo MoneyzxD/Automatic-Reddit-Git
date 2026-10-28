@@ -111,6 +111,23 @@ def test_teto_do_guardiao_pode_ser_configurado_sem_mudar_wrapper(sdk_http, mode)
     assert "max_tokens" not in sdk_http[1][0]
 
 
+@pytest.mark.parametrize("mode,expected", [("facts", 2048), ("chunk", 1024), ("global", 1024)])
+def test_reserva_groq_menor_para_revisao_preserva_fatos(sdk_http, monkeypatch, mode, expected):
+    monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "groq")
+    sdk_http[0]["content"] = _content(mode)
+    _GroqReviewer({"groq_model": _QWEN, "semantic_timeout_seconds": 60,
+                   "semantic_max_completion_tokens": 2048,
+                   "groq_review_max_completion_tokens": 1024}).review(**_context(mode))
+    assert sdk_http[1][0]["max_completion_tokens"] == expected
+
+
+def test_reserva_especifica_groq_nao_muda_gemini(monkeypatch):
+    monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "gemini")
+    reviewer = _GroqReviewer({"semantic_max_completion_tokens": 2048,
+                              "groq_review_max_completion_tokens": 1024})
+    assert reviewer.completion_cap == reviewer.review_cap == 2048
+
+
 @pytest.mark.parametrize("mode", ["facts", "chunk", "global"])
 @pytest.mark.parametrize("model,effort", _MODELS)
 def test_teto_preserva_mensagens_schema_e_esforco_especifico_do_modelo(sdk_http, mode, model, effort):

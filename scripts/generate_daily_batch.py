@@ -20,7 +20,7 @@ if str(BASE_DIR) not in sys.path:
 
 
 class BatchUnavailable(RuntimeError):
-    """Dependência/estado indisponível não pode ser escondido por nova história."""
+    """Dependência indisponível não é escondida; outros idiomas podem concluir."""
 
 
 def _carregar_publicacao() -> dict:
@@ -84,6 +84,8 @@ def _executar_historia(
         comando.append("--dry-run")
     if test_story:
         comando.append("--test-story")
+    if len(idiomas) == 1 and not dry_run and not test_story:
+        comando.append("--isolar-idioma")
     return subprocess.run(comando, cwd=BASE_DIR, check=False).returncode
 
 
@@ -95,34 +97,36 @@ def preencher_lote(
 ) -> dict[str, int]:
     logger = logging.getLogger("daily_batch")
     contagens = _contar_lote_do_dia(idiomas)
-    tentativas = 0
+    tentativas = dict.fromkeys(idiomas, 0)
+    indisponiveis, esgotados = set(), set()
 
-    while any(contagens[idioma] < meta for idioma in idiomas):
-        if tentativas >= max_tentativas:
-            faltando = ", ".join(
-                f"{idioma}={contagens[idioma]}/{meta}" for idioma in idiomas
-            )
-            raise RuntimeError(
-                f"Nao foi possivel completar o lote em {max_tentativas} historias: {faltando}"
-            )
-
-        restantes = {idioma: meta - contagens[idioma] for idioma in idiomas}
-        maior_falta = max(restantes.values())
-        grupo = [idioma for idioma, falta in restantes.items() if falta == maior_falta]
-        limite_historia = min(3, maior_falta + max_excedente)
-
-        tentativas += 1
+    while True:
+        elegiveis = [idioma for idioma in idiomas if contagens[idioma] < meta
+                     and idioma not in indisponiveis | esgotados]
+        if not elegiveis:
+            break
+        idioma = max(elegiveis, key=lambda lang: meta - contagens[lang])
+        if tentativas[idioma] >= max_tentativas:
+            esgotados.add(idioma)
+            continue
+        limite_historia = min(3, meta - contagens[idioma] + max_excedente)
+        tentativas[idioma] += 1
         logger.info(
-            "Historia %d/%d: idiomas=%s, ate %d parte(s)",
-            tentativas,
+            "Historia %d/%d: idioma=%s, ate %d parte(s)",
+            tentativas[idioma],
             max_tentativas,
-            ",".join(grupo),
+            idioma,
             limite_historia,
         )
-        codigo = _executar_historia(grupo, limite_historia)
+        # Um único gravador por vez, com orçamento/tentativas por idioma.
+        # A mesma fonte/perfil e os checkpoints aprovados seguem reutilizáveis.
+        codigo = _executar_historia([idioma], limite_historia)
         if codigo == 2:
-            raise BatchUnavailable("Dependência ou estado obrigatório indisponível (codigo 2); lote interrompido")
-        if codigo != 0:
+            raise BatchUnavailable("Estado obrigatório indisponível (codigo 2); lote interrompido")
+        if codigo == 4:
+            indisponiveis.add(idioma)
+            logger.error("IA indisponível em %s; sem nova história neste idioma; continuando os demais", idioma)
+        elif codigo != 0:
             raise RuntimeError(f"main.py falhou com codigo {codigo}")
 
         novas_contagens = _contar_lote_do_dia(idiomas)
@@ -135,6 +139,10 @@ def preencher_lote(
             logger.warning("Historia nao coube nas vagas restantes; tentando outra")
         contagens = novas_contagens
 
+    if indisponiveis:
+        raise BatchUnavailable(f"IA indisponível em {','.join(sorted(indisponiveis))}; lote preservado: {contagens}")
+    if esgotados:
+        raise RuntimeError(f"Nao foi possivel completar o lote em {max_tentativas} historias por idioma: {contagens}")
     logger.info(
         "Lote completo: %s (ate %d excedente para o dia seguinte)",
         contagens,

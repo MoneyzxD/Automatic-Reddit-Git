@@ -638,6 +638,10 @@ class _GroqReviewer:
         self.completion_cap = config.get("semantic_max_completion_tokens", 2048)
         if type(self.completion_cap) is not int or not 1 <= self.completion_cap <= 32768:
             raise ValueError("Teto de saída semântica inválido")
+        self.review_cap = (config.get("groq_review_max_completion_tokens", self.completion_cap)
+                           if env.llm_provider() == "groq" else self.completion_cap)
+        if type(self.review_cap) is not int or not 1 <= self.review_cap <= 32768:
+            raise ValueError("Teto de saída da revisão inválido")
 
     def context_chars(self, **context):
         _, _, wire = _review_transport_context(context, self.citation_ids)
@@ -800,7 +804,7 @@ class _GroqReviewer:
         response = tracked_llm(key, "script_guardian", sdk_max_retries=0, retry_rate_limit=False,
                                 timeout=self.config["semantic_timeout_seconds"]).chat.completions.create(
             model=model, temperature=0,
-            max_completion_tokens=self.completion_cap, **effort,
+            max_completion_tokens=self.completion_cap if context["mode"] == "facts" else self.review_cap, **effort,
             response_format=_semantic_response_format(model, context["mode"],
                 quote_ids=tuple(registry) if registry is not None else None,
                 candidate_ids=tuple(candidate_units) if candidate_units is not None else None),
