@@ -1,5 +1,39 @@
 # PROJECT_HANDOFF.md
 
+## Retomada — 28/10/2026
+
+O [run 40772331493](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40772331493),
+head `c36770f`, foi cancelado pelo agente após os bloqueios de PT e ES, antes
+de qualquer upload novo. Save final e logs passaram. Checkpoint **354**:
+97 IDs e todas as rejeições anteriores preservados, 132 arquivos imutáveis
+idênticos à baseline e zero linhas `processing`. Nenhum gravador está ativo.
+
+PT/tradução/chunk e ES/título/global falharam por HTTP429/OTPM, mesmo com cap
+1024. ES passou a naturalização, antes bloqueada. EN ficou sem matéria-prima
+após 36 respostas 502/503 do arquivo gratuito. Não é falha OAuth: todos os
+tokens foram renovados e validados em 28/10. Ainda não há aceite dos três idiomas.
+
+Correção nova: `retry_candidates` inclui idioma ausente em fonte gerenciada,
+como já faz `processing_languages`. Assim a retomada usa `source.json` sem raw.
+Legado e estados existentes `rejected`/`exported`/`processing` seguem excluídos
+no idioma solicitado. A consulta não altera estado ou perfil. Oito casos RED;
+163 testes próximos e **1.517 testes completos** passaram com LanguageTool real.
+Revisão independente sem achados. Implantação/verificação no runner em preparação.
+
+Diagnóstico adicional de uma chamada Groq ES foi bloqueado pela revisão
+automática antes da execução: exige autorização específica para reenviar a
+fonte, contexto e perfil de `1x6sq3x`. Pergunta assíncrona está pendente;
+não repetir esse envio sem a resposta. Serviço não forneceu Retry-After nos logs.
+
+Monitor somente leitura, da raiz:
+
+```powershell
+& ".\.venv\Scripts\python.exe" "_export_repo_publico/data/state/restauracao_20261027/monitor_run.py" 40772331493
+```
+
+Computer Use foi interrompido pela ferramenta por não validar URL; não emitir
+novas ações de UI nesta mesma rodada. Acompanhamento continua só por APIs/CLI.
+
 ## Reparos dos incidentes reais — 28/10/2026
 
 Run40761430663 foi cancelado pelo agente para liberar os relatórios de três

@@ -1,5 +1,42 @@
 # Retomada automática — 27/10/2026
 
+## Estado vigente — 28/10/2026
+
+A rodada [40772331493](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40772331493)
+usou `c36770f`, produção, Groq, PT/EN/ES, meta normal de três vídeos e publicação
+habilitada. Foi cancelada pelo agente para liberar os diagnósticos após PT e
+ES ficarem indisponíveis, antes de qualquer upload novo. Save final e logs
+passaram. O checkpoint 354 preserva 97 IDs, todas as rejeições anteriores e
+132 arquivos imutáveis idênticos à baseline; não deixou linhas `processing`.
+
+PT falhou na revisão chunk da tradução de `1xf3poe`; ES passou a naturalização
+de `1x6sq3x`, mas falhou na revisão global do título. Ambos receberam HTTP429
+com tipo declarado **OTPM**, mesmo com cap 1024, e sem Retry-After. Os cabeçalhos
+gerais ainda indicavam TPM 8000 disponível; não representam saldo de saída.
+Não foi comprovado que reduzir o cap ou esperar 61 segundos resolva esse limite.
+Uma chamada diagnóstica adicional foi bloqueada antes de executar pela revisão
+automática e aguarda autorização específica do operador.
+
+EN ficou sem fontes após 36 respostas 502/503 do arquivo gratuito. A revisão
+encontrou uma inconsistência: fonte gerenciada com idioma ainda não registrado
+era elegível em `processing_languages`, mas não em `retry_candidates`. O seletor
+agora inclui esse idioma ausente e usa a fonte privada íntegra, sem exigir raw
+ou nova coleta. Não muda estados anteriores, fonte, perfil ou gates. Idiomas
+explicitamente rejeitados, exportados ou processando e fontes legadas continuam
+fora da retomada. Oito casos falharam antes da correção; os testes integrados
+proíbem extração e preservam a linha PT inteira ao iniciar EN. Isso corrige a
+dependência desnecessária da coleta, sem prometer disponibilidade do Groq.
+
+Os três tokens foram renovados em 28/10, enviados aos Secrets e validados por
+refresh e consulta autenticada do canal esperado. Nenhum login está pendente.
+A suíte local final passou com 1.517 testes e LanguageTool 6.6 real; a revisão
+independente não encontrou bloqueios. Esses resultados não substituem a
+confirmação de geração e publicação nos três idiomas.
+
+Os registros abaixo são históricos; o estado acima prevalece sobre pendências
+antigas. Para continuar o acompanhamento sem alterar produção, consulte a
+seção inicial de [PROJECT_HANDOFF.md](../PROJECT_HANDOFF.md).
+
 ## Incidentes de conteúdo de28/10
 
 Run40761430663 foi cancelado para diagnosticar três recusas antes de upload.

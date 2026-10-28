@@ -68,6 +68,36 @@ def test_nova_historia_tem_idiomas_solicitados(tmp_path):
     assert db.processing_languages("new", ["pt-br", "en", "pt"]) == ["pt", "en"]
 
 
+@pytest.mark.parametrize("status_pt", ["pending", "processing", "unavailable", "exported", "rejected"])
+def test_idioma_ausente_retoma_fonte_gerenciada_sem_mudar_estado_pt(tmp_path, status_pt):
+    db = PipelineDB(tmp_path / "pipeline.db")
+    db.register_story({"id": "s1"}, ["pt"], "a" * 64)
+    if status_pt != "pending":
+        db.set_language_status("s1", "pt", "processing", profile_id="p1")
+        if status_pt != "processing":
+            db.set_language_status("s1", "pt", status_pt)
+    with sqlite3.connect(db.db_path) as conn:
+        before = conn.execute("SELECT * FROM story_languages").fetchall()
+
+    assert db.processing_languages("s1", ["en"]) == ["en"]
+    assert db.retry_candidates(["en"]) == ["s1"]
+    assert db.retry_candidates(["en", "es", "en"]) == ["s1"]
+    with sqlite3.connect(db.db_path) as conn:
+        assert conn.execute("SELECT * FROM story_languages").fetchall() == before
+
+
+@pytest.mark.parametrize("status_en", ["processing", "exported", "rejected"])
+def test_idioma_existente_fechado_nao_vira_ausente_na_selecao(tmp_path, status_en):
+    db = PipelineDB(tmp_path / "pipeline.db")
+    db.register_story({"id": "s1"}, ["pt", "en"], "a" * 64)
+    db.set_language_status("s1", "en", "processing", profile_id="p1")
+    if status_en != "processing":
+        db.set_language_status("s1", "en", status_en)
+    assert db.processing_languages("s1", ["en"]) == []
+    assert db.retry_candidates(["en"]) == []
+    assert db.retry_candidates(["pt-br", "en"]) == ["s1"]
+
+
 def test_novo_idioma_nao_altera_terminais_anteriores(tmp_path):
     db = PipelineDB(tmp_path / "pipeline.db")
     db.register_story({"id": "s1"}, ["pt"], "a" * 64)

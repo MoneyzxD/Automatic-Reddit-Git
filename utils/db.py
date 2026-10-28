@@ -176,12 +176,17 @@ class PipelineDB:
     def retry_candidates(self, languages: list[str]) -> list[str]:
         """Fontes gerenciadas retomáveis, sem incluir processamento abandonado."""
         languages = _languages(languages)
-        placeholders = ",".join("?" for _ in languages)
+        placeholders = ",".join("(?)" for _ in languages)
         with closing(sqlite3.connect(self.db_path)) as conn, conn:
+            # Como em processing_languages, idioma ainda ausente é pendente.
+            # O lote serial preserva a fonte antes de registrar os outros idiomas.
             rows = conn.execute(
-                "SELECT s.id FROM stories s JOIN story_languages l ON l.story_id=s.id "
-                "WHERE s.source_sha256 IS NOT NULL AND l.status IN ('pending','unavailable') "
-                f"AND l.language IN ({placeholders}) GROUP BY s.id ORDER BY MIN(l.updated_at),s.id", languages,
+                f"WITH requested(language) AS (VALUES {placeholders}) "
+                "SELECT s.id FROM stories s CROSS JOIN requested r "
+                "LEFT JOIN story_languages l ON l.story_id=s.id AND l.language=r.language "
+                "WHERE s.source_sha256 IS NOT NULL "
+                "AND (l.story_id IS NULL OR l.status IN ('pending','unavailable')) "
+                "GROUP BY s.id ORDER BY MIN(COALESCE(l.updated_at,s.extracted_at)),s.id", languages,
             ).fetchall()
         return [row[0] for row in rows]
 

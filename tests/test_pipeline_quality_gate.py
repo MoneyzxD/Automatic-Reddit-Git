@@ -248,6 +248,43 @@ def test_retomada_preserva_expansao_legada_hash_perfil_e_etapa_aprovada(pipeline
                               profile.profile_id) == cached
 
 
+@pytest.mark.parametrize("status_pt", ["unavailable", "exported", "rejected"])
+def test_en_ausente_retoma_sem_raw_sem_extracao_e_preserva_pt(pipeline, monkeypatch, status_pt):
+    from stages.extractor import RedditExtractor
+    from stages.narrator_profile import NarratorProfileResolver, save_profile, source_sha256
+    from utils.db import PipelineDB
+    from utils.pipeline_recovery import save_source
+
+    story = main.TEST_STORY
+    source = main.expand_acronyms_translated(main.expand_age_gender_en(story["text"]), "en")
+    digest = source_sha256(story["title"], source)
+    source_path = save_source(pipeline.root, story, digest, expanded_source=source)
+    profile = NarratorProfileResolver({}, semantic_enabled=False).resolve(
+        story_id=story["id"], title=story["title"], original_text=source)
+    profile_path = save_profile(profile, pipeline.root)
+    database = PipelineDB(pipeline.root / "db/pipeline.db")
+    database.register_story(story, ["pt"], digest)
+    database.set_language_status(story["id"], "pt", "processing", profile_id=profile.profile_id)
+    database.set_language_status(story["id"], "pt", status_pt)
+    original_files = source_path.read_bytes(), profile_path.read_bytes()
+    import sqlite3
+    with sqlite3.connect(database.db_path) as conn:
+        original_pt = conn.execute("SELECT * FROM story_languages WHERE language='pt'").fetchall()
+    extract = Mock(side_effect=AssertionError("Retomada deve usar a fonte persistida"))
+    monkeypatch.setattr(RedditExtractor, "run", extract)
+    assert not list((pipeline.root / "data/raw").glob("*.json"))
+
+    main.run_pipeline(pipeline.config, ["en"])
+
+    extract.assert_not_called()
+    assert pipeline.audios and {lang for _, lang, _ in pipeline.audios} == {"en"}
+    assert (source_path.read_bytes(), profile_path.read_bytes()) == original_files
+    with sqlite3.connect(database.db_path) as conn:
+        assert conn.execute("SELECT * FROM story_languages WHERE language='pt'").fetchall() == original_pt
+        assert conn.execute("SELECT status,profile_id FROM story_languages WHERE language='en'").fetchone() == (
+            "exported", profile.profile_id)
+
+
 def test_gates_derivados_usam_roteiro_sem_serializar_ledger_como_fonte(pipeline, monkeypatch):
     from stages import naturalizer, script_guardian
 
