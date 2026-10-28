@@ -23,10 +23,12 @@ Revisões Groq reservam1024tokens; fatos e Gemini conservam2048. Resposta trunca
 continua bloqueada. Suíte completa**1.481 testes**, LanguageTool real obrigatório,
 em79,48s; revisão independente sem achados. Implantação/teste real em andamento.
 
-Operador pediu comando para renovar todos os tokens e recebeu da raiz:
-python scripts/reautenticar_youtube.py --all --github. Secret ES ainda17/10 na
-última conferência; aguardar renovação antes de disparar job com esse Secret.
-Não iniciar OAuth paralelo enquanto o operador conclui os logins.
+Operador renovou os três tokens da raiz com:
+python scripts/reautenticar_youtube.py --all --github. Secrets atualizados em
+28/10 às20:08–20:09UTC. Refresh real e channels.list confirmaram PT, EN e ES
+nos canais esperados, inclusive ES comparado aos vídeos históricos. As datas
+públicas foram sincronizadas para produção. Não precisa iniciar outro OAuth.
+Prova local sem segredo: data/state/restauracao_20261027/renewed_tokens_check.json.
 
 ## Retomada automática em validação — 27/10/2026
 

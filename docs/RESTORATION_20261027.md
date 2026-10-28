@@ -19,8 +19,10 @@ indisponível, preservando o alerta e a publicação das filas aprovadas.
 
 Groq reserva1024 nas revisões; extração de fatos e Gemini mantêm2048. Comprimento
 incompleto continua bloqueado. Os**1.481 testes** passaram com o LanguageTool real
-obrigatório em79,48s; revisão independente sem achados. Nova rodada real pendente
-da renovação dos tokens solicitada ao operador. Meta diária permanece3por idioma.
+obrigatório em79,48s; revisão independente sem achados. Tokens dos três idiomas
+renovados e Secrets atualizados em28/10 às20:08–20:09UTC. Refresh e canal esperado
+confirmados por API. Datas públicas de expiração sincronizadas para produção.
+Nova rodada real em preparação, com meta normal de3por idioma.
 
 O operador autorizou restaurar geração e publicação pública nos três idiomas.
 O aceite local PT é https://youtu.be/H2XqpcQM_50, sem repetição desse upload.
