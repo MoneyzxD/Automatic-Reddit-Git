@@ -1,8 +1,31 @@
 # PROJECT_HANDOFF.md
 
-## Rodada real em andamento — 28/10/2026
+## Reparos dos incidentes reais — 28/10/2026
 
-Ajuste posterior preparado/revisado: o lote fixa
+Run40761430663 foi cancelado pelo agente para liberar os relatórios de três
+recusas, antes de qualquer upload novo. Cleanup/save e artifacts passaram.
+Checkpoint**40761430663-1-344** verificado:97IDs preservados, zero IDs novos.
+1xg5u87/PT e1xfuywi/PT permanecem rejected(adaptation);1x9een7/PT permanece
+rejected(translation), sem repetir seu upload EN. A quarta fonte1xf3poe/PT
+terminou unavailable/dependency_unavailable quando LT parou no cancelamento;
+retomável normalmente, sem reconciliação manual ou estado processing pendente.
+
+Causas concretas: COMMA_COMPOUND_SENTENCE sinalizava " or" e a candidata local
+só cobria a regra_2 com and/but/so. Agora testa a vírgula dessa regra exata+or,
+sem mudar palavras e exigindo nova revisão LT/chunk/global. Em PT, TU_TI_EU_MIM
+sugeria mim em "para eu nem precisar subir", apesar de eu ser sujeito do
+infinitivo. Exceção estritamente pt-BR/regra/span/prefixo/sufixo desse caso;
+erros reais da mesma regra permanecem, inclusive no mesmo texto. Não mudou
+glossário, perfil, fonte, limites de revisão nem aprovação semântica.
+
+Seis testes falharam antes da correção. Native6.6 confirmou o falso positivo
+e a candidata EN; contraprovas preservam rejeição/indisponibilidade semântica.
+Suíte final**1.506 aprovados em78,34s**, LanguageTool obrigatório real. Revisão
+independente sem achados. Próxima rodada deve usar estas correções junto deD36.
+
+## Rodada anterior — histórico de28/10/2026
+
+Ajuste integrado/revisado emd36ae8a: o lote fixa
 `PIPELINE_GROQ_WORKLOAD_LANGUAGE` no ambiente de cada filho único. Assim perfil,
 adapter e revisão EN da fonte também usam a chave fixa PT/EN/ES da execução,
 sem concentrar etapas comuns na chave EN. Não troca por cota; Gemini e fallback
@@ -11,9 +34,9 @@ de vagas, o lote tenta quem teve menos tentativas: recusa PT dá vez a EN/ES.
 **1.493 testes aprovados**, LanguageTool real obrigatório,74,98s; revisão sem
 achados. O run abaixo usa9cdfc83 e não recebe esses dois deltas enquanto roda.
 
-**Run40761430663**, head9cdfc83, está executando produção com PT/EN/ES,
+**Run40761430663**, head9cdfc83, executou produção com PT/EN/ES,
 meta normal3, Groq, extração real e publicação habilitada. Não é dry-run nem
-validacao_groq/meta1. Acompanho antes de lançar outro gravador. O workflow usa
+validacao_groq/meta1. Foi encerrado conforme o registro acima. O workflow usou
 os três Secrets renovados em28/10. Link:
 https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40761430663
 

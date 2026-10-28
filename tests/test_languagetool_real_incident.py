@@ -10,6 +10,57 @@ pytestmark = pytest.mark.skipif(not os.getenv("LANGUAGETOOL_URL"),
                                 reason="Runtime local de LanguageTool não configurado")
 
 
+def test_incidente_real_para_eu_nem_precisar_preserva_sujeito_do_infinitivo():
+    client = LanguageToolClient({})
+    text = "Ele ia carregar tudo para baixo para mim, para eu nem precisar subir."
+    with client._post(text, "pt-BR") as response:
+        raw = response.json()
+    assert any(m["rule"]["id"] == "TU_TI_EU_MIM" for m in raw["matches"])
+    assert not any(i.rule_id == "TU_TI_EU_MIM" for i in client.check(text, "pt"))
+    assert any(i.rule_id == "TU_TI_EU_MIM" for i in client.check("Ele trouxe um presente para eu.", "pt"))
+    mixed = "Ele trouxe um presente para eu. Ele fez isso para eu nem precisar subir."
+    remaining = [i for i in client.check(mixed, "pt") if i.rule_id == "TU_TI_EU_MIM"]
+    assert len(remaining) == 1 and remaining[0].start == mixed.index("eu")
+
+
+@pytest.mark.parametrize("outcome", ["approved", "rejected", "unavailable"])
+def test_incidente_real_virgula_or_exige_nova_revisao_integral(tmp_path, outcome):
+    import json
+    from types import SimpleNamespace
+    from stages.script_guardian import ScriptGuardian, QualityRejected, QualityUnavailable
+    from stages.narrator_profile import NarratorProfile
+    text = ("It is ingrained in my husband, who is in counseling, that he has to see "
+            "mommy and daddy on Christmas day or it doesn’t count.")
+    corrected = text.replace(" or", ", or")
+    calls = []
+    def semantic(**context):
+        calls.append(context)
+        if context["mode"] == "facts":
+            return json.dumps({"facts": []})
+        if context["candidate_text"] == corrected and context["mode"] == "global":
+            if outcome == "unavailable":
+                raise TimeoutError()
+            if outcome == "rejected":
+                return json.dumps({"approved": False, "issues": [{"category": "amount", "severity": "critical",
+                    "reason": "Rejeição semântica simulada.", "original": "", "replacement": "", "start": None,
+                    "subject": "narrator", "source_quote": text}]})
+        return json.dumps({"approved": True, "issues": []})
+    guardian = ScriptGuardian({"semantic_max_attempts": 1}, base_dir=tmp_path,
+                              semantic_reviewer=SimpleNamespace(review=semantic))
+    profile = NarratorProfile("pf", "1xfuywi", "unknown", "female", 0.0, "stable_tiebreak", (), "1")
+    args = dict(source_text=text, candidate_text=text, language="en", stage="adaptation",
+                story_id="1xfuywi", profile=profile)
+    if outcome == "approved":
+        review = guardian.review_and_fix(**args)
+        assert review.status == "approved"
+    else:
+        with pytest.raises(QualityRejected if outcome == "rejected" else QualityUnavailable) as error:
+            guardian.review_and_fix(**args)
+        review = error.value.review
+    assert review.approved_text == corrected
+    assert calls[-1]["mode"] == "global" and calls[-1]["candidate_text"] == corrected
+
+
 def test_marcador_pt_do_splitter_nao_introduz_erro_de_acento():
     from stages.splitter import CONTINUITY_MARKERS
     client = LanguageToolClient({})

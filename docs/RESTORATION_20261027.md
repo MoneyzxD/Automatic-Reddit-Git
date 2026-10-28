@@ -1,5 +1,26 @@
 # Retomada automática — 27/10/2026
 
+## Incidentes de conteúdo de28/10
+
+Run40761430663 foi cancelado para diagnosticar três recusas antes de upload.
+O save final confirmou checkpoint344,97IDs preservados e nenhum ID novo. Os
+três rejeitados PT permanecem fechados. A quarta fonte1xf3poe/PT foi marcada
+unavailable ao desligar LT no cancelamento e pode retomar sem reabrir rejeições.
+
+Dois bloqueios comprovados e corrigidos:
+
+- EN: regra COMMA_COMPOUND_SENTENCE marcava " or", fora da candidata restrita
+  anterior. Apenas a inserção literal sugerida pelo LT é testada, com nova
+  revisão gramatical e semântica completa; não altera palavras ou fatos.
+- PT: falso positivo TU_TI_EU_MIM em "para eu nem precisar subir". Eu é sujeito
+  de precisar, conforme a [regra gramatical](https://ciberduvidas.iscte-iul.pt/consultorio/perguntas/para-eu-e-para-mim/39216).
+  A exceção exige esse contexto literal no pt-BR. A mesma regra continua
+  detectando erros verdadeiros, inclusive ao lado da ocorrência correta.
+
+Seis regressões falharam antes. Backend6.6 real e contraprovas confirmaram os
+reparos sem dispensar a autoridade semântica. Suíte final**1.506aprovados em78,34s**;
+revisão independente sem achados. Nova rodada integral com meta3 ainda pendente.
+
 ## Atualização em28/10
 
 Complemento de isolamento: cada filho único recebe carga Groq fixa PT/EN/ES,

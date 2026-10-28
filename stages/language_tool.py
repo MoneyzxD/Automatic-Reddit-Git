@@ -200,6 +200,15 @@ class LanguageToolClient:
                     and re.match(r"[ \t]+\d+(?:[.,]\d+)?[ \t]+dólares\b", text[end:], flags=re.IGNORECASE)):
                 logger.info("LanguageTool: leitura verbal de valia preservada no contexto monetário")
                 continue
+            # Incidente1x9een7: "para eu nem precisar subir" tem sujeito eu
+            # do infinitivo precisar. A sugestão mim da regra6.6 criaria erro.
+            # Limite literal: só para + eu + nem + precisar; demais casos ficam.
+            if (key == "pt" and self._languages[key] == "pt-BR" and rule_id == "TU_TI_EU_MIM"
+                    and text[start:end].casefold() == "eu"
+                    and re.search(r"\bpara[ \t]+$", text[:start], flags=re.IGNORECASE)
+                    and re.match(r"[ \t]+nem[ \t]+precisar\b", text[end:], flags=re.IGNORECASE)):
+                logger.info("LanguageTool: sujeito eu preservado em para eu nem precisar")
+                continue
             issues.append(LanguageIssue(rule_id, category, message, replacements, start, end, text[start:end], issue_type))
         return tuple(issues)
 

@@ -8,6 +8,26 @@ from requests.utils import select_proxy
 from stages.language_tool import LanguageIssue, LanguageToolClient, LanguageToolUnavailable
 
 
+@pytest.mark.parametrize("text,language,rule,expected", [
+    ("Ele fez isso para eu nem precisar subir.", "pt", "TU_TI_EU_MIM", 0),
+    ("🧾 Ele fez isso para EU nem precisar subir.", "pt-br", "TU_TI_EU_MIM", 0),
+    ("Ele trouxe um presente para eu.", "pt", "TU_TI_EU_MIM", 1),
+    ("Ele fez isso para eu nem preciso subir.", "pt", "TU_TI_EU_MIM", 1),
+    ("Ele fez isso para eu nem lugar.", "pt", "TU_TI_EU_MIM", 1),
+    ("Ele fez isso para eu, nem precisar subir.", "pt", "TU_TI_EU_MIM", 1),
+    ("Ele fez isso para eu nem precisar subir.", "en", "TU_TI_EU_MIM", 1),
+    ("Ele fez isso para eu nem precisar subir.", "pt", "OTHER_RULE", 1),
+    ("Ele deixou para mim fazer o trabalho.", "pt", "TU_TI_EU_MIM", 1),
+])
+def test_para_eu_nem_precisar_tem_excecao_literal(session, text, language, rule, expected):
+    import re
+    span = re.search(r"\b(?:eu|mim)\b", text, flags=re.IGNORECASE)
+    resposta_check(session, {"matches": [{"offset": len(text[:span.start()].encode("utf-16-le")) // 2,
+        "length": len(span.group()), "message": "Verifique o pronome.", "replacements": [{"value": "mim"}],
+        "rule": {"id": rule, "category": {"id": "GRAMMAR"}, "issueType": "grammar"}}]})
+    assert len(cliente(session).check(text, language)) == expected
+
+
 @pytest.mark.parametrize('text,language,rule,expected', [
     ('I fleetingly mentioned the message.', 'en', 'PRP_VB', 0),
     ('🧾 That I fleetingly mentioned the message.', 'en', 'PRP_VB', 0),

@@ -1245,7 +1245,7 @@ class ScriptGuardian:
                         issues.extend(focused_issues)
                         semantic_patches.extend(focused_patches)
                     # Incidentes PT/EN: o LLM devolveu vazio para vírgulas do LT.
-                    # Só duas regras e inserção literal de uma vírgula, sem mudar
+                    # Só regras comprovadas e inserção literal de vírgula, sem mudar
                     # palavras. A candidata exige nova revisão LT/semântica integral.
                     if not semantic_patches and not glossary_patches:
                         for finding in lt_findings[:8]:
@@ -1256,8 +1256,12 @@ class ScriptGuardian:
                                     and not text[finding["end"]:].lstrip().startswith(",")
                                     and original + "," in finding["replacements"]):
                                 replacement = original + ","
-                            elif (language == "en" and finding["rule_id"] == "COMMA_COMPOUND_SENTENCE_2"
+                            elif (language == "en" and (
+                                    finding["rule_id"] == "COMMA_COMPOUND_SENTENCE_2"
                                     and re.fullmatch(r"[ \t]+(?:and|but|so)", original, flags=re.IGNORECASE)
+                                    # Incidentes1xg5u87/1xfuywi: a regra sem _2 sinaliza " or".
+                                    or finding["rule_id"] == "COMMA_COMPOUND_SENTENCE"
+                                    and re.fullmatch(r"[ \t]+or", original, flags=re.IGNORECASE))
                                     and not text[:finding["start"]].rstrip().endswith(",")
                                     and "," + original in finding["replacements"]):
                                 replacement = "," + original
