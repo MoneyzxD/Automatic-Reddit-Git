@@ -33,6 +33,13 @@ A suíte local final passou com 1.517 testes e LanguageTool 6.6 real; a revisão
 independente não encontrou bloqueios. Esses resultados não substituem a
 confirmação de geração e publicação nos três idiomas.
 
+Correção implantada em `c6faba7`. A verificação
+[40779021584](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40779021584)
+terminou com sucesso: 1.517 testes em 28,89s, restauração privada e validação do
+estado aprovadas, geração/publicação/save pulados. Automação permanece habilitada,
+Groq fixo e meta3. O diagnóstico adicional de OTPM aguarda autorização; a rotina
+integral ainda não foi comprovada nesta retomada.
+
 Os registros abaixo são históricos; o estado acima prevalece sobre pendências
 antigas. Para continuar o acompanhamento sem alterar produção, consulte a
 seção inicial de [PROJECT_HANDOFF.md](../PROJECT_HANDOFF.md).

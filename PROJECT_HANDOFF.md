@@ -18,7 +18,12 @@ como já faz `processing_languages`. Assim a retomada usa `source.json` sem raw.
 Legado e estados existentes `rejected`/`exported`/`processing` seguem excluídos
 no idioma solicitado. A consulta não altera estado ou perfil. Oito casos RED;
 163 testes próximos e **1.517 testes completos** passaram com LanguageTool real.
-Revisão independente sem achados. Implantação/verificação no runner em preparação.
+Revisão independente sem achados. Implantado em **c6faba7**; o
+[run 40779021584](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40779021584)
+terminou **success** em modo `verify`, com 1.517 testes em 28,89s, restauração e
+verificação privada aprovadas. Não gerou, publicou ou escreveu checkpoint.
+Automação continua habilitada, Groq fixo e meta3; isso não comprova disponibilidade
+do provedor nem recuperação integral. Não há execução em andamento desta rodada.
 
 Diagnóstico adicional de uma chamada Groq ES foi bloqueado pela revisão
 automática antes da execução: exige autorização específica para reenviar a
