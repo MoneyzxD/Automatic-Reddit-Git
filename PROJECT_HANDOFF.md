@@ -7,7 +7,7 @@ cron40866173891 (headfe9390f). Geração falhou, mas publicação e save passara
 Foram cinco uploads novos, todos confirmados pela API proprietária como
 processados e no canal correto: PT2, EN3, ES0. Em29/10 às13h55, três estavam
 públicos e dois agendados. Não repetir nenhum dos102IDs confirmados.
-Não há gravador ativo. O último checkpoint é40866173891-1-430.
+O checkpoint de entrada da nova rodada é40866173891-1-430.
 
 Os relatórios finalmente registraram causa concreta da cota: OTPM com limite
 1000 e pedido1024 em PT/tradução/chunk e EN/hook injetado/global. Teto de revisão
@@ -24,7 +24,7 @@ revalida janela e preserva90min entre publicações. O publicador limita o
 resultado a hoje e a uma vaga excedente amanhã; o resto permanece pendente.
 Não houve alteração de vídeos/horários já enviados ao YouTube.
 
-Prova:23REDs novos (quota, recuperação, falha de geração e agenda),339testes
+Prova:24REDs novos (quota, recuperação, falha de geração e agenda),339testes
 próximos e **1.581 completos** com LanguageTool real em84,71s; revisão sem achados.
 Replay isolado do estado real mudou16h15 para19h10UTC, com90min de distância.
 Auditoria:140arquivos com conteúdo imutável preservado (três só reserializados),
@@ -32,9 +32,12 @@ Auditoria:140arquivos com conteúdo imutável preservado (três só reserializad
 data/state/restauracao_20261027/{control_integrity_40866173891,
 new_uploads_owner_check_20261029,schedule_replay_20261029}.json.
 
-Próximo passo autorizado: implantar as correções e executar normal PT/EN/ES,
-meta3/publicação, restaurando430. EN já alcançou a meta e deve ser pulado pelo
-contador. Confirmar PT e ES reais; não declarar aceite integral só pelos testes.
+Correções implantadas em0720fc8. [Run40918218668](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40918218668)
+iniciado às14h07 de29/10, produção normal PT/EN/ES, meta3, Groq e publicação.
+É o único gravador. EN já alcançou a meta e deve ser pulado pelo contador.
+Monitor somente leitura na sessão exec **47988**, via write_stdin; encerra ao
+concluir o run. Inicialmente passou FFmpeg e iniciou o aquecimento do LT.
+Confirmar PT e ES reais; não declarar aceite integral só pelos testes.
 A sessão antiga de monitor41675 terminou com a interrupção; não existe mais.
 Os registros abaixo são históricos e esta seção prevalece.
 

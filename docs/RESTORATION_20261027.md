@@ -19,8 +19,10 @@ anteriores: o incidente EN16h09/16h15UTC vira19h10 no replay isolado, mantendo
 90min. Janela/quota e excedente máximo de uma parte amanhã são preservados;
 pendentes sem vaga permanecem na fila. Vídeos já enviados não foram alterados.
 
-23REDs,339testes próximos e1.581completos com LanguageTool real passaram;
-revisão independente sem pendências. Falta a próxima rodada real de PT/ES.
+24REDs,339testes próximos e1.581completos com LanguageTool real passaram;
+revisão independente sem pendências. Correções implantadas em0720fc8 e
+[run40918218668](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40918218668)
+iniciado às14h07, meta3/publicação PT/EN/ES, restaurando430. Falta aceite PT/ES.
 Os registros abaixo são históricos, não evidência de uma execução ainda ativa.
 
 ## Estado vigente — 28/10/2026
