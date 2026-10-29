@@ -1,5 +1,47 @@
 # Retomada automática — 27/10/2026
 
+## Aceite concluído em 29/10, 16h08 de São Paulo
+
+A [execução 40929298655](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40929298655),
+head `36298b9`, concluiu geração, publicação e salvamento com **success**.
+Foi uma rodada manual de produção normal, meta três em PT/EN/ES, sem modo de
+teste. O cron permanece habilitado para `17 5 * * *`, 02h17 de São Paulo,
+sujeito ao atraso da plataforma. O workflow está ativo e as variáveis de
+automação, meta e provedor foram reconferidas no GitHub.
+
+O estado final confirma **três vídeos de hoje por idioma**, mais uma parte ES
+de amanhã. A API proprietária confirmou os dez uploads desta restauração como
+processados e nos canais corretos. Às 16h07, seis estavam públicos, três
+agendados para hoje e um para amanhã; envio não foi confundido com publicação.
+O último PT, [LlknwWb9Nwo](https://youtu.be/LlknwWb9Nwo), está agendado para
+16h29min31s. Os ES restantes estão agendados para 17h13min07s e 18h50min07s;
+o excedente, para 30/10 às 07h20. Os horários deste parágrafo são de São Paulo.
+
+O tradutor Qwen usa explicitamente `reasoning_effort=none`, conservando o teto
+2048 e a recusa de `length`. A fonte PT `1wybqga`, antes truncada, passou pelas
+revisões e gerou o vídeo; logs confirmam tempos nativos do edge-tts e ASS.
+Outra fonte PT foi rejeitada por qualidade, sem impedir o lote de continuar.
+Não houve `rate_limit_exceeded` no run final. A revisão Groq agora reserva 900,
+abaixo do limite OTPM 1000 comprovado; fatos e Gemini mantêm seus limites.
+Recuperação limitada de textos públicos, reaproveitamento de etapas aprovadas,
+seleção de fontes e agenda com horários já ocupados foram implantados sem
+dispensar gates, trocar chaves ou reabrir rejeições.
+
+Checkpoint final **40929298655-1-475**, **107 IDs**: todos os anteriores
+preservados e nenhum duplicado. A auditoria verificou 229 arquivos por hash,
+os 140 conteúdos imutáveis anteriores e 52 estados já encerrados, sem alterações
+de conteúdo, processing ou upload incerto. Três perfis apenas reserializados
+continuam canonicamente idênticos. Evidências ficam em
+`data/state/restauracao_20261027/final_control_audit_40929298655.json`,
+`final_owner_audit_40929298655.json`, `final_actions_audit_40929298655.json`
+e `logs_40929298655/`, ignorados pelo Git.
+
+A suíte final passou com **1.587 testes e LanguageTool real** em 82,14s;
+revisão independente sem pendências. Gemini foi preservado e a stack continua
+gratuita. A renovação manual semanal de OAuth Testing permanece necessária e
+aceita; os três tokens foram renovados em 28/10. Não há login ou aceite pendente
+nesta restauração. As seções seguintes registram o histórico.
+
 ## Situação conferida em29/10, 14h de São Paulo
 
 Manual40797660200 e cron40866173891 terminaram com erro de geração, mas upload

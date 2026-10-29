@@ -1,5 +1,48 @@
 # PROJECT_HANDOFF.md
 
+## Rotina restaurada — 29/10/2026, 16h08 de São Paulo
+
+**FATO VERIFICADO:** [run 40929298655](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40929298655),
+head **36298b9**, terminou **success** às 16h07. Foi uma rodada manual normal,
+com PT/EN/ES, meta três e publicação habilitada, sem modo de teste. Geração,
+publicação e salvamento privado passaram. O checkpoint final é
+**40929298655-1-475**, com **107 IDs confirmados**. Não há execução ativa;
+o monitor somente leitura da sessão 43157 encerrou normalmente.
+
+O aceite diário foi alcançado: **três vídeos de hoje por idioma**. A API
+proprietária verificou os dez envios desta restauração, todos processados com
+sucesso e nos canais esperados. Às 16h07, seis estavam públicos; três estavam
+agendados para hoje e um ES para amanhã. Horários de São Paulo:
+
+- PT: dois públicos; [LlknwWb9Nwo](https://youtu.be/LlknwWb9Nwo), o terceiro,
+  agendado para 29/10 às **16h29min31s**.
+- EN: os três públicos; a rodada final os pulou por já terem atingido a meta.
+- ES: um público; os outros dois para **17h13min07s e 18h50min07s** de hoje.
+  Uma parte excedente foi enviada para **30/10 às 07h20** e conta na meta de amanhã.
+
+O PT1xf3poe foi rejeitado por qualidade; o lote continuou com 1wybqga, que
+concluiu tradução, todos os gates, áudio, legendas nativas e vídeo. A mesma
+fonte antes truncada passou após o ajuste de raciocínio do tradutor Qwen.
+O run final não registrou rate_limit_exceeded. No anterior 40918218668, os
+quatro ES concluíram após recuperação real de descrições e hook; não repeti-los.
+
+Auditoria de controle: 229 arquivos verificados por tamanho/SHA-256, conteúdo
+dos 140 arquivos imutáveis anteriores preservado (três diferenças apenas de
+serialização), 52 estados de história/idioma já encerrados intactos, todos os IDs anteriores
+preservados, sem ID duplicado, processing ou upload incerto. Evidências privadas:
+`data/state/restauracao_20261027/final_control_audit_40929298655.json` e
+`final_owner_audit_40929298655.json`. Resultado e variáveis reconferidos em
+`final_actions_audit_40929298655.json`. Logs sanitizados em `logs_40929298655/`.
+
+**ROTINA VIGENTE:** workflow ativo, `PIPELINE_AUTOMATION_ENABLED=true`,
+`DAILY_VIDEO_TARGET=3`, `PIPELINE_LLM_PROVIDER=groq`; cron `17 5 * * *`
+(02h17 de São Paulo), sujeito ao atraso do GitHub. Gemini continua disponível,
+sem troca automática por quota. Última suíte: **1.587 testes aprovados** com
+LanguageTool real em 82,14s e revisão independente sem achados. OAuth Testing
+e renovação manual semanal continuam decisões aceitas; tokens renovados em 28/10.
+Não iniciar outra rodada para repetir o aceite nem reabrir conteúdo encerrado.
+As seções abaixo são históricas; este estado prevalece.
+
 ## Retomada — 29/10/2026, 14h de São Paulo
 
 As duas rodadas anteriores terminaram: manual40797660200 (head4777aa2) e
