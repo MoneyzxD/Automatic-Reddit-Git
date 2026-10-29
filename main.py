@@ -992,11 +992,30 @@ def run_pipeline(
                     narrator_gender=narrator_gender, localized_script=part_script, factual_context=lang_facts,
                 )
                 meta = None
+                description_feedback = None
                 def generate_description():
                     nonlocal meta
-                    meta = meta_gen.generate(**metadata_args)
+                    options = {"retry_feedback": description_feedback} if description_feedback else {}
+                    meta = meta_gen.generate(**metadata_args, **options)
                     return meta["description"]
-                description = checkpoint(derived_source, generate_description, lang, "metadata", part_num).approved_text
+                # Uma nova candidata da mesma parte; nunca regenera por cota ou falha de serviço.
+                for description_attempt in range(2):
+                    try:
+                        description = checkpoint(derived_source, generate_description, lang, "metadata", part_num).approved_text
+                        break
+                    except (QualityRejected, QualityUnavailable) as error:
+                        failure = error.review.semantic_failure
+                        if (description_attempt or isinstance(error, QualityUnavailable)
+                                and (failure is None or failure.code != "unexplained_rejection")):
+                            raise
+                        description_feedback = {
+                            "rejected_text": error.review.approved_text or meta["description"],
+                            "issues": [{"category": issue.category, "message": issue.message,
+                                        "original": issue.original} for issue in error.review.issues],
+                            "semantic_failure": failure.code if failure else None,
+                        }
+                        logger.warning("Descrição não aprovada em %s parte %d; gerando uma nova candidata (1/1)",
+                                       lang, part_num)
                 if meta is None:
                     meta = meta_gen.generate(**metadata_args, description_body=description)
                 meta = attach_narrator_profile(meta, profile)

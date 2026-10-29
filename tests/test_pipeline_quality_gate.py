@@ -168,7 +168,7 @@ def pipeline(monkeypatch, tmp_path):
     for name in ("_groq_title", "_groq_hook", "_groq_closing"):
         monkeypatch.setattr(titler.TitleGenerator, name, lambda *args: "Minha irmã disse ERRADO?")
     monkeypatch.setattr(metadata.MetadataGenerator, "_description_via_groq",
-                        lambda *args: "Minha irmã falou ERRADO.")
+                        lambda *args, **kwargs: "Minha irmã falou ERRADO.")
     def audio(self, text, language, path, narrator_gender):
         state.audios.append((text, language, narrator_gender))
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -328,6 +328,93 @@ def test_metadados_reprovados_impedem_audio_render_export_e_fila(pipeline):
     assert report["stage"] == "metadata"
     assert report["profile_id"]
     assert report["source_sha256"]
+
+
+@pytest.mark.parametrize("unexplained", [True, False])
+@pytest.mark.parametrize("persistent", [True, False])
+def test_descricao_da_segunda_parte_tem_uma_regeneracao_sem_contornar_gates(
+    pipeline, monkeypatch, unexplained, persistent,
+):
+    from stages import metadata, script_guardian
+    original_review = script_guardian._GroqReviewer.review
+    original_check = script_guardian.LanguageToolClient.check
+    seen_lt, feedback, first_bytes = [], [], []
+    monkeypatch.setattr(main, "TEST_STORY", {
+        **main.TEST_STORY,
+        "text": "I (28F) work as a nurse.\n\n" + "\n\n".join([
+            "I kept working as a nurse and refused the loan. " * 20 for _ in range(3)]),
+    })
+    def review(self, **context):
+        if (context.get("stage") == "metadata" and context.get("candidate_text") == "Descrição recusada."
+                and (unexplained or context["mode"] == "chunk")):
+            pipeline.calls.append(context)
+            if unexplained:
+                return json.dumps({"approved": False, "issues": []})
+            return json.dumps({"approved": False, "issues": [dict(
+                original="", replacement="", category="language", severity="critical",
+                subject="text", reason="Descrição incompleta", source_quote="")]})
+        return original_review(self, **context)
+    def check(self, text, language):
+        seen_lt.append(text)
+        return original_check(self, text, language)
+    def describe(*args, **kwargs):
+        assert pipeline.audios == pipeline.renders == []
+        feedback.append(kwargs.get("retry_feedback"))
+        if len(feedback) == 1:
+            return "Primeira descrição."
+        path = pipeline.root / "data/recovery/s1/en/metadata_part1.json"
+        first_bytes.append(path.read_bytes())
+        return "Descrição recusada." if len(feedback) == 2 or persistent else "Nova descrição."
+    monkeypatch.setattr(script_guardian._GroqReviewer, "review", review)
+    monkeypatch.setattr(script_guardian.LanguageToolClient, "check", check)
+    monkeypatch.setattr(metadata.MetadataGenerator, "_description_via_groq", describe)
+
+    if unexplained and persistent:
+        with pytest.raises(QualityUnavailable) as error:
+            main.run_pipeline(pipeline.config, ["en"], test_story=True)
+        assert error.value.review.semantic_failure.code == "unexplained_rejection"
+    else:
+        main.run_pipeline(pipeline.config, ["en"], test_story=True)
+
+    assert len(feedback) == 3
+    assert feedback[:2] == [None, None]
+    assert feedback[2]["rejected_text"] == "Descrição recusada."
+    assert first_bytes[0] == first_bytes[1]
+    assert (pipeline.root / "data/recovery/s1/en/metadata_part1.json").read_bytes() == first_bytes[0]
+    if persistent:
+        assert pipeline.audios == pipeline.renders == []
+        assert not (pipeline.root / "data/recovery/s1/en/metadata_part2.json").exists()
+    else:
+        assert len(pipeline.audios) == len(pipeline.renders) == 2
+        assert "Nova descrição." in seen_lt
+        assert {c["mode"] for c in pipeline.calls if c["stage"] == "metadata"
+                and c["candidate_text"] == "Nova descrição."} == {"chunk", "global"}
+
+
+@pytest.mark.parametrize("code,http", [
+    ("rate_limit", 429), ("timeout", None), ("provider_error", 503),
+    ("invalid_json", None), (None, None), ("state", None),
+])
+def test_dependencia_de_metadados_nao_dispara_regeneracao(pipeline, monkeypatch, code, http):
+    from stages import metadata, script_guardian
+    from stages.script_guardian import ScriptReview, SemanticFailure
+    from utils.pipeline_state import StateError
+    original = script_guardian.ScriptGuardian.review_and_fix
+    def review(self, **kwargs):
+        if kwargs["stage"] == "metadata":
+            if code == "state":
+                raise StateError("Snapshot indisponível")
+            failure = SemanticFailure(code, http, "global", 3, 100) if code else None
+            return ScriptReview("unavailable", kwargs["candidate_text"], (), (), 1, False, "",
+                                semantic_failure=failure)
+        return original(self, **kwargs)
+    describe = Mock(return_value="Descrição pendente.")
+    monkeypatch.setattr(script_guardian.ScriptGuardian, "review_and_fix", review)
+    monkeypatch.setattr(metadata.MetadataGenerator, "_description_via_groq", describe)
+    with pytest.raises(StateError if code == "state" else QualityUnavailable):
+        main.run_pipeline(pipeline.config, ["en"], test_story=True)
+    assert describe.call_count == 1
+    assert pipeline.audios == pipeline.renders == []
 
 
 @pytest.mark.parametrize("stage,method", [

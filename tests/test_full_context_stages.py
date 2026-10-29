@@ -179,6 +179,64 @@ def test_metadata_sem_contexto_usa_script_localizado(monkeypatch):
     assert seen == ["Texto português no fim."]
 
 
+def test_metadata_envia_feedback_com_fonte_e_perfil_sem_chamada_real(monkeypatch):
+    import json
+    from utils import environment, llm_client
+    monkeypatch.setattr(environment, "llm_api_key", lambda *args: "chave-sintetica")
+    prompts = []
+    def create(**kwargs):
+        prompts.extend(kwargs["messages"])
+        return SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop", message=SimpleNamespace(
+            content="Me negué a prestar dinero.\n¿Habrías hecho lo mismo?"))])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(llm_client, "tracked_llm", lambda *args: client)
+    feedback = {"rejected_text": "Descrição anterior.", "issues": [],
+                "semantic_failure": "unexplained_rejection"}
+    result = MetadataGenerator({}).generate(
+        {"title": "Decisión", "text": "RAW NAO USAR"}, "es", narrator_gender="female",
+        localized_script="Me negué a prestar dinero a mi hermana.",
+        factual_context="El préstamo fue rechazado.", retry_feedback=feedback,
+    )
+    prompt = prompts[1]["content"]
+    assert json.dumps(feedback, ensure_ascii=False) in prompt
+    assert "Me negué a prestar dinero a mi hermana." in prompt
+    assert "El préstamo fue rechazado." in prompt and "femenino" in prompt
+    assert "RAW NAO USAR" not in prompt
+    assert result["description"].startswith("Me negué")
+
+
+@pytest.mark.parametrize("kind,code", [
+    ("429", "rate_limit"), ("503", "provider_error"),
+    ("timeout", "timeout"), ("sdk_timeout", "timeout"),
+])
+def test_metadata_falha_de_servico_na_geracao_interrompe_sem_template(monkeypatch, caplog, kind, code):
+    from utils import environment, llm_client
+    monkeypatch.setattr(environment, "llm_provider", lambda: "groq")
+    monkeypatch.setattr(environment, "llm_api_key", lambda *args: "chave-sintetica")
+    class ProviderError(RuntimeError):
+        status_code = int(kind) if kind.isdigit() else None
+    def create(**kwargs):
+        if kind == "timeout":
+            raise TimeoutError("MENSAGEM_PRIVADA_NAO_REGISTRAR")
+        if kind == "sdk_timeout":
+            import httpx
+            from groq import APITimeoutError
+            raise APITimeoutError(request=httpx.Request("POST", "https://provider.invalid"))
+        raise ProviderError("MENSAGEM_PRIVADA_NAO_REGISTRAR")
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(llm_client, "tracked_llm", lambda *args: client)
+    generator = MetadataGenerator({})
+    from unittest.mock import Mock
+    template = Mock(return_value="Fallback não pode ocultar cota.")
+    monkeypatch.setattr(generator, "_description_via_template", template)
+    caplog.set_level("DEBUG")
+    with pytest.raises(llm_client.LLMUnavailable, match=code):
+        generator.generate({"title": "Título"}, "es", narrator_gender="female",
+                           localized_script="Fuente aprobada.")
+    template.assert_not_called()
+    assert "MENSAGEM_PRIVADA" not in caplog.text
+
+
 @pytest.mark.parametrize("method", ["generate", "generate_hook", "generate_closing_hook"])
 def test_titler_rejeita_resposta_groq_interrompida(method, monkeypatch):
     from utils import environment, groq_client

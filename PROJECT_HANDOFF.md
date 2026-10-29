@@ -12,10 +12,11 @@ Os 1.535 testes completos e a revisão anteriores correspondem ao código implan
 Conferir progresso com o monitor abaixo, trocando o runID por 40797660200.
 O último estado antes desta rodada é o checkpoint354, com 97 IDs preservados.
 Ainda não há aceite desta execução. As seções seguintes registram o histórico.
-Checkpoint **373**, conferido às23h58 de São Paulo em28/10: `1x5ugmy/PT`
+Checkpoint **378**, conferido às00h25 de São Paulo em29/10: `1x5ugmy/PT`
 está **exported**, com dois vídeos na fila; ES da mesma fonte está unavailable
 por unexplained_rejection, com metadata_part1 aprovada e metadata_part2 pendente.
-`1x9nddb/EN` e `1x9vb4m/EN` foram rejected por qualidade; `1x9w7n2/EN` processa.
+`1x9nddb/EN`, `1x9vb4m/EN` e `1x9w7n2/EN` foram rejected por qualidade;
+`1wvcl31/EN` processa, com tradução/naturalização aprovadas.
 Ainda sem upload novo; publicação ocorre após o lote.
 Os97IDs anteriores continuam preservados. Monitor contínuo somente leitura
 está na sessão exec **41675**; usar write_stdin para acompanhar, sem iniciar
@@ -30,6 +31,22 @@ reproduziu duas chamadas em vez de uma; a contraprova de entrada incompatível
 continua exigindo duas gerações/revisões. Gate final, Gemini e indisponibilidade
 preservados.182testes próximos e **1.541 completos** com LanguageTool real
 passaram em78,05s; revisão independente sem achados. Não é prova de upload.
+
+Recuperação estreita adicionada só às descrições: uma candidata extra da mesma
+parte após rejeição fundamentada ou unexplained_rejection esgotado, com feedback
+e nova revisão integral. Recusa vazia persistente continua unavailable. Falhas
+do guardião por quota/timeout/503/LT/JSON e StateError não acionam regeneração.
+Na geração de metadados Groq,429/5xx/conexão/timeout reconhecidos agora propagam
+LLMUnavailable antes de template; isso evita repetir a geração após falha real.
+Fallback por truncamento/sem chave e Gemini permanecem. Quatro RED de recuperação
+e quatro RED de falhas da geração;188testes próximos e **1.556 completos** em
+79,42s com LanguageTool real, revisão independente sem achados. Nenhuma chamada
+real de IA foi executada nesses testes. Esta alteração só afeta a próxima rodada.
+
+Auditoria de controle no snapshot377:43idiomas encerrados preservados;140arquivos
+anteriores de fonte/perfil/etapas com conteúdo intacto.139idênticos em bytes e
+um perfil apenas reserializado (JSON canônico idêntico, mesmo profile_id/fonte).
+Prova: data/state/restauracao_20261027/live_control_integrity_40797660200.json.
 
 Cron seguinte antecipado para 05h17 UTC (02h17 de São Paulo), minuto17 para evitar
 hora cheia; mesma meta, janelas e concorrência. Oito disparos sob 09h UTC começaram
