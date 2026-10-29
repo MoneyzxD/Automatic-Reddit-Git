@@ -986,13 +986,20 @@ def run_pipeline(
                     logger.info("[dry-run] %s — %.1f min", stem, part_data["estimated_min"])
                     continue
                 part_script = checkpoint(derived_source, part_data["full_script"], lang, "split_part", part_num).approved_text
-                meta = meta_gen.generate(
-                    attach_narrator_profile({**story, "title": title_for_lang}, profile), lang,
+                metadata_args = dict(
+                    story=attach_narrator_profile({**story, "title": title_for_lang}, profile), language=lang,
                     part_number=part_num, total_parts=total, hook=hook_for_lang,
                     narrator_gender=narrator_gender, localized_script=part_script, factual_context=lang_facts,
                 )
+                meta = None
+                def generate_description():
+                    nonlocal meta
+                    meta = meta_gen.generate(**metadata_args)
+                    return meta["description"]
+                description = checkpoint(derived_source, generate_description, lang, "metadata", part_num).approved_text
+                if meta is None:
+                    meta = meta_gen.generate(**metadata_args, description_body=description)
                 meta = attach_narrator_profile(meta, profile)
-                description = checkpoint(derived_source, meta["description"], lang, "metadata", part_num).approved_text
                 meta = meta_gen.rebuild_after_validation(meta, description, meta.get("hashtags", []))
                 prepared.append((part_num, total, stem, part_script, meta))
             if dry_run:

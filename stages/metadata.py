@@ -378,7 +378,8 @@ class MetadataGenerator:
     def generate(self, story: dict, language: str,
                  part_number: int = 1, total_parts: int = 1,
                  hook: str = "", narrator_gender: str | None = None,
-                 localized_script: str = "", factual_context: str = "") -> dict:
+                 localized_script: str = "", factual_context: str = "",
+                 description_body: str | None = None) -> dict:
         """
         Gera metadados completos para uma parte de história.
         Inclui blocos youtube{} e tiktok{} prontos para o uploader.
@@ -394,10 +395,11 @@ class MetadataGenerator:
         hashtags, hashtags_str = _pick_hashtags(language)
         cta = _get_channel_cta(language)
 
-        # Descrição personalizada
-        description_body = self._description_via_groq(
-            title, story_summary, language, narrator_gender
-        )
+        # Recompõe os blocos sem chamar a IA quando a descrição já foi aprovada.
+        if description_body is None:
+            description_body = self._description_via_groq(
+                title, story_summary, language, narrator_gender
+            )
         if not description_body:
             from utils.llm_client import require_gemini_result
             require_gemini_result(description_body, "metadados")

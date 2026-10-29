@@ -12,14 +12,24 @@ Os 1.535 testes completos e a revisão anteriores correspondem ao código implan
 Conferir progresso com o monitor abaixo, trocando o runID por 40797660200.
 O último estado antes desta rodada é o checkpoint354, com 97 IDs preservados.
 Ainda não há aceite desta execução. As seções seguintes registram o histórico.
-Checkpoint **367**, conferido às23h13 de São Paulo em28/10: `1x5ugmy/PT`
-está **exported**, com dois vídeos na fila; ES da mesma fonte está processing,
-com tradução/naturalização aprovadas. `1x9nddb/EN` foi rejected por qualidade.
+Checkpoint **373**, conferido às23h58 de São Paulo em28/10: `1x5ugmy/PT`
+está **exported**, com dois vídeos na fila; ES da mesma fonte está unavailable
+por unexplained_rejection, com metadata_part1 aprovada e metadata_part2 pendente.
+`1x9nddb/EN` e `1x9vb4m/EN` foram rejected por qualidade; `1x9w7n2/EN` processa.
 Ainda sem upload novo; publicação ocorre após o lote.
 Os97IDs anteriores continuam preservados. Monitor contínuo somente leitura
 está na sessão exec **41675**; usar write_stdin para acompanhar, sem iniciar
-outro monitor/gravação. Ele para quando o run termina. Head remoto **d8c26ff**
-inclui o novo cron; o run ativo permanece em **4777aa2**.
+outro monitor/gravação. Ele para quando o run termina. Main já inclui o novo
+cron e a prioridade abaixo; o run ativo permanece em **4777aa2**.
+
+Retomada parcial de metadados corrigida: a factory de descrição agora só roda
+depois de consultar o checkpoint. Blocos são recompostos localmente quando
+fonte/perfil/entrada/parte coincidem com a descrição aprovada. Antes, havia
+chamada remota desnecessária para a parte1 antes de retomar a parte2. Um RED
+reproduziu duas chamadas em vez de uma; a contraprova de entrada incompatível
+continua exigindo duas gerações/revisões. Gate final, Gemini e indisponibilidade
+preservados.182testes próximos e **1.541 completos** com LanguageTool real
+passaram em78,05s; revisão independente sem achados. Não é prova de upload.
 
 Cron seguinte antecipado para 05h17 UTC (02h17 de São Paulo), minuto17 para evitar
 hora cheia; mesma meta, janelas e concorrência. Oito disparos sob 09h UTC começaram

@@ -2,10 +2,18 @@
 
 ## Estado vigente — 28/10/2026
 
-Run40797660200 está em andamento no head4777aa2. Checkpoint367: dois vídeos PT
-de1x5ugmy exportados/pendentes, ES da mesma fonte com tradução/naturalização
-aprovadas e EN1x9nddb rejeitado pela revisão. Os97IDs anteriores preservados;
+Run40797660200 está em andamento no head4777aa2. Checkpoint373: dois vídeos PT
+de1x5ugmy exportados/pendentes; ES da mesma fonte unavailable por recusa sem
+motivo válido, com metadata_part1 aprovada e metadata_part2 pendente. EN1x9nddb
+e1x9vb4m rejeitados pela revisão;1x9w7n2 em processamento. Os97IDs preservados;
 nenhum upload novo até esse checkpoint. Não é aceite integral.
+
+A retomada parcial de descrições consulta o checkpoint antes da geração.
+Se fonte/perfil/entrada/parte coincidem, recompõe os blocos localmente usando
+o texto aprovado, sem chamada remota descartada. Entrada diferente exige nova
+geração e revisão; o gate antes da voz permanece. Um RED e uma contraprova;
+182testes próximos e1.541completos com LanguageTool real passaram em78,05s.
+Revisão independente sem achados. O run em curso não recebe esta alteração.
 
 O seletor agora prioriza retomadas explícitas, depois idioma ausente de fonte
 que já concluiu geração em outro idioma, e só então demais ausentes. Na ordem

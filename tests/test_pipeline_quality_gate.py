@@ -522,6 +522,46 @@ def test_retomada_reusa_roteiro_aprovado_mas_repete_gate_pre_tts(pipeline, monke
     assert len([c for c in pipeline.calls if c["stage"] == "pre_tts"]) > initial_pre_tts
 
 
+@pytest.mark.parametrize("same_input", [True, False])
+def test_retomada_parcial_so_gera_descricao_sem_aprovacao_compativel(pipeline, monkeypatch, same_input):
+    from stages.metadata import MetadataGenerator
+    from utils.pipeline_recovery import save_approved_step
+
+    monkeypatch.setattr(main, "TEST_STORY", {
+        **main.TEST_STORY,
+        "text": "I (28F) work as a nurse.\n\n" + "\n\n".join([
+            "I kept working as a nurse and refused the loan. " * 20 for _ in range(3)]),
+    })
+    descriptions = Mock(side_effect=["Primeira descrição.", "Segunda descrição."])
+    monkeypatch.setattr(MetadataGenerator, "_description_via_groq", descriptions)
+    pipeline.fail, pipeline.fail_text, pipeline.outage = "metadata", "Segunda", True
+    with pytest.raises(QualityUnavailable):
+        main.run_pipeline(pipeline.config, ["en"], test_story=True)
+    path = pipeline.root / "data/recovery/s1/en/metadata_part1.json"
+    if not same_input:
+        payload = json.loads(path.read_text(encoding="utf-8"))["payload"]
+        payload["input_sha256"] = "0" * 64
+        save_approved_step(pipeline.root, "s1", "en", "metadata_part1", payload)
+    before = path.read_bytes()
+    assert pipeline.audios == pipeline.renders == []
+    pipeline.fail = None
+    resumed = Mock(return_value="Descrição retomada.")
+    monkeypatch.setattr(MetadataGenerator, "_description_via_groq", resumed)
+
+    main.run_pipeline(pipeline.config, ["en"], test_story=True)
+
+    assert resumed.call_count == (1 if same_input else 2)
+    assert len(pipeline.audios) == len(pipeline.renders) == 2
+    if same_input:
+        assert path.read_bytes() == before
+    from scheduler.queue import get_pending
+    queued = get_pending("en")
+    assert len(queued) == 2
+    assert queued[0]["metadata"]["description"] == (
+        "Primeira descrição." if same_input else "Descrição retomada.")
+    assert queued[1]["metadata"]["description"] == "Descrição retomada."
+
+
 def test_perfil_persistido_ausente_bloqueia_sem_redetectar(pipeline, monkeypatch):
     from stages import voice, narrator_profile
     monkeypatch.setattr(voice.VoiceGenerator, "generate", lambda *args, **kwargs: False)
