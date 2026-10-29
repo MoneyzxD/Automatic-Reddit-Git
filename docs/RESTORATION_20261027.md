@@ -23,6 +23,14 @@ pendentes sem vaga permanecem na fila. Vídeos já enviados não foram alterados
 revisão independente sem pendências. Correções implantadas em0720fc8 e
 [run40918218668](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40918218668)
 iniciado às14h07, meta3/publicação PT/EN/ES, restaurando430. Falta aceite PT/ES.
+Checkpoint434: ES1x5ugmy em processamento;102IDs anteriores preservados.
+
+Outra falha concreta no log: tradução PT1wybqga completou2048tokens e terminou
+em length, sem usar texto parcial. O ajuste seguinte envia none só para Qwen3.8
+Groq, como já faz o guardião; outros modelos/Gemini e cap2048 preservados. Dois
+REDs e seis casos de SDK,222testes próximos e1.587completos com LT real passaram
+em82,14s; revisão sem achados. A eficácia real fica para a execução posterior,
+pois o run ativo usa0720fc8. Atribuir o truncamento ao raciocínio é inferência.
 Os registros abaixo são históricos, não evidência de uma execução ainda ativa.
 
 ## Estado vigente — 28/10/2026

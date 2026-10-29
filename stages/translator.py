@@ -234,6 +234,9 @@ class ScriptTranslator:
         try:
             options = ({"model": self.config.get("groq_model", "qwen/qwen3.8-27b")}
                        if provider == "Groq" else {})
+            # Evita gastar saída com raciocínio;1wybqga terminou em length com low.
+            if options.get("model") == "qwen/qwen3.8-27b":
+                options["reasoning_effort"] = "none"
             response = tracked_llm(env.llm_api_key(target), "translator", timeout=60).chat.completions.create(
                 messages=[
                     {"role": "system", "content": (

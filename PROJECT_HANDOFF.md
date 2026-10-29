@@ -38,6 +38,17 @@ iniciado às14h07 de29/10, produção normal PT/EN/ES, meta3, Groq e publicaçã
 Monitor somente leitura na sessão exec **47988**, via write_stdin; encerra ao
 concluir o run. Inicialmente passou FFmpeg e iniciou o aquecimento do LT.
 Confirmar PT e ES reais; não declarar aceite integral só pelos testes.
+Checkpoint434 às14h16: ES retomou1x5ugmy (metadados da parte2 pendentes),
+EN continua com a meta3,102IDs preservados. Nenhum upload novo nesta rodada.
+
+Correção adicional do tradutor pronta para a próxima rodada:1wybqga/PT no run
+40797660200 retornou HTTP200, completion2048/teto2048 e length. O SDK enviava low
+ao Qwen3.8; agora somente esse modelo Groq recebe none, como o guardião.
+Cap2048, modelos/chaves, prompts, marcadores, idioma e rejeição de truncamento
+preservados. Dois REDs de wire; seis casos de SDK (outros modelos e stop/length),
+222testes próximos e **1.587 completos** com LT real em82,14s passaram. Revisão
+sem achados. Raciocínio é hipótese causal apoiada no incidente do guardião;
+eficácia real no tradutor ainda pendente. O run ativo0720fc8 não recebe o ajuste.
 A sessão antiga de monitor41675 terminou com a interrupção; não existe mais.
 Os registros abaixo são históricos e esta seção prevalece.
 

@@ -151,6 +151,26 @@ def test_pedido_de_1024_continua_recusado_na_cota_real_de_1000(sdk_http, monkeyp
     assert len(sdk_http[1]) == 1
 
 
+@pytest.mark.parametrize("model,effort", [
+    (_QWEN, "none"), ("openai/gpt-oss-20b", "low"), ("qwen/qwen3-32b", "low"),
+])
+@pytest.mark.parametrize("finish", ["stop", "length"])
+def test_tradutor_qwen_preserva_saida_e_bloqueia_length_no_sdk(sdk_http, monkeypatch, model, effort, finish):
+    from stages.translator import ScriptTranslator
+    monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "groq")
+    sdk_http[0].update(content="Fui à loja.", finish_reason=finish)
+    translator = ScriptTranslator({"groq_translation": True, "groq_model": model, "delay": 0})
+
+    result = translator.translate("I went to the store.", "en", "pt")
+
+    assert len(sdk_http[1]) == 1
+    payload = sdk_http[1][0]
+    assert payload["reasoning_effort"] == effort
+    assert payload["model"] == model and payload["max_tokens"] == 2048
+    assert result.status == ("approved" if finish == "stop" else "unavailable")
+    assert result.text == ("Fui à loja." if finish == "stop" else None)
+
+
 @pytest.mark.parametrize("mode", ["facts", "chunk", "global"])
 @pytest.mark.parametrize("model,effort", _MODELS)
 def test_teto_preserva_mensagens_schema_e_esforco_especifico_do_modelo(sdk_http, mode, model, effort):
