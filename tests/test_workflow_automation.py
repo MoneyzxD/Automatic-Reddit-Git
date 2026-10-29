@@ -59,7 +59,7 @@ def test_cron_diario_fica_protegido_por_chave_de_ativacao():
         encoding="utf-8"
     )
 
-    assert '- cron: "0 9 * * *"' in workflow
+    assert '- cron: "17 5 * * *"' in workflow
     assert "vars.PIPELINE_AUTOMATION_ENABLED == 'true'" in workflow
     assert "vars.YOUTUBE_OAUTH_PUBLISHING_STATUS == 'production'" not in workflow
 

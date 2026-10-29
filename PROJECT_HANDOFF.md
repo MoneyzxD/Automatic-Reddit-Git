@@ -1,5 +1,27 @@
 # PROJECT_HANDOFF.md
 
+## Execução ativa — 28/10/2026, noite de São Paulo
+
+[Run 40797660200](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40797660200),
+head **4777aa2**, iniciado pelo agente após o operador pedir novamente a retomada.
+É produção real, PT/EN/ES, meta normal de três vídeos, Groq fixo e publicação habilitada.
+Não iniciar outro gravador ou chamada avulsa de IA enquanto este run estiver ativo.
+O bloqueio de revisão automática foi resolvido; commit/push e dispatch passaram.
+O diagnóstico da chamada única ES já foi consumido com HTTP200; não repeti-lo.
+Os 1.535 testes completos e a revisão anteriores correspondem ao código implantado.
+Conferir progresso com o monitor abaixo, trocando o runID por 40797660200.
+O último estado antes desta rodada é o checkpoint354, com 97 IDs preservados.
+Ainda não há aceite desta execução. As seções seguintes registram o histórico.
+
+Cron seguinte antecipado para 05h17 UTC (02h17 de São Paulo), minuto17 para evitar
+hora cheia; mesma meta, janelas e concorrência. Oito disparos sob 09h UTC começaram
+entre 13h e 15h39 UTC. Os 74 testes próximos passaram; conferência de fusos em julho/outubro/
+novembro/janeiro preserva o mesmo dia nos três canais. Os rascunhos locais do
+operador em AGENTS/README mantêm suas alterações e não integram este commit;
+o horário vigente está no workflow e em docs/RESTORATION_20261027.md.
+A revisão independente não encontrou bloqueios. O ajuste atinge o próximo cron;
+a execução manual atual continua usando seu head 4777aa2.
+
 ## Retomada — 28/10/2026
 
 O [run 40772331493](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40772331493),

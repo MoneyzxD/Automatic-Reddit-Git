@@ -114,6 +114,13 @@ Este documento acompanha a implantação; o aceite local não equivale ao cron.
 
 ## Configuração da rotina
 
+- Geração diária antecipada para `17 5 * * *` (05h17 UTC / 02h17 São Paulo),
+  com as mesmas janelas de publicação, meta e exclusão de gravadores simultâneos.
+  Oito execuções agendadas consultadas começaram entre13h00 e15h39 UTC sob o
+  cron antigo de09h00 UTC. A antecipação dá margem para atraso e processamento;
+  o minuto17 segue a [orientação do GitHub](https://docs.github.com/en/actions/how-tos/troubleshoot-workflows)
+  de evitar hora cheia, sem garantir pontualidade. Às05h17 UTC, os três canais
+  já estão no mesmo dia local inclusive no inverno de Nova York.
 - `PIPELINE_LLM_PROVIDER=groq` seleciona explicitamente Groq no repositório.
   Gemini continua disponível com a mesma variável igual a `gemini`; não há
   alternância automática por indisponibilidade ou cota.

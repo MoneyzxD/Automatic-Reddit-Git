@@ -65,9 +65,10 @@ on:
         type: string
 
   schedule:
-    # Uma rodada diaria as 09:00 UTC. A API agenda cada idioma dentro da sua
-    # janela local de publicacao; o horario do runner nao vira o horario do video.
-    - cron: "0 9 * * *"
+    # Uma rodada diaria as 05:17 UTC (02:17 de Sao Paulo), fora da hora cheia.
+    # Antecipa a geracao para absorver atrasos do Actions e revisoes demoradas.
+    # A API continua agendando cada idioma na sua janela local de publicacao.
+    - cron: "17 5 * * *"
 
 # Serializa execucoes: duas rodadas simultaneas corromperiam a fila JSON e o
 # banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).
