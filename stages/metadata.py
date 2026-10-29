@@ -313,22 +313,8 @@ class MetadataGenerator:
                 logger.info("Descrição gerada via %s (%s): %s", env.llm_provider(), language, result[:80])
                 return result
         except Exception as e:
-            if env.llm_provider() == "groq":
-                network_errors, timeout_errors = (TimeoutError,), (TimeoutError,)
-                try:
-                    from groq import APIConnectionError, APITimeoutError
-                except ImportError:
-                    pass
-                else:
-                    network_errors += (APIConnectionError,)
-                    timeout_errors += (APITimeoutError,)
-                status = getattr(e, "status_code", None)
-                if (isinstance(e, network_errors) or status == 429
-                        or type(status) is int and 500 <= status <= 599):
-                    from utils.llm_client import LLMUnavailable
-                    code = ("rate_limit" if status == 429 else
-                            "timeout" if isinstance(e, timeout_errors) else "provider_error")
-                    raise LLMUnavailable(f"Groq indisponível na etapa metadados: {code}; HTTP={status}") from None
+            from utils.llm_client import propagate_groq_service_failure
+            propagate_groq_service_failure(e, "metadados")
             logger.debug("LLM remoto falhou para descrição: %s", e)
         return None
 

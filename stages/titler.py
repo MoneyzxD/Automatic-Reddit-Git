@@ -763,6 +763,8 @@ class TitleGenerator:
                 logger.info("Título gerado via %s (%s, tipo=%s): %s", env.llm_provider(), language, hook_type, title)
                 return title
         except Exception as e:
+            from utils.llm_client import propagate_groq_service_failure
+            propagate_groq_service_failure(e, "título")
             logger.warning("LLM remoto falhou para título (%s): %s", language, e)
         return None
 
@@ -808,6 +810,8 @@ class TitleGenerator:
                 logger.info("Hook gerado via %s (%s): %s", env.llm_provider(), language, hook)
                 return hook
         except Exception as e:
+            from utils.llm_client import propagate_groq_service_failure
+            propagate_groq_service_failure(e, "hook")
             logger.warning("LLM remoto falhou para hook (%s): %s", language, e)
         return None
 
@@ -853,6 +857,8 @@ class TitleGenerator:
                 logger.info("Encerramento gerado via %s (%s): %s", env.llm_provider(), language, closing)
                 return closing
         except Exception as e:
+            from utils.llm_client import propagate_groq_service_failure
+            propagate_groq_service_failure(e, "encerramento")
             logger.warning("LLM remoto falhou para encerramento (%s): %s", language, e)
         return None
 

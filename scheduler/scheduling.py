@@ -102,6 +102,7 @@ def next_publish_slots(
     agora: datetime | None = None,
     limite_por_dia: int | None = None,
     ocupacao_por_dia: dict[str, int] | None = None,
+    horarios_ocupados: list[datetime] | None = None,
 ) -> list[datetime]:
     """
     Calcula `quantidade` horarios de publicacao, em UTC, em ordem crescente.
@@ -141,6 +142,12 @@ def next_publish_slots(
         # Garantia dura: a API do YouTube rejeita publishAt no passado
         if slot <= agora_local:
             slot = agora_local + timedelta(minutes=LEAD_MINIMO_MINUTOS)
+        # Rodadas anteriores já enviaram publishAt ao YouTube; não basta contar vagas.
+        conflitos = [occupied for occupied in horarios_ocupados or ()
+                     if abs(slot - occupied) < timedelta(minutes=intervalo_minutos)]
+        if conflitos:
+            cursor = max(conflitos).astimezone(tz) + timedelta(minutes=intervalo_minutos)
+            continue
         horarios.append(slot.astimezone(timezone.utc))
         ocupacao[data_local] = ocupacao.get(data_local, 0) + 1
         cursor = slot + timedelta(minutes=intervalo_minutos)

@@ -238,6 +238,38 @@ def test_metadata_falha_de_servico_na_geracao_interrompe_sem_template(monkeypatc
 
 
 @pytest.mark.parametrize("method", ["generate", "generate_hook", "generate_closing_hook"])
+@pytest.mark.parametrize("kind", ["429", "503", "timeout", "sdk_timeout"])
+def test_titler_nao_repete_servico_indisponivel_via_fallback(monkeypatch, caplog, method, kind):
+    from unittest.mock import Mock
+    from utils import environment, llm_client
+    monkeypatch.setattr(environment, "llm_provider", lambda: "groq")
+    monkeypatch.setattr(environment, "llm_api_key", lambda *args: "chave-sintetica")
+    class ProviderError(RuntimeError):
+        status_code = int(kind) if kind.isdigit() else None
+    def create(**kwargs):
+        if kind == "timeout":
+            raise TimeoutError("MENSAGEM_PRIVADA_NAO_REGISTRAR")
+        if kind == "sdk_timeout":
+            import httpx
+            from groq import APITimeoutError
+            raise APITimeoutError(request=httpx.Request("POST", "https://provider.invalid"))
+        raise ProviderError("MENSAGEM_PRIVADA_NAO_REGISTRAR")
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(llm_client, "tracked_llm", lambda *args: client)
+    generator = TitleGenerator({"llm_enabled": True})
+    fallback = Mock(return_value="Texto de fallback.")
+    fallback_method = {"generate": "_ollama_title", "generate_hook": "_ollama_hook",
+                       "generate_closing_hook": "_ollama_closing"}[method]
+    monkeypatch.setattr(generator, fallback_method, fallback)
+    caplog.set_level("DEBUG")
+    with pytest.raises(llm_client.LLMUnavailable):
+        getattr(generator, method)("Fuente aprobada.", language="es", original_title="Título",
+                                   narrator_gender="female")
+    fallback.assert_not_called()
+    assert "MENSAGEM_PRIVADA" not in caplog.text
+
+
+@pytest.mark.parametrize("method", ["generate", "generate_hook", "generate_closing_hook"])
 def test_titler_rejeita_resposta_groq_interrompida(method, monkeypatch):
     from utils import environment, groq_client
 

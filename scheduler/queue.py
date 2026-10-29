@@ -425,19 +425,9 @@ def _count_today(queue: dict) -> int:
     return count
 
 
-def count_scheduled_by_local_date(
-    language: str,
-    timezone_name: str,
-) -> dict[str, int]:
-    """Conta publicacoes do YouTube pela data local configurada do canal."""
-    import pytz
-
-    try:
-        channel_tz = pytz.timezone(timezone_name)
-    except Exception:
-        channel_tz = pytz.UTC
-
-    counts: dict[str, int] = {}
+def get_scheduled_times(language: str) -> list[datetime]:
+    """Horários confirmados, com upload como fallback nas filas antigas."""
+    times = []
     for item in _load_queue(language)["items"]:
         youtube = item.get("platforms", {}).get("youtube", {})
         if youtube.get("status") != "uploaded":
@@ -456,9 +446,27 @@ def count_scheduled_by_local_date(
             instante = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             if instante.tzinfo is None:
                 instante = instante.replace(tzinfo=timezone.utc)
-            data_local = instante.astimezone(channel_tz).date().isoformat()
+            times.append(instante.astimezone(timezone.utc))
         except (TypeError, ValueError):
             continue
+    return times
+
+
+def count_scheduled_by_local_date(
+    language: str,
+    timezone_name: str,
+) -> dict[str, int]:
+    """Conta publicacoes do YouTube pela data local configurada do canal."""
+    import pytz
+
+    try:
+        channel_tz = pytz.timezone(timezone_name)
+    except Exception:
+        channel_tz = pytz.UTC
+
+    counts: dict[str, int] = {}
+    for instante in get_scheduled_times(language):
+        data_local = instante.astimezone(channel_tz).date().isoformat()
         counts[data_local] = counts.get(data_local, 0) + 1
     return counts
 

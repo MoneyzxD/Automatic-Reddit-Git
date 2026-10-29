@@ -139,7 +139,7 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
     teto_diario = int(limites.get("max_uploads_per_day", 1))
     intervalo   = int(limites.get("min_interval_minutes", 360))
 
-    from scheduler.queue import count_scheduled_by_local_date
+    from scheduler.queue import count_scheduled_by_local_date, get_scheduled_times
     import pytz
 
     timezone_name = canal.get("timezone", "UTC")
@@ -187,7 +187,21 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
     horarios = next_publish_slots(language, canal, len(lote),
                                    intervalo_minutos=intervalo,
                                    limite_por_dia=teto_diario,
-                                   ocupacao_por_dia=ocupacao)
+                                   ocupacao_por_dia=ocupacao,
+                                   horarios_ocupados=get_scheduled_times(language))
+    # A janela/intervalo pode empurrar horários além das vagas permitidas.
+    vagas_por_data = {hoje: restante, amanha: vagas_amanha}
+    permitidos = 0
+    for horario in horarios:
+        data_local = horario.astimezone(channel_tz).date()
+        if vagas_por_data.get(data_local, 0) <= 0:
+            break
+        vagas_por_data[data_local] -= 1
+        permitidos += 1
+    if permitidos < len(lote):
+        logger.warning("Janela ou intervalo sem vaga em %s; %d vídeo(s) permanecem na fila",
+                       language, len(lote) - permitidos)
+    lote, horarios = lote[:permitidos], horarios[:permitidos]
 
     for indice, item in enumerate(lote):
         item_id = item["id"]

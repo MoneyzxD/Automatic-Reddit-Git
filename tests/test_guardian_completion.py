@@ -53,6 +53,10 @@ def sdk_http(monkeypatch):
     def handle(request):
         payload = json.loads(request.content)
         payloads.append(payload)
+        if state.get("output_limit") and payload.get("max_completion_tokens", 0) > state["output_limit"]:
+            return httpx.Response(429, json={"error": {
+                "code": "rate_limit_exceeded",
+                "message": "Output tokens per minute: Limit 1000, Requested 1024."}})
         if state["status"] != 200:
             return httpx.Response(state["status"], json={"error": {
                 "code": "synthetic_provider_error", "message": "Falha sintética"}})
@@ -126,6 +130,25 @@ def test_reserva_especifica_groq_nao_muda_gemini(monkeypatch):
     reviewer = _GroqReviewer({"semantic_max_completion_tokens": 2048,
                               "groq_review_max_completion_tokens": 1024})
     assert reviewer.completion_cap == reviewer.review_cap == 2048
+
+
+@pytest.mark.parametrize("mode", ["chunk", "global", "language"])
+def test_revisao_de_producao_cabe_na_cota_de_saida_do_incidente(sdk_http, monkeypatch, mode):
+    import main
+    monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "groq")
+    sdk_http[0].update(output_limit=1000, content=_content(mode))
+    config = main.load_config()["script_quality"]
+    _GroqReviewer(config).review(**_context(mode))
+    assert 0 < sdk_http[1][0]["max_completion_tokens"] < 1000
+
+
+def test_pedido_de_1024_continua_recusado_na_cota_real_de_1000(sdk_http, monkeypatch):
+    monkeypatch.setenv("PIPELINE_LLM_PROVIDER", "groq")
+    sdk_http[0]["output_limit"] = 1000
+    with pytest.raises(RateLimitError):
+        _GroqReviewer({"groq_model": _QWEN, "semantic_timeout_seconds": 60,
+                       "groq_review_max_completion_tokens": 1024}).review(**_context("chunk"))
+    assert len(sdk_http[1]) == 1
 
 
 @pytest.mark.parametrize("mode", ["facts", "chunk", "global"])

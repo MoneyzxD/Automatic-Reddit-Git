@@ -1,5 +1,28 @@
 # Retomada automática — 27/10/2026
 
+## Situação conferida em29/10, 14h de São Paulo
+
+Manual40797660200 e cron40866173891 terminaram com erro de geração, mas upload
+e estado foram salvos. Cinco vídeos novos confirmados pela API: PT2 e EN3,
+todos processados no canal correto. ES ainda0. O snapshot430 preserva102IDs,
+43estados encerrados e o conteúdo dos140arquivos imutáveis anteriores; zero
+processing. As três diferenças de perfil são só serialização canônica idêntica.
+
+O diagnóstico do Groq prova OTPM1000 contra pedido1024. A revisão passa a900,
+sem mudar fatos/Gemini2048, modelo, chave ou bloqueio de resposta incompleta.
+Recusa sem motivo também pode regenerar título/hooks dentro do orçamento de
+três candidatas; persistência continua indisponível. Falha real da geração
+429/5xx/conexão/timeout propaga antes de fallback e não provoca regeneração.
+
+Agenda corrigida para ocupar também os horários confirmados de rodadas
+anteriores: o incidente EN16h09/16h15UTC vira19h10 no replay isolado, mantendo
+90min. Janela/quota e excedente máximo de uma parte amanhã são preservados;
+pendentes sem vaga permanecem na fila. Vídeos já enviados não foram alterados.
+
+23REDs,339testes próximos e1.581completos com LanguageTool real passaram;
+revisão independente sem pendências. Falta a próxima rodada real de PT/ES.
+Os registros abaixo são históricos, não evidência de uma execução ainda ativa.
+
 ## Estado vigente — 28/10/2026
 
 Run40797660200 está em andamento no head4777aa2. Checkpoint378: dois vídeos PT

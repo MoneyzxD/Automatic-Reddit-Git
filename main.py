@@ -782,7 +782,8 @@ def run_pipeline(
         for language in list(active_languages):
             finish_language(language, status, reason_code)
 
-    def checkpoint(source, candidate, language, stage, part=None, *, regenerate_candidate=None):
+    def checkpoint(source, candidate, language, stage, part=None, *, regenerate_candidate=None,
+                   retry_unexplained=False):
         key = f"{stage}_part{part}" if part is not None else stage
         cached = load_approved_step(BASE_DIR, story_id, language, key, source_hash, profile.profile_id)
         input_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
@@ -812,13 +813,21 @@ def run_pipeline(
                 ), (), 0, False, "")
             except QualityRejected as error:
                 review = error.review
+            except QualityUnavailable as error:
+                if not retry_unexplained:
+                    raise
+                review = error.review
             if review.status == "approved":
                 break
             if review.status == "unavailable":
-                raise QualityUnavailable(review)
+                failure = review.semantic_failure
+                if not (retry_unexplained and regenerate_candidate is not None
+                        and failure is not None and failure.code == "unexplained_rejection"
+                        and generation + 1 < generations):
+                    raise QualityUnavailable(review)
             if generation + 1 == generations:
                 raise QualityRejected(review)
-            logger.warning("Texto reprovado em %s (%s); regenerando somente esta etapa (%d/2)",
+            logger.warning("Texto não aprovado em %s (%s); regenerando somente esta etapa (%d/2)",
                            stage, language, generation + 1)
         save_script_trace(scripts_dir, story_id, language, stage, review.approved_text)
         save_approved_step(BASE_DIR, story_id, language, key, {
@@ -948,7 +957,7 @@ def run_pipeline(
                         })
                     return checkpoint(
                         derived_source, lambda: method(**title_args, **extra), lang, stage,
-                        regenerate_candidate=regenerate,
+                        regenerate_candidate=regenerate, retry_unexplained=True,
                     ).approved_text
 
                 title_for_lang = public_text(title_gen.generate, "title", hook_type=random.choice(["short", "narrative"]))

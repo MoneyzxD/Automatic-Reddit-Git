@@ -1,5 +1,43 @@
 # PROJECT_HANDOFF.md
 
+## Retomada — 29/10/2026, 14h de São Paulo
+
+As duas rodadas anteriores terminaram: manual40797660200 (head4777aa2) e
+cron40866173891 (headfe9390f). Geração falhou, mas publicação e save passaram.
+Foram cinco uploads novos, todos confirmados pela API proprietária como
+processados e no canal correto: PT2, EN3, ES0. Em29/10 às13h55, três estavam
+públicos e dois agendados. Não repetir nenhum dos102IDs confirmados.
+Não há gravador ativo. O último checkpoint é40866173891-1-430.
+
+Os relatórios finalmente registraram causa concreta da cota: OTPM com limite
+1000 e pedido1024 em PT/tradução/chunk e EN/hook injetado/global. Teto de revisão
+Groq reduzido para900; fatos/Gemini mantêm2048 e length continua bloqueado.
+ES recusou título sem achados: recuperação opt-in também em título/hooks, dentro
+das três candidatas já previstas; recusa vazia persistente continua unavailable.
+Metadados continuam com uma candidata adicional.429/5xx/conexão/timeout da
+geração não podem virar fallback e depois outra chamada; proteção compartilhada
+em utils/llm_client.py para metadados e os três geradores públicos.
+
+Outro incidente confirmado: o cron enviou EN às16h15UTC entre horários já
+confirmados16h09 e17h40. A agenda agora considera os instantes existentes,
+revalida janela e preserva90min entre publicações. O publicador limita o
+resultado a hoje e a uma vaga excedente amanhã; o resto permanece pendente.
+Não houve alteração de vídeos/horários já enviados ao YouTube.
+
+Prova:23REDs novos (quota, recuperação, falha de geração e agenda),339testes
+próximos e **1.581 completos** com LanguageTool real em84,71s; revisão sem achados.
+Replay isolado do estado real mudou16h15 para19h10UTC, com90min de distância.
+Auditoria:140arquivos com conteúdo imutável preservado (três só reserializados),
+43idiomas encerrados inalterados e zero processing. Evidências privadas em
+data/state/restauracao_20261027/{control_integrity_40866173891,
+new_uploads_owner_check_20261029,schedule_replay_20261029}.json.
+
+Próximo passo autorizado: implantar as correções e executar normal PT/EN/ES,
+meta3/publicação, restaurando430. EN já alcançou a meta e deve ser pulado pelo
+contador. Confirmar PT e ES reais; não declarar aceite integral só pelos testes.
+A sessão antiga de monitor41675 terminou com a interrupção; não existe mais.
+Os registros abaixo são históricos e esta seção prevalece.
+
 ## Execução ativa — 28/10/2026, noite de São Paulo
 
 [Run 40797660200](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40797660200),

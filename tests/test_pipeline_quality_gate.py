@@ -514,6 +514,44 @@ def test_indisponibilidade_na_revisao_nao_regenera_texto_publico(pipeline, monke
     assert pipeline.audios == pipeline.renders == []
 
 
+@pytest.mark.parametrize("stage,method", [
+    ("title", "generate"), ("opening_hook", "generate_hook"),
+    ("closing_hook", "generate_closing_hook"),
+])
+@pytest.mark.parametrize("persistent", [False, True])
+def test_recusa_publica_sem_motivo_regenera_com_limite_e_nova_revisao(
+    pipeline, monkeypatch, stage, method, persistent,
+):
+    from stages import script_guardian, titler
+    original = script_guardian._GroqReviewer.review
+    rejected, repaired = "Candidata sem decisão.", "Minha irmã pediu dinheiro?"
+    generations = []
+    def generate(self, **kwargs):
+        assert pipeline.audios == pipeline.renders == []
+        generations.append(kwargs)
+        return rejected if persistent or len(generations) == 1 else repaired
+    def review(self, **context):
+        if context.get("stage") == stage and context.get("candidate_text") == rejected:
+            return json.dumps({"approved": False, "issues": []})
+        return original(self, **context)
+    monkeypatch.setattr(titler.TitleGenerator, method, generate)
+    monkeypatch.setattr(script_guardian._GroqReviewer, "review", review)
+    if persistent:
+        with pytest.raises(QualityUnavailable) as caught:
+            main.run_pipeline(pipeline.config, ["en"], test_story=True)
+        assert caught.value.review.semantic_failure.code == "unexplained_rejection"
+        assert pipeline.audios == pipeline.renders == []
+    else:
+        main.run_pipeline(pipeline.config, ["en"], test_story=True)
+        assert len(pipeline.audios) == 1
+        assert {c["mode"] for c in pipeline.calls if c["stage"] == stage
+                and c["candidate_text"] == repaired} == {"chunk", "global"}
+    assert len(generations) == (3 if persistent else 2)
+    assert generations[1]["retry_feedback"]["rejected_text"] == rejected
+    assert len({g["story_text"] for g in generations}) == 1
+    assert len({g["narrator_gender"] for g in generations}) == 1
+
+
 @pytest.mark.parametrize("initial_invalid", [False, True])
 def test_saida_fora_do_limite_durante_regeneracao_continua_no_orcamento(
     pipeline, monkeypatch, initial_invalid,
