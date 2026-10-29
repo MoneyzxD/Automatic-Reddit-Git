@@ -12,6 +12,14 @@ Os 1.535 testes completos e a revisão anteriores correspondem ao código implan
 Conferir progresso com o monitor abaixo, trocando o runID por 40797660200.
 O último estado antes desta rodada é o checkpoint354, com 97 IDs preservados.
 Ainda não há aceite desta execução. As seções seguintes registram o histórico.
+Checkpoint **367**, conferido às23h13 de São Paulo em28/10: `1x5ugmy/PT`
+está **exported**, com dois vídeos na fila; ES da mesma fonte está processing,
+com tradução/naturalização aprovadas. `1x9nddb/EN` foi rejected por qualidade.
+Ainda sem upload novo; publicação ocorre após o lote.
+Os97IDs anteriores continuam preservados. Monitor contínuo somente leitura
+está na sessão exec **41675**; usar write_stdin para acompanhar, sem iniciar
+outro monitor/gravação. Ele para quando o run termina. Head remoto **d8c26ff**
+inclui o novo cron; o run ativo permanece em **4777aa2**.
 
 Cron seguinte antecipado para 05h17 UTC (02h17 de São Paulo), minuto17 para evitar
 hora cheia; mesma meta, janelas e concorrência. Oito disparos sob 09h UTC começaram
@@ -21,6 +29,17 @@ operador em AGENTS/README mantêm suas alterações e não integram este commit;
 o horário vigente está no workflow e em docs/RESTORATION_20261027.md.
 A revisão independente não encontrou bloqueios. O ajuste atinge o próximo cron;
 a execução manual atual continua usando seu head 4777aa2.
+
+Prioridade de retomada corrigida nesta continuação: linhas solicitadas já
+pending/unavailable primeiro; depois idiomas ausentes de fontes com algum
+exported; por último demais ausentes. Mantém datas das retomadas explícitas
+sem antecipá-las pela data de extração de um idioma ausente. No snapshot367,
+1x4uvxk/EN estava em8º, além do orçamento de seis; na cópia isolada corrigida
+fica em1º, enquanto PT retoma1xf3poe e ES retoma1x6sq3x. A consulta não escreve
+estado nem reabre terminais. Quatro RED antes;113testes próximos e **1.539
+completos** passaram com LanguageTool real em79,42s; revisão sem achados.
+Prova local: data/state/restauracao_20261027/selector_priority_probe_20261029.json.
+O run ativo não recebe essa alteração; valerá na próxima retomada.
 
 ## Retomada — 28/10/2026
 

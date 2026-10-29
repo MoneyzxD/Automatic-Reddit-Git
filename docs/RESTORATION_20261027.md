@@ -2,6 +2,19 @@
 
 ## Estado vigente — 28/10/2026
 
+Run40797660200 está em andamento no head4777aa2. Checkpoint367: dois vídeos PT
+de1x5ugmy exportados/pendentes, ES da mesma fonte com tradução/naturalização
+aprovadas e EN1x9nddb rejeitado pela revisão. Os97IDs anteriores preservados;
+nenhum upload novo até esse checkpoint. Não é aceite integral.
+
+O seletor agora prioriza retomadas explícitas, depois idioma ausente de fonte
+que já concluiu geração em outro idioma, e só então demais ausentes. Na ordem
+anterior, a fonte PT bem-sucedida1x4uvxk ficava em8º para EN, fora das seis
+tentativas. Reprodução em cópia isolada confirmou a nova prioridade. Nenhum
+estado, perfil, gate ou limite é alterado. Quatro regressões RED;113testes
+próximos e1.539completos passaram; revisão independente sem achados. A alteração
+não modifica o run que já está ativo.
+
 A rodada [40772331493](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40772331493)
 usou `c36770f`, produção, Groq, PT/EN/ES, meta normal de três vídeos e publicação
 habilitada. Foi cancelada pelo agente para liberar os diagnósticos após PT e

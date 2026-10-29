@@ -107,6 +107,54 @@ def test_novo_idioma_nao_altera_terminais_anteriores(tmp_path):
     assert db.processing_languages("s1", ["pt", "es"]) == ["es"]
 
 
+def test_fonte_exportada_em_pt_nao_fica_fora_das_seis_tentativas_en(tmp_path):
+    db = PipelineDB(tmp_path / "pipeline.db")
+    for index in range(8):
+        story_id = f"old{index}"
+        db.register_story({"id": story_id}, ["pt"], "a" * 64)
+        db.set_language_status(story_id, "pt", "processing", profile_id=f"p{index}")
+        db.set_language_status(story_id, "pt", "rejected")
+    db.register_story({"id": "1x4uvxk"}, ["pt"], "b" * 64)
+    db.set_language_status("1x4uvxk", "pt", "processing", profile_id="good")
+    db.set_language_status("1x4uvxk", "pt", "exported")
+    with sqlite3.connect(db.db_path) as conn:
+        conn.execute("UPDATE stories SET extracted_at='2026-10-20T10:00:00+00:00' WHERE id LIKE 'old%'")
+        conn.execute("UPDATE stories SET extracted_at='2026-10-27T21:00:00+00:00' WHERE id='1x4uvxk'")
+        before = conn.execute("SELECT * FROM story_languages ORDER BY story_id,language").fetchall()
+    assert db.retry_candidates(["en"])[0] == "1x4uvxk"
+    assert "1x4uvxk" in db.retry_candidates(["en"])[:6]
+    with sqlite3.connect(db.db_path) as conn:
+        assert conn.execute("SELECT * FROM story_languages ORDER BY story_id,language").fetchall() == before
+
+
+@pytest.mark.parametrize("status", ["pending", "unavailable"])
+def test_retomada_explicita_precede_novo_idioma_de_fonte_ja_exportada(tmp_path, status):
+    db = PipelineDB(tmp_path / "pipeline.db")
+    db.register_story({"id": "good"}, ["pt"], "a" * 64)
+    db.set_language_status("good", "pt", "processing", profile_id="good_profile")
+    db.set_language_status("good", "pt", "exported")
+    db.register_story({"id": "resume"}, ["en"], "b" * 64)
+    if status == "unavailable":
+        db.set_language_status("resume", "en", "processing", profile_id="resume_profile")
+        db.set_language_status("resume", "en", "unavailable")
+    with sqlite3.connect(db.db_path) as conn:
+        conn.execute("UPDATE stories SET extracted_at='2026-10-20T10:00:00+00:00' WHERE id='good'")
+        conn.execute("UPDATE story_languages SET updated_at='2026-10-28T10:00:00+00:00' WHERE story_id='resume'")
+    assert db.retry_candidates(["en"]) == ["resume", "good"]
+
+
+def test_idioma_ausente_nao_muda_ordem_das_retomadas_explicitas(tmp_path):
+    db = PipelineDB(tmp_path / "pipeline.db")
+    for story_id in ("first", "second"):
+        db.register_story({"id": story_id}, ["en"], "a" * 64)
+    with sqlite3.connect(db.db_path) as conn:
+        conn.execute("UPDATE stories SET extracted_at='2026-10-24T00:00:00+00:00' WHERE id='first'")
+        conn.execute("UPDATE stories SET extracted_at='2026-10-20T00:00:00+00:00' WHERE id='second'")
+        conn.execute("UPDATE story_languages SET updated_at='2026-10-25T00:00:00+00:00' WHERE story_id='first'")
+        conn.execute("UPDATE story_languages SET updated_at='2026-10-26T00:00:00+00:00' WHERE story_id='second'")
+    assert db.retry_candidates(["en", "es"]) == ["first", "second"]
+
+
 def test_hash_mudado_bloqueia_sem_modificar_estado(tmp_path):
     db = PipelineDB(tmp_path / "pipeline.db")
     db.register_story({"id": "s1", "title": "original"}, ["pt"], "a" * 64)
