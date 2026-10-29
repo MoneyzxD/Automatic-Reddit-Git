@@ -25,10 +25,28 @@ verificação privada aprovadas. Não gerou, publicou ou escreveu checkpoint.
 Automação continua habilitada, Groq fixo e meta3; isso não comprova disponibilidade
 do provedor nem recuperação integral. Não há execução em andamento desta rodada.
 
-Diagnóstico adicional de uma chamada Groq ES foi bloqueado pela revisão
-automática antes da execução: exige autorização específica para reenviar a
-fonte, contexto e perfil de `1x6sq3x`. Pergunta assíncrona está pendente;
-não repetir esse envio sem a resposta. Serviço não forneceu Retry-After nos logs.
+O operador autorizou a chamada única Groq ES de `1x6sq3x`, após o bloqueio da
+revisão automática. Executada uma vez, sem retries: HTTP200, resposta completa,
+1,52s e cap1024. Título/fonte conferidos por SHA; ledger do checkpoint aprovado
+de naturalização. Prova sem conteúdo/credenciais em
+`data/state/restauracao_20261027/single_es_otpm_diagnostic.json`. A autorização
+desse diagnóstico foi consumida; não o repetir. Sucesso isolado não confirma
+continuidade nem informa números de OTPM, pois não houve recusa.
+
+Diagnóstico numérico passivo no SemanticFailure pronto para a rodada normal:
+apenas limite/uso/pedido/espera da mensagem 429 reconhecida, sem texto livre ou
+alteração de retries. Valores finitos limitados; formatos parciais/ambíguos são
+descartados. Um RED inicial e quatro RED de parsing; 345 testes próximos e
+**1.535 completos** passaram com LanguageTool real em 74,87s. Revisão independente
+confirmou fechamento dos achados. Próximo passo: implantar e executar a rodada
+normal, aproveitando também a retomada de idiomas ausentes de `c6faba7`.
+
+Implantação deste diagnóstico ficou bloqueada: a revisão automática de
+permissões falhou por limite de uso antes de executar diff/add/commit/push.
+Não classificou a ação como insegura. Não contornar a revisão por outro meio.
+As mudanças estão locais, sem commit; HEAD remoto permanece `e4d666a`.
+A chamada ES autorizada já foi executada uma vez e não deve ser repetida.
+Nenhuma nova rodada foi disparada após o run verify 40779021584.
 
 Monitor somente leitura, da raiz:
 

@@ -14,8 +14,18 @@ de `1x6sq3x`, mas falhou na revisão global do título. Ambos receberam HTTP429
 com tipo declarado **OTPM**, mesmo com cap 1024, e sem Retry-After. Os cabeçalhos
 gerais ainda indicavam TPM 8000 disponível; não representam saldo de saída.
 Não foi comprovado que reduzir o cap ou esperar 61 segundos resolva esse limite.
-Uma chamada diagnóstica adicional foi bloqueada antes de executar pela revisão
-automática e aguarda autorização específica do operador.
+Após autorização específica, uma chamada diagnóstica ES retornou HTTP200 em
+1,52s, completa, com cap1024 e sem retries. Título/fonte foram conferidos por SHA;
+o contexto factual veio do checkpoint aprovado de naturalização. A chamada
+isolada não informa o limite, pois não houve429, nem comprova continuidade.
+
+A rodada normal passa a registrar `rate_limit_diagnostic`: apenas números
+finitos de limite, uso, pedido e espera declarados em uma mensagem 429 com código
+conhecido e cota única reconhecida. Mensagem, IDs e conteúdo não são armazenados.
+Este diagnóstico não altera `_retry_wait`, tentativas ou gates. Formatos parciais
+e ambíguos são descartados. Provas com SDK/transporte HTTP isolado e privacidade:
+345 testes próximos e 1.535 na suíte completa, com LanguageTool real; revisão
+independente sem pendências. Disponibilidade real será medida separadamente.
 
 EN ficou sem fontes após 36 respostas 502/503 do arquivo gratuito. A revisão
 encontrou uma inconsistência: fonte gerenciada com idioma ainda não registrado
@@ -37,8 +47,7 @@ Correção implantada em `c6faba7`. A verificação
 [40779021584](https://github.com/MoneyzxD/Automatic-Reddit-Git/actions/runs/40779021584)
 terminou com sucesso: 1.517 testes em 28,89s, restauração privada e validação do
 estado aprovadas, geração/publicação/save pulados. Automação permanece habilitada,
-Groq fixo e meta3. O diagnóstico adicional de OTPM aguarda autorização; a rotina
-integral ainda não foi comprovada nesta retomada.
+Groq fixo e meta3. A rotina integral ainda não foi comprovada nesta retomada.
 
 Os registros abaixo são históricos; o estado acima prevalece sobre pendências
 antigas. Para continuar o acompanhamento sem alterar produção, consulte a

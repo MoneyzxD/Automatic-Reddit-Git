@@ -97,6 +97,7 @@ class SemanticFailure:
     generation_schema_truncated: bool = False
     source_reference_error: str | None = None
     transport_diagnostic: dict | None = None
+    rate_limit_diagnostic: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -328,6 +329,30 @@ def _generation_schema_diagnostic(generation, response_format):
     return status, tuple(errors), truncated
 
 
+def _declared_rate_numbers(message):
+    """Só números finitos declarados; esta observação nunca determina retries."""
+    values = dict.fromkeys(("limit", "used", "requested", "message_wait_seconds"))
+    number = r"([0-9]{1,10}(?:\.[0-9]{1,9})?)(?![\s,.;]*[0-9])(?=,|\s|$|\.(?:\s|$))"
+    for name in ("limit", "used", "requested"):
+        matches = re.findall(r"\b" + name + r"\s*:?\s*" + number, message, re.IGNORECASE)
+        if len(matches) == 1:
+            value = float(matches[0])
+            if math.isfinite(value) and 0 <= value <= 10**9:
+                values[name] = value
+    waits = re.findall(r"\btry again in\s+((?:[0-9]+(?:\.[0-9]+)?[dhms]){1,4})"
+                       r"(?![\s.,;]*[0-9])(?=[\s.,;]|$)",
+                       message, re.IGNORECASE)
+    if len(waits) == 1 and len(waits[0]) <= 64:
+        match = re.fullmatch(r"(?:(\d+(?:\.\d+)?)d)?(?:(\d+(?:\.\d+)?)h)?"
+                             r"(?:(\d+(?:\.\d+)?)m)?(?:(\d+(?:\.\d+)?)s)?", waits[0].lower())
+        if match:
+            seconds = sum(float(part or 0) * unit for part, unit in
+                          zip(match.groups(), (86400, 3600, 60, 1)))
+            if math.isfinite(seconds) and 0 <= seconds <= 604800:
+                values["message_wait_seconds"] = seconds
+    return values if any(value is not None for value in values.values()) else None
+
+
 def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-oss-20b", quote_ids=None, candidate_ids=None):
     status = getattr(exc, "status_code", None)
     status = status if type(status) is int and 100 <= status <= 599 else None
@@ -348,6 +373,7 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
     diagnostic = (None, None, None)
     schema_diagnostic = (None, (), False)
     rate_limit_type = None
+    rate_diagnostic = None
     retry_after = None
     if status == 429:
         wait = _retry_wait(exc, None)
@@ -369,6 +395,8 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
                     for match in re.finditer(r"\b(?:(input|output) )?tokens per minute\b", message.lower()))
                 if len(declared) == 1:
                     rate_limit_type = declared.pop()
+                    if error.get("code") == "rate_limit_exceeded":
+                        rate_diagnostic = _declared_rate_numbers(message)
         if isinstance(error, dict) and "code" in error:
             known = {"json_validate_failed": "invalid_json", "context_length_exceeded": "context_limit",
                      "model_not_found": "provider_error", "invalid_api_key": "authentication",
@@ -391,7 +419,8 @@ def _provider_failure(exc, mode, attempts, context_chars, *, model="openai/gpt-o
                            generation_schema_status=schema_diagnostic[0],
                            generation_schema_errors=schema_diagnostic[1],
                            generation_schema_truncated=schema_diagnostic[2],
-                           transport_diagnostic=sanitize_groq_diagnostic(getattr(exc, "groq_diagnostic", None)))
+                           transport_diagnostic=sanitize_groq_diagnostic(getattr(exc, "groq_diagnostic", None)),
+                           rate_limit_diagnostic=rate_diagnostic)
 
 
 def _retry_wait(exc, default):

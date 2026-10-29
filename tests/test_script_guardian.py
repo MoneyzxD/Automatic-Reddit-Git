@@ -980,6 +980,7 @@ def test_indisponibilidade_tem_classe_sem_vazar(tmp_path, perfil_feminino, statu
         "generation_schema_truncated": False,
         "source_reference_error": None,
         "transport_diagnostic": None,
+        "rate_limit_diagnostic": None,
     }
     assert error.value.review.semantic_failure.code == expected
     assert len(calls) == attempts

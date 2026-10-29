@@ -20,14 +20,14 @@ def isolated_clock(monkeypatch):
     telemetry.reset()
 
 
-def client(monkeypatch, *, status=200, headers=None):
+def client(monkeypatch, *, status=200, headers=None, error_message=None):
     requests = []
 
     def handle(request):
         requests.append(request)
         if status != 200:
             return httpx.Response(status, headers=headers, json={"error": {
-                "code": "rate_limit_exceeded", "message": "ROTEIRO_PRIVADO Authorization=CHAVE_PRIVADA"}})
+                "code": "rate_limit_exceeded", "message": error_message or "ROTEIRO_PRIVADO Authorization=CHAVE_PRIVADA"}})
         return httpx.Response(200, headers=headers, json={
             "id": "private-response-id", "object": "chat.completion", "created": 1,
             "model": "qwen/qwen3.8-27b", "choices": [{"index": 0, "message": {
@@ -95,6 +95,73 @@ def test_sucesso_emite_consumo_e_teto_ausente_sem_mudar_resposta(monkeypatch, ca
     assert telemetry.usage_by_stage()["script_guardian"]["total"] == 2100
     assert "RESPOSTA_PRIVADA" not in caplog.text and "ROTEIRO_PRIVADO" not in caplog.text
     assert "max_completion_tokens" not in json.loads(requests[0].content)
+
+
+def test_429_registra_numeros_de_saida_e_espera_da_mensagem_sem_mudar_retry(monkeypatch, tmp_path):
+    from stages.script_guardian import _retry_wait
+    wrapped, requests = client(monkeypatch, status=429, error_message=(
+        "Rate limit reached on output tokens per minute (OTPM): "
+        "Limit 2000, Used 1850.5, Requested 1024. Please try again in 1m30.5s. "
+        "Authorization=CHAVE_PRIVADA ROTEIRO_PRIVADO"))
+    with pytest.raises(Exception) as caught:
+        complete(wrapped, max_completion_tokens=1024)
+    failure = _provider_failure(caught.value, "global", 1, 15051)
+    assert getattr(failure, "rate_limit_diagnostic", None) == {
+        "limit": 2000, "used": 1850.5, "requested": 1024, "message_wait_seconds": 90.5}
+    assert failure.rate_limit_type == "OTPM"
+    assert failure.retry_after_seconds is None
+    assert _retry_wait(caught.value, 15) == 15
+    assert len(requests) == 1
+    report = tmp_path / "quality.jsonl"
+    telemetry.append_quality_report(report, {"semantic_failure": asdict(failure)})
+    persisted = report.read_text(encoding="utf-8")
+    assert "CHAVE_PRIVADA" not in persisted and "ROTEIRO_PRIVADO" not in persisted
+
+
+@pytest.mark.parametrize("value", ["-1", "NaN", "inf", "1e30", "1000000001", "3.4.5", "CHAVE_PRIVADA"])
+def test_diagnostico_da_mensagem_recusa_numeros_invalidos(monkeypatch, value):
+    wrapped, _ = client(monkeypatch, status=429, error_message=(
+        f"Rate limit on output tokens per minute (OTPM): Limit {value}, Used {value}, "
+        f"Requested {value}. Please try again in {value}s."))
+    with pytest.raises(Exception) as caught:
+        complete(wrapped)
+    assert getattr(_provider_failure(caught.value, "chunk", 1, 20), "rate_limit_diagnostic", None) is None
+
+
+@pytest.mark.parametrize("status,message", [
+    (503, "output tokens per minute: Limit 2000, Used 1000, Requested 1024. Try again in 80s."),
+    (429, "OTPM: Limit 2000, Used 1000, Requested 1024. Try again in 80s."),
+    (429, "tokens per minute and requests per day: Limit 2000, Used 1000, Requested 1024."),
+    (429, "output tokens per minute: " + "x" * 8192),
+])
+def test_diagnostico_numerico_exige_cota_unica_e_mensagem_limitada(monkeypatch, status, message):
+    wrapped, _ = client(monkeypatch, status=status, error_message=message)
+    with pytest.raises(Exception) as caught:
+        complete(wrapped)
+    assert getattr(_provider_failure(caught.value, "chunk", 1, 20), "rate_limit_diagnostic", None) is None
+
+
+@pytest.mark.parametrize("numbers", [
+    "Limit 2,000, Used 1,850, Requested 1,024.",
+    "Limit 2 000, Used 1 850, Requested 1 024.",
+])
+def test_diagnostico_nao_aceita_prefixo_de_numero_com_separador(monkeypatch, numbers):
+    wrapped, _ = client(monkeypatch, status=429,
+                        error_message="Rate limit on output tokens per minute: " + numbers)
+    with pytest.raises(Exception) as caught:
+        complete(wrapped)
+    assert _provider_failure(caught.value, "chunk", 1, 20).rate_limit_diagnostic is None
+
+
+@pytest.mark.parametrize("duration", ["1m 30s", "1m.30s", "8d", "1m2m"])
+def test_diagnostico_nao_aceita_prefixo_de_duracao_ou_espera_excessiva(monkeypatch, duration):
+    wrapped, _ = client(monkeypatch, status=429, error_message=(
+        "Rate limit on output tokens per minute: Limit 2000, Used 1850, Requested 1024. "
+        f"Please try again in {duration}."))
+    with pytest.raises(Exception) as caught:
+        complete(wrapped)
+    assert _provider_failure(caught.value, "chunk", 1, 20).rate_limit_diagnostic == {
+        "limit": 2000, "used": 1850, "requested": 1024, "message_wait_seconds": None}
 
 
 @pytest.mark.parametrize("invalid", ["-1", "NaN", "Infinity", "CHAVE_PRIVADA", "1e200", "1.5"])
