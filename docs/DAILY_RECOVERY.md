@@ -70,3 +70,22 @@ GitHub Status confirmou incidente ativo Actions/Pages xr3myzj7ms51 iniciado
 para aceite remoto, não falha de teste local nem prova da causa do incidente03/11.
 https://www.githubstatus.com/incidents/xr3myzj7ms51
 A recuperação deve usar o commit atual, cujo modo normal já prioriza a fila.
+
+## Resultado real de recuperação em 04/11
+
+A execução41867271673 recebeu runner após a espera e passou testes/restauração.
+Checkpoints privados confirmaram status YouTube uploaded com ID e publishAt:
+PT RdaYmiDJw4g,2026-11-04T17:14:55Z; ES k06_rjyWcQY,2026-11-04T17:02:57Z.
+São envios/agendamentos confirmados, não comprovação de visibilidade pública.
+Recibos detalhados e payloads íntegros somente no workspace privado.
+
+Reposição41869313564 foi solicitada em main5a2e36a para PT/ES e aguarda o grupo
+serializado. Se novo cron substituir esse pending, ele também publica primeiro
+a fila aprovada e repõe déficits/reserva. Não reexecutar envio de IDs confirmados.
+Uma parte pronta por idioma não significa meta3+reserva completa.
+
+Credenciais de publicação: metadata dos três secrets confirma atualização em
+28/10 às20:08–20:09UTC; status versionado coincide. Sem variável de status
+OAuth, o workflow usa testing. Renovação semanal exige consentimento humano
+Google e atualização dos mesmos secrets, mantendo separada a leitura Analytics.
+Não substituir pela concessão readonly da inteligência nem publicar valores.
