@@ -75,6 +75,18 @@ def test_fila_pronta_pode_publicar_apos_falha_de_geracao_com_restore_e_testes_co
     assert "steps.generate.outcome" not in condition
 
 
+def test_fila_aprovada_e_publicada_antes_de_nova_geracao():
+    steps = pipeline_job()["steps"]
+    ready = next(step for step in steps if step.get("id") == "publish_ready")
+    generate = next(step for step in steps if step.get("id") == "generate")
+    assert steps.index(ready) < steps.index(generate)
+    assert "steps.execution.outputs.publish == 'true'" in ready["if"]
+    assert "steps.execution.outputs.state_action == 'normal'" in ready["if"]
+    assert "steps.state_restore.outcome == 'success'" in ready["if"]
+    assert "steps.tests.outcome == 'success'" in ready["if"]
+    assert ready["run"].strip() == "python publish.py --lang $PIPELINE_LANGUAGES"
+
+
 def test_cron_respeita_prazo_gemini_antes_de_gerar_sem_bloquear_fila_pronta():
     steps = {step.get("id"): step for step in pipeline_job()["steps"] if step.get("id")}
     assert "steps.generation_window.outputs.allowed == 'true'" in steps["generate"]["if"]
@@ -89,7 +101,7 @@ def test_cron_usa_tres_idiomas_tambem_na_publicacao():
     )
 
     assert "INPUT_LANGUAGES: ${{ inputs.idiomas || 'pt en es' }}" in workflow
-    assert workflow.count("PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}") == 2
+    assert workflow.count("PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}") == 3
     assert "python scripts/generate_daily_batch.py" in workflow
     assert "vars.DAILY_VIDEO_TARGET || '3'" in workflow
     assert "python publish.py --lang $PIPELINE_LANGUAGES" in workflow

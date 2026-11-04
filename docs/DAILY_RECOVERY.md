@@ -47,3 +47,26 @@ Produção usa o snapshot privado existente; sem bootstrap/reset/limpeza de esta
 A reserva só passa a proteger o dia seguinte depois de gerar, aprovar e enviar
 os vídeos. OAuth, cota, indisponibilidade e janelas vencidas continuam limites
 reais: configurar recuperação não comprova que a meta pública já foi atingida.
+
+## Prioridade da fila pronta e aceite de implantação
+
+O workflow normal publica a fila aprovada logo após testes/restauração e antes
+de gerar. A publicação após geração continua para os novos itens. Os dois
+passos reutilizam publish.py e recalculam estado/ocupação; não reenviam IDs
+confirmados. Preview, teste e modo generate não publicam nesta etapa.
+Regressão reproduziu ausência da prioridade; 74 testes focados passaram após
+ajuste. Revisão independente da nova etapa não encontrou achados adicionais.
+
+Em 04/11, o checkpoint privado complete-753 da execução41834110638 continha
+um item YouTube pendente PT e um ES. Payload verificado por SHA-256, sem baixar
+mídia para inspecionar contagens. A geração antiga foi encerrada fora de uploads
+para priorizar fila pronta; checkpoint final confirmou success. Estado não foi
+apagado, refeito ou reinicializado. A tentativa41866749282 foi substituída pela
+prioridade de publicação41867271673, ainda pendente sem runner no momento da
+verificação. Isso NÃO comprova envio nem visibilidade pública.
+
+GitHub Status confirmou incidente ativo Actions/Pages xr3myzj7ms51 iniciado
+2026-11-04T16:05:31Z; Actions em partial_outage às16:17UTC. É limite externo
+para aceite remoto, não falha de teste local nem prova da causa do incidente03/11.
+https://www.githubstatus.com/incidents/xr3myzj7ms51
+A recuperação deve usar o commit atual, cujo modo normal já prioriza a fila.

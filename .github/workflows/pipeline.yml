@@ -293,6 +293,31 @@ jobs:
           PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
         run: python scripts/pipeline_state.py verify --base-dir .
 
+      # A reserva pronta tem prioridade: não aguarda um novo lote de horas.
+      - name: Publicar fila aprovada antes de gerar
+        id: publish_ready
+        if: ${{ steps.execution.outputs.publish == 'true' && steps.execution.outputs.state_action == 'normal' && steps.state_restore.outcome == 'success' && steps.tests.outcome == 'success' }}
+        env:
+          PIPELINE_STATE_REQUIRED: "true"
+          PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+          PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+          PIPELINE_STATE_NAMESPACE: ${{ steps.execution.outputs.namespace }}
+          PIPELINE_ENV: runner
+          PIPELINE_LANGUAGES: ${{ steps.execution.outputs.languages }}
+          DAILY_VIDEO_TARGET: ${{ vars.DAILY_VIDEO_TARGET || '3' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          TELEGRAM_CHAT_ID_PTBR: ${{ secrets.TELEGRAM_CHAT_ID_PTBR }}
+          TELEGRAM_CHAT_ID_EN: ${{ secrets.TELEGRAM_CHAT_ID_EN }}
+          TELEGRAM_CHAT_ID_ES: ${{ secrets.TELEGRAM_CHAT_ID_ES }}
+          YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}
+          YOUTUBE_TOKEN_PT: ${{ secrets.YOUTUBE_TOKEN_PT }}
+          YOUTUBE_TOKEN_EN: ${{ secrets.YOUTUBE_TOKEN_EN }}
+          YOUTUBE_TOKEN_ES: ${{ secrets.YOUTUBE_TOKEN_ES }}
+          YOUTUBE_OAUTH_PUBLISHING_STATUS: ${{ vars.YOUTUBE_OAUTH_PUBLISHING_STATUS || 'testing' }}
+          REDDIT_SESSION_COOKIE: ${{ secrets.REDDIT_SESSION_COOKIE }}
+        run: python publish.py --lang $PIPELINE_LANGUAGES
+
       # ── GERACAO ─────────────────────────────────────────────────────────
       - name: Respeitar prazo de retomada Gemini
         id: generation_window
