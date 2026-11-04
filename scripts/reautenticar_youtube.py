@@ -10,7 +10,8 @@ Por que existe:
     navegador/conta Google no momento da autorizacao — nao existe parametro
     na API para escolher o canal depois. Se a conta Google gerencia mais de
     um canal (pessoal + marca), autorizar com o canal errado selecionado
-    sobe todo video pro canal errado, silenciosamente (a API nao avisa).
+    pode direcionar uploads ao canal errado. Este script confere o ID do
+    canal antes de salvar a nova credencial e preserva a anterior se divergir.
 
 Antes de rodar:
     Cada canal (ex: "Ah Voz do Reddit") pode estar numa conta Google (e-mail)
@@ -19,11 +20,12 @@ Antes de rodar:
     de escolha de conta do Google (se voce ja tiver mais de uma logada);
     quando ela aparecer, clique especificamente no e-mail dono do canal
     certo (ou em "Usar outra conta" se esse e-mail nao estiver logado ali).
-    Autorizar com o e-mail errado prende o token no canal errado de novo,
-    silenciosamente — a API nao avisa.
+    --login-hint orienta a conta Google desejada; o seletor continua visível
+    e o canal autorizado é validado pela API, inclusive para contas de marca.
 
 Uso:
     python scripts/reautenticar_youtube.py --lang pt
+    python scripts/reautenticar_youtube.py --lang pt --login-hint dono@example.com
     python scripts/reautenticar_youtube.py --lang en --credentials secrets/youtube_credentials.json
 
 Depois de gerar:
@@ -47,10 +49,17 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube",
 ]
 
+CHANNELS = {
+    "pt": "UC3p2paTQWBFzhvcJ-vobcJQ",
+    "en": "UCHQZZUYpek_aK_b6PQF2iVA",
+    "es": "UCAMHj4K_q2qWu9LEVgbwfoA",
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Reautentica um canal do YouTube")
-    parser.add_argument("--lang", required=True, help="idioma/canal (ex: pt, en, es)")
+    parser.add_argument("--lang", required=True, choices=CHANNELS, help="idioma/canal")
+    parser.add_argument("--login-hint", default=None, help="E-mail Google dono do canal")
     parser.add_argument("--credentials", default=None,
                          help="caminho do client_secret.json (default: secrets/youtube_credentials.json)")
     args = parser.parse_args()
@@ -77,7 +86,25 @@ def main() -> int:
     from google_auth_oauthlib.flow import InstalledAppFlow
 
     flow  = InstalledAppFlow.from_client_secrets_file(str(credentials_file), SCOPES)
-    creds = flow.run_local_server(port=0)
+    options = {"port": 0, "prompt": "select_account consent"}
+    if args.login_hint:
+        options["login_hint"] = args.login_hint
+    creds = flow.run_local_server(**options)
+
+    # Uma conta Google pode gerenciar vários canais; confirme antes de gravar.
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
+    from google.auth.exceptions import GoogleAuthError
+    try:
+        youtube = build("youtube", "v3", credentials=creds)
+        items = youtube.channels().list(part="snippet", mine=True).execute().get("items", [])
+    except (HttpError, GoogleAuthError, OSError):
+        print("Não foi possível confirmar o canal. Token anterior preservado.")
+        return 1
+    if len(items) != 1 or items[0].get("id") != CHANNELS[args.lang]:
+        print("Canal autorizado incorreto. Token anterior preservado; repita com a conta/canal correto.")
+        return 1
+    print(f"Canal confirmado: {items[0]['snippet']['title']}")
 
     token_file.parent.mkdir(parents=True, exist_ok=True)
     with open(token_file, "w") as f:
