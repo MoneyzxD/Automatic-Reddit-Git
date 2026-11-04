@@ -7,6 +7,48 @@ from pathlib import Path
 from scripts import generate_daily_batch
 
 
+def test_contagem_reserva_conta_so_hoje_amanha_e_pendentes(monkeypatch):
+    from datetime import datetime, timezone
+    from scheduler import queue
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 4, 12, tzinfo=timezone.utc)
+    monkeypatch.setattr(generate_daily_batch, "datetime", Clock)
+    monkeypatch.setattr(generate_daily_batch, "_carregar_publicacao", lambda: {
+        "channels": {"pt": {"timezone": "UTC"}},
+        "daily_video_plan": {"reserve_days": 1, "target_per_language": 3}})
+    monkeypatch.setattr(queue, "count_scheduled_by_local_date", lambda *a: {
+        "2026-11-03": 3, "2026-11-04": 4, "2026-11-05": 2, "2026-11-06": 3})
+    monkeypatch.setattr(queue, "get_pending", lambda *a: [dict(id="ready")])
+    assert generate_daily_batch._contar_lote_do_dia(["pt"]) == {"pt": 6}
+
+
+def test_meta_completa_nao_executa_outra_historia(monkeypatch):
+    monkeypatch.setattr(generate_daily_batch, "_contar_lote_do_dia", lambda langs: {lang: 6 for lang in langs})
+    monkeypatch.setattr(generate_daily_batch, "_executar_historia", lambda *a, **k: pytest.fail("Meta já coberta"))
+    assert generate_daily_batch.preencher_lote(["pt", "es"], 6, 9) == {"pt": 6, "es": 6}
+
+
+def test_target_explicito_nao_confunde_reserva_amanha_com_video_hoje(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from scheduler import queue
+    tomorrow = (datetime.now(timezone.utc).date() + timedelta(days=1)).isoformat()
+    monkeypatch.setattr(generate_daily_batch, "_carregar_publicacao", lambda: {
+        "channels": {"pt": {"timezone": "UTC"}},
+        "daily_video_plan": {"reserve_days": 1, "target_per_language": 3}})
+    monkeypatch.setattr(queue, "count_scheduled_by_local_date", lambda *a: {tomorrow: 3})
+    ready, calls = [], []
+    monkeypatch.setattr(queue, "get_pending", lambda *a: ready)
+    def generate(langs, max_parts):
+        calls.append(langs)
+        ready.append({"id": "new"})
+        return 0
+    monkeypatch.setattr(generate_daily_batch, "_executar_historia", generate)
+    assert generate_daily_batch.main(["--lang", "pt", "--target", "1"]) == 0
+    assert calls == [["pt"]]
+
+
 def test_meta_um_pula_recusa_de_conteudo_e_exige_video_sem_reabrir_fonte(monkeypatch):
     count, calls = 0, []
     monkeypatch.setattr(generate_daily_batch, "_contar_lote_do_dia", lambda langs: {"pt": count})

@@ -14,6 +14,31 @@ from test_pipeline_snapshot import snapshot_fixture, build
 REPO = "MoneyzxD/Automatic-Reddit-State"
 
 
+def test_leitura_estado_repete_503_sem_repetir_post(monkeypatch):
+    from utils.pipeline_state import PrivateStateStore
+    waits, calls = [], []
+    client = PrivateStateStore(REPO, "SYNTHETIC", "validation-test")
+    def request(method, url, **kwargs):
+        calls.append(method)
+        return Response(503 if len(calls) == 1 else 200, {"ok": True})
+    monkeypatch.setattr(client.session, "request", request)
+    monkeypatch.setattr(time, "sleep", waits.append)
+    assert client._json("GET", client._url()) == {"ok": True}
+    assert calls == ["GET", "GET"]
+    assert waits == [2]
+
+
+def test_erro_estado_identifica_http_sem_expor_resposta():
+    from utils.pipeline_state import PrivateStateStore, StateError
+    client = PrivateStateStore(REPO, "SYNTHETIC", "validation-test")
+    client.session.request = lambda *a, **k: Response(403, {"message": "SYNTHETIC_SECRET"})
+    with pytest.raises(StateError) as caught:
+        client._json("GET", client._url())
+    assert caught.value.http_status == 403
+    assert caught.value.operation == "GET"
+    assert "SYNTHETIC_SECRET" not in str(caught.value)
+
+
 class Response:
     def __init__(self, status=200, data=None, *, content=b"", headers=None):
         self.status_code, self.data, self.content = status, data, content

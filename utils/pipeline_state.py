@@ -27,6 +27,10 @@ _MARKER_LIMIT = 10 * 1024 * 1024
 class StateError(RuntimeError):
     """Falha de confirmação/recuperação exige parar efeitos externos."""
 
+    def __init__(self, message, *, http_status=None, operation="", stage=""):
+        super().__init__(message)
+        self.http_status, self.operation, self.stage = http_status, operation, stage
+
 
 class StateMissing(StateError):
     """Ausência provada por listagem autorizada, nunca por erro HTTP."""
@@ -73,8 +77,17 @@ class PrivateStateStore:
         attempts = 3 if method == "GET" else 1
         for attempt in range(attempts):
             try:
-                return self.session.request(method, url, headers=headers, timeout=(15, 60), verify=True,
-                                            allow_redirects=False, **kwargs)
+                response = self.session.request(method, url, headers=headers, timeout=(15, 60), verify=True,
+                                                allow_redirects=False, **kwargs)
+                if method == "GET" and response.status_code in {500, 502, 503, 504} and attempt + 1 < attempts:
+                    status = response.status_code
+                    response.close()
+                    wait = 2 * (attempt + 1)
+                    logging.getLogger(__name__).warning(
+                        "Leitura privada temporariamente indisponível; HTTP=%s; nova tentativa em %ds", status, wait)
+                    time.sleep(wait)
+                    continue
+                return response
             except requests.RequestException as error:
                 if attempt + 1 == attempts:
                     raise StateError("API de estado privado indisponível") from None
@@ -89,7 +102,7 @@ class PrivateStateStore:
         response = self._request(method, url, **kwargs)
         try:
             if response.status_code not in statuses:
-                raise StateError("API de estado recusou a operação")
+                raise StateError("API de estado recusou a operação", http_status=response.status_code, operation=method)
             return response.json()
         except (ValueError, TypeError):
             raise StateError("Resposta da API de estado inválida") from None
@@ -125,7 +138,7 @@ class PrivateStateStore:
             elif response.status_code == 200:
                 data = response.json()
             else:
-                raise StateError("Não foi possível obter a release de estado")
+                raise StateError("Não foi possível obter a release de estado", http_status=response.status_code, operation="GET")
         except (ValueError, TypeError):
             raise StateError("Release de estado inválida") from None
         finally:
@@ -211,7 +224,7 @@ class PrivateStateStore:
                         if blob and response.status_code in {502, 503, 504}:
                             continue
                         if response.status_code != 201:
-                            raise StateError("API de estado recusou a operação")
+                            raise StateError("API de estado recusou a operação", http_status=response.status_code, operation="POST")
                         existing = response.json()
                     except (ValueError, TypeError):
                         raise StateError("Resposta da API de estado inválida") from None
@@ -259,13 +272,17 @@ class PrivateStateStore:
                 raise StateError("Marker de conclusão corrompido") from None
 
     def publish(self, snapshot: Snapshot) -> dict:
+        stage = "target"
         try:
             self.validate_target()
+            stage = "snapshot"
             verify_snapshot(snapshot)
             if snapshot.namespace != self.namespace:
                 raise StateError("Namespace do snapshot divergente")
             self._run_attempt, self._sequence = snapshot.manifest["run_attempt"], snapshot.manifest["sequence"]
+            stage = "release"
             release = self._ensure_release(snapshot.manifest["run_id"])
+            stage = "inventory"
             marker = next((asset for asset in self._assets(release) if asset["name"] == f"complete-{self._sequence}.json"), None)
             if marker is not None:
                 receipt = self._read_completion(marker)
@@ -273,14 +290,20 @@ class PrivateStateStore:
                     raise StateError("Snapshot já publicado com conteúdo diferente")
                 self._fetch_receipt(receipt)
                 return receipt
+            stage = "media"
             media_ids = self._upload_media(release, snapshot.media)
+            stage = "payload"
             payload_id = self._upload_asset(release, snapshot.payload_path)
             # Os bytes locais também devem permanecer íntegros até o commit remoto.
             verify_snapshot(snapshot)
             receipt = {"snapshot_id": snapshot.snapshot_id, "namespace": self.namespace,
                        "manifest": snapshot.manifest, "payload_id": payload_id, "media_ids": media_ids}
+            stage = "completion"
             self._upload_completion(release, receipt)
             return receipt
+        except StateError as error:
+            error.stage = stage
+            raise
         except (SnapshotError, OSError, ValueError, TypeError, KeyError):
             raise StateError("Falha ao confirmar estado privado") from None
 

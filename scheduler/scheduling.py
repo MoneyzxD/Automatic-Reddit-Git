@@ -46,6 +46,14 @@ JITTER_MAXIMO_MINUTOS = 20
 JANELA_PADRAO = {"start": "10:00", "end": "22:00"}
 
 
+def daily_reserve_days(pub_cfg: dict) -> int:
+    """Reserva opcional de um dia, mantendo a meta de publicações por data."""
+    value = (pub_cfg.get("daily_video_plan") or {}).get("reserve_days", 0)
+    if type(value) is not int or value not in {0, 1}:
+        raise ValueError("reserve_days deve ser 0 ou 1")
+    return value
+
+
 def _fuso(channel_cfg: dict):
     """Fuso do canal, com UTC como fallback seguro."""
     nome = channel_cfg.get("timezone", "UTC")

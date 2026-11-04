@@ -7,7 +7,7 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
@@ -47,11 +47,15 @@ def _meta_diaria(valor_cli: int | None = None) -> tuple[int, int]:
     return meta, max(minimo_tentativas, meta + 3)
 
 
-def _contar_lote_do_dia(idiomas: list[str]) -> dict[str, int]:
+def _contar_lote_do_dia(idiomas: list[str], *, reserve_days=None, daily_target=None) -> dict[str, int]:
     import pytz
     from scheduler.queue import count_scheduled_by_local_date, get_pending
 
-    canais = _carregar_publicacao().get("channels", {}) or {}
+    from scheduler.scheduling import daily_reserve_days
+    publicacao = _carregar_publicacao()
+    canais = publicacao.get("channels", {}) or {}
+    dias = daily_reserve_days(publicacao) if reserve_days is None else reserve_days
+    meta = _meta_diaria()[0] if daily_target is None else daily_target
     contagens = {}
     for idioma in idiomas:
         canal = canais.get(idioma) or canais.get("pt-br" if idioma == "pt" else idioma, {})
@@ -60,9 +64,10 @@ def _contar_lote_do_dia(idiomas: list[str]) -> dict[str, int]:
             channel_tz = pytz.timezone(timezone_name)
         except Exception:
             channel_tz = pytz.UTC
-        hoje = datetime.now(timezone.utc).astimezone(channel_tz).date().isoformat()
+        hoje = datetime.now(timezone.utc).astimezone(channel_tz).date()
         agendados = count_scheduled_by_local_date(idioma, timezone_name)
-        contagens[idioma] = agendados.get(hoje, 0) + len(get_pending(idioma))
+        contagens[idioma] = sum(min(meta, agendados.get((hoje + timedelta(days=offset)).isoformat(), 0))
+                               for offset in range(dias + 1)) + len(get_pending(idioma))
     return contagens
 
 
@@ -99,9 +104,14 @@ def preencher_lote(
     meta: int,
     max_tentativas: int,
     max_excedente: int = 1,
+    *, explicit_target: int | None = None,
 ) -> dict[str, int]:
     logger = logging.getLogger("daily_batch")
-    contagens = _contar_lote_do_dia(idiomas)
+    def contar():
+        if explicit_target is not None:
+            return _contar_lote_do_dia(idiomas, reserve_days=0, daily_target=explicit_target)
+        return _contar_lote_do_dia(idiomas)
+    contagens = contar()
     tentativas = dict.fromkeys(idiomas, 0)
     indisponiveis, esgotados = set(), set()
 
@@ -135,7 +145,7 @@ def preencher_lote(
         elif codigo != 0:
             raise RuntimeError(f"main.py falhou com codigo {codigo}")
 
-        novas_contagens = _contar_lote_do_dia(idiomas)
+        novas_contagens = contar()
         if any(
             novas_contagens[idioma] > meta + max_excedente
             for idioma in idiomas
@@ -182,8 +192,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         meta, max_tentativas = _meta_diaria(args.target)
+        from scheduler.scheduling import daily_reserve_days
+        # Validação explícita --target não constrói reserva de produção.
+        if args.target is None:
+            meta *= 1 + daily_reserve_days(_carregar_publicacao())
+            max_tentativas = max(max_tentativas, meta + 3)
         max_excedente = int(_carregar_plano().get("max_carryover_parts_next_day", 1))
-        preencher_lote(idiomas, meta, max_tentativas, max_excedente)
+        preencher_lote(idiomas, meta, max_tentativas, max_excedente, explicit_target=args.target)
     except BatchUnavailable as erro:
         logging.getLogger("daily_batch").error("Lote indisponível: %s", erro)
         return 2

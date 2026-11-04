@@ -9,6 +9,34 @@ def isolate_queue(tmp_path, monkeypatch):
     monkeypatch.setattr(queue, "_QUEUE_DIR_PATHS", [tmp_path / "queue"])
 
 
+def test_reserva_preenche_amanha_mesmo_com_meta_de_hoje_completa(monkeypatch):
+    now = datetime(2026, 11, 4, 10, tzinfo=timezone.utc)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz or timezone.utc)
+    monkeypatch.setattr(publish, "datetime", Clock)
+    monkeypatch.setattr(queue, "get_pending", lambda lang: [
+        {"id": f"v{i}", "video_path": "video.mp4", "metadata": {}} for i in range(5)])
+    monkeypatch.setattr(queue, "count_scheduled_by_local_date", lambda *a: {"2026-11-04": 3, "2026-11-05": 1})
+    config = {"channels": {"pt": {"enabled": True, "timezone": "UTC"}},
+        "daily_video_plan": {"enabled": True, "target_per_language": 3, "reserve_days": 1}}
+    result = publish.publicar_idioma("pt", config, maximo=10, dry_run=True)
+    assert len(result["agendamentos"]) == 2
+    assert all(date.startswith("2026-11-05T") for _, date in result["agendamentos"])
+
+
+def test_reserva_nao_reenvia_quando_hoje_e_amanha_estao_completos(monkeypatch):
+    today = datetime.now(timezone.utc).date()
+    monkeypatch.setattr(queue, "get_pending", lambda lang: [
+        {"id": "ready", "video_path": "video.mp4", "metadata": {}}])
+    monkeypatch.setattr(queue, "count_scheduled_by_local_date", lambda *a: {
+        today.isoformat(): 3, (today + timedelta(days=1)).isoformat(): 3})
+    config = {"channels": {"pt": {"enabled": True, "timezone": "UTC"}},
+        "daily_video_plan": {"enabled": True, "target_per_language": 3, "reserve_days": 1}}
+    assert publish.publicar_idioma("pt", config, maximo=10, dry_run=True)["agendamentos"] == []
+
+
 @pytest.mark.parametrize("future_carryover", [False, True])
 def test_nova_rodada_respeita_intervalo_dos_horarios_confirmados(tmp_path, monkeypatch, future_carryover):
     from scheduler import scheduling

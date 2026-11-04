@@ -65,10 +65,10 @@ on:
         type: string
 
   schedule:
-    # Uma rodada diaria as 05:17 UTC (02:17 de Sao Paulo), fora da hora cheia.
-    # Antecipa a geracao para absorver atrasos do Actions e revisoes demoradas.
-    # A API continua agendando cada idioma na sua janela local de publicacao.
-    - cron: "17 5 * * *"
+    # Seis oportunidades diárias de completar déficits e repor a reserva.
+    # Execuções seguem serializadas e o lote pula idiomas já cobertos.
+    # O YouTube mantém a janela, o intervalo e a meta de cada data local.
+    - cron: "17 1,5,9,13,17,21 * * *"
 
 # Serializa execucoes: duas rodadas simultaneas corromperiam a fila JSON e o
 # banco de dedupe (ambos gravados por leitura-modificacao-escrita simples).

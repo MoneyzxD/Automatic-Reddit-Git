@@ -1205,6 +1205,9 @@ def cli(argv: list[str] | None = None) -> int:
             # Somente diagnóstico tipificado; nunca roteiro, evidência ou erro HTTP bruto.
             logger.error("Revisão obrigatória indisponível; codigo=%s; http=%s; modo=%s; tentativas=%s",
                          failure.code, failure.http_status, failure.mode, failure.attempts)
+        elif isinstance(error, StateError):
+            logger.error("Estado obrigatório indisponível; etapa=%s; http=%s; operação=%s; lote interrompido",
+                         error.stage, error.http_status, error.operation)
         else:
             logger.error("Dependência obrigatória indisponível; tipo=%s; lote interrompido", type(error).__name__)
         # O lote pode prosseguir em outro idioma após falha de IA; incerteza

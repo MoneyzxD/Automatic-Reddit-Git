@@ -154,12 +154,14 @@ def publicar_idioma(language: str, pub_cfg: dict, maximo: int,
 
     plano_diario = pub_cfg.get("daily_video_plan", {}) or {}
     max_excedente = int(plano_diario.get("max_carryover_parts_next_day", 1))
+    from scheduler.scheduling import daily_reserve_days
+    reserva = daily_reserve_days(pub_cfg)
     restante = max(0, teto_diario - ja_hoje)
     vagas_amanha = max(
         0,
-        max_excedente - ocupacao.get(amanha.isoformat(), 0),
+        (teto_diario if reserva else max_excedente) - ocupacao.get(amanha.isoformat(), 0),
     )
-    capacidade = restante + (vagas_amanha if restante > 0 else 0)
+    capacidade = restante + (vagas_amanha if reserva or restante > 0 else 0)
     limite_efetivo = min(maximo, capacidade)
 
     logger.info(
