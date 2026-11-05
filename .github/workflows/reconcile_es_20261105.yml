@@ -1,0 +1,38 @@
+name: Reconciliar recibo ES 05-11
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pipeline-videos
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PIPELINE_ENV: runner
+      PIPELINE_STATE_REQUIRED: 'true'
+      PIPELINE_STATE_TOKEN: ${{ secrets.PIPELINE_STATE_TOKEN }}
+      PIPELINE_STATE_REPO: ${{ vars.PIPELINE_STATE_REPO }}
+      PIPELINE_STATE_NAMESPACE: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar dependencias de estado e leitura
+        run: python -m pip install requests pyyaml python-dotenv google-api-python-client google-auth-httplib2 google-auth-oauthlib
+      - name: Validar reparo isolado
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/test_reconcile_es_20261105.py -q
+      - name: Restaurar estado privado
+        run: python scripts/pipeline_state.py restore --base-dir .
+      - name: Conferir API e persistir somente recibo conhecido
+        env:
+          YOUTUBE_TOKEN_ES: ${{ secrets.YOUTUBE_TOKEN_ES }}
+        run: python scripts/reconcile_es_20261105.py

@@ -9,6 +9,17 @@ def isolate_queue(tmp_path, monkeypatch):
     monkeypatch.setattr(queue, "_QUEUE_DIR_PATHS", [tmp_path / "queue"])
 
 
+@pytest.fixture
+def fixed_morning(monkeypatch):
+    from scheduler import scheduling
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 11, 5, 10, tzinfo=timezone.utc).astimezone(tz or timezone.utc)
+    monkeypatch.setattr(publish, "datetime", Clock)
+    monkeypatch.setattr(scheduling, "datetime", Clock)
+
+
 def test_reserva_preenche_amanha_mesmo_com_meta_de_hoje_completa(monkeypatch):
     now = datetime(2026, 11, 4, 10, tzinfo=timezone.utc)
     class Clock(datetime):
@@ -16,6 +27,8 @@ def test_reserva_preenche_amanha_mesmo_com_meta_de_hoje_completa(monkeypatch):
         def now(cls, tz=None):
             return now.astimezone(tz or timezone.utc)
     monkeypatch.setattr(publish, "datetime", Clock)
+    from scheduler import scheduling
+    monkeypatch.setattr(scheduling, "datetime", Clock)
     monkeypatch.setattr(queue, "get_pending", lambda lang: [
         {"id": f"v{i}", "video_path": "video.mp4", "metadata": {}} for i in range(5)])
     monkeypatch.setattr(queue, "count_scheduled_by_local_date", lambda *a: {"2026-11-04": 3, "2026-11-05": 1})
@@ -111,7 +124,7 @@ def test_intervalo_no_fim_da_janela_nao_envia_mais_de_um_excedente(tmp_path, mon
     assert queue._queue_path("pt").read_bytes() == before
 
 
-def test_publicador_agenda_um_excedente_para_o_dia_seguinte(monkeypatch):
+def test_publicador_agenda_um_excedente_para_o_dia_seguinte(monkeypatch, fixed_morning):
     pendentes = [
         {"id": f"video-{indice}", "video_path": "video.mp4", "metadata": {}}
         for indice in range(4)
@@ -149,7 +162,7 @@ def test_publicador_agenda_um_excedente_para_o_dia_seguinte(monkeypatch):
     assert len(resumo["agendamentos"]) == 4
 
 
-def test_publicador_nao_cria_segundo_excedente_para_amanha(monkeypatch):
+def test_publicador_nao_cria_segundo_excedente_para_amanha(monkeypatch, fixed_morning):
     pendentes = [
         {"id": f"video-{indice}", "video_path": "video.mp4", "metadata": {}}
         for indice in range(4)

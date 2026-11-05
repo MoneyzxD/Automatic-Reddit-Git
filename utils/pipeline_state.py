@@ -53,6 +53,7 @@ class PrivateStateStore:
         self.base_dir = None
         self._run_attempt, self._sequence = 1, 0
         self._default_branch = None
+        self._publishing_assets = None
 
     @classmethod
     def from_environment(cls, base_dir: Path) -> PrivateStateStore:
@@ -150,10 +151,14 @@ class PrivateStateStore:
     def _assets(self, release: dict) -> list[dict]:
         if not _integer(release.get("id")):
             raise StateError("ID de release inválido")
+        if self._publishing_assets is not None and release["id"] in self._publishing_assets:
+            return self._publishing_assets[release["id"]]
         assets = self._pages(f"/releases/{release['id']}/assets")
         names = [asset.get("name") for asset in assets]
         if any(not isinstance(name, str) for name in names) or len(names) != len(set(names)):
             raise StateError("Inventário de assets conflitante")
+        if self._publishing_assets is not None:
+            self._publishing_assets[release["id"]] = assets
         return assets
 
     def _download(self, asset_id: int, destination: Path, limit: int) -> None:
@@ -235,7 +240,12 @@ class PrivateStateStore:
                 logging.getLogger(__name__).warning(
                     "Upload de blob incompleto no GitHub; cópia não confirmada (%d/3)", attempt + 1)
                 continue
-            return self._check_asset(existing, candidate, size, digest)
+            asset_id = self._check_asset(existing, candidate, size, digest)
+            if self._publishing_assets is not None:
+                inventory = self._publishing_assets[release["id"]]
+                if not any(asset["id"] == asset_id for asset in inventory):
+                    inventory.append(existing)
+            return asset_id
         raise StateError("Upload de estado não confirmado após tentativas limitadas")
 
     def _upload_media(self, release: dict, media: dict[str, Path]) -> dict[str, int]:
@@ -273,6 +283,9 @@ class PrivateStateStore:
 
     def publish(self, snapshot: Snapshot) -> dict:
         stage = "target"
+        # Um único gravador por release: reutiliza inventário só neste checkpoint.
+        # Evita reler todas as páginas para cada blob já conhecido.
+        self._publishing_assets = {}
         try:
             self.validate_target()
             stage = "snapshot"
@@ -306,6 +319,8 @@ class PrivateStateStore:
             raise
         except (SnapshotError, OSError, ValueError, TypeError, KeyError):
             raise StateError("Falha ao confirmar estado privado") from None
+        finally:
+            self._publishing_assets = None
 
     def _markers(self) -> list[tuple[tuple[int, int, int], dict]]:
         self.validate_target()

@@ -89,3 +89,34 @@ Credenciais de publicação: metadata dos três secrets confirma atualização e
 OAuth, o workflow usa testing. Renovação semanal exige consentimento humano
 Google e atualização dos mesmos secrets, mantendo separada a leitura Analytics.
 Não substituir pela concessão readonly da inteligência nem publicar valores.
+
+## Incidentes de05/11 e correções de confiabilidade
+
+EN também encontrou Groq429 no run41990830593; o lote terminou com contagem
+PT0/EN2/ES3. Dois EN e dois ES tiveram envio registrado no log. A API autenticada
+confirmou um terceiro ES, cxV3V4z7Kwc, public/processed,149s, título e descrição
+idênticos ao item1x3uxdj_es. O último checkpoint completo845 ainda guardava
+uploading/sem ID: o transporte terminou, mas a persistência falhou. Não reenviar.
+
+- Run41927174362: dois testes de overflow dependiam do relógio real e falharam
+  às22:42UTC. Reprodução no mesmo horário deu2RED; relógios publish/scheduling
+  controlados deram2GREEN. Limites/janelas reais de produção não foram relaxados.
+- Run42074743045: timeout124 baixando FFmpeg no mirror Ubuntu26 após300s, antes
+  de qualquer idioma executar. Runner fixado emUbuntu24.04; probe de libx264,
+  filtro ASS e DejaVu dispensa instalação só se completo. Fallback APT limitado
+  a600s,step15min; testes executam shell real com operações administrativas falsas.
+- Inventário privado era relido para cada blob: teste pequeno mediu8GETs por
+  checkpoint. Cache apenas dentro de publish reduz para1–2leituras nesse cenário;
+  a próxima publicação relê o servidor. IDs/tamanho/hash continuam conferidos,
+  somente ack confirmado entra no cache e finally o limpa. Não atribuir o erro
+  histórico de estado à cota GitHub sem HTTP correspondente preservado no log.
+- Reparo único reconcile_es_20261105: mesmo lock pipeline-videos,main/production,
+  restauração obrigatória, valida canal/ID/título/descrição/data/duração/public/
+  processed por API antes de marcar uploaded. Dois checkpoints preservam recibo;
+  nenhuma mutação YouTube, upload ou aprovação de roteiro. Capa fica missing.
+  Replay é idempotente; divergência ou API indisponível mantém bloqueio.
+
+Suíte principal1587passou/14ignorados; seis casos isolados do reparo passaram.
+Revisão independente não encontrou achados bloqueantes nas correções e no reparo.
+As falhas Groq429 continuam dependência externa: estas alterações não ampliam
+cotas, trocam chaves nem liberam conteúdo sem revisão.

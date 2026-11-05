@@ -90,7 +90,7 @@ jobs:
     if: >-
       ${{ github.event_name != 'schedule' ||
           vars.PIPELINE_AUTOMATION_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     # Teto de 6h do GitHub; 300 min deixa margem e evita job pendurado
@@ -105,9 +105,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Instalar FFmpeg
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           set -Eeuo pipefail
+          # Reutiliza a imagem somente com encoder, legendas ASS e fontes reais.
+          if command -v ffmpeg >/dev/null && command -v fc-list >/dev/null &&
+             timeout --kill-after=5s 10s ffmpeg -hide_banner -filters 2>/dev/null | grep -E '[[:space:]]ass[[:space:]]' >/dev/null &&
+             timeout --kill-after=5s 10s ffmpeg -hide_banner -encoders 2>/dev/null | grep 'libx264' >/dev/null &&
+             timeout --kill-after=5s 10s fc-list | grep -i 'DejaVu' >/dev/null; then
+            echo 'FFmpeg, libx264, ASS e DejaVu disponíveis na imagem; instalação dispensada.'
+            exit 0
+          fi
           phase=timer
           trap 'code=$?; echo "ERRO preparação FFmpeg: fase=$phase codigo=$code" >&2; exit "$code"' ERR
           echo "Preparação FFmpeg: fase=$phase"
@@ -136,7 +144,7 @@ jobs:
           echo "Preparação FFmpeg: fase=$phase"
           # No run40351541446,180s interromperam o download de94MB do mirror.
           # Mantém lock/rede limitados, com margem para download e configuração.
-          timeout --kill-after=10s 300s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y ffmpeg fonts-dejavu-core
+          timeout --kill-after=10s 600s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "${apt_options[@]}" install -y --no-install-recommends ffmpeg fonts-dejavu-core
           phase=ffmpeg
           echo "Preparação FFmpeg: fase=$phase"
           timeout --kill-after=5s 10s ffmpeg -version | sed -n '1p'

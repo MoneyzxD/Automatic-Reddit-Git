@@ -7,6 +7,16 @@ import yaml
 BASE_DIR = Path(__file__).parent.parent
 
 
+def test_ffmpeg_reusa_runtime_valido_e_instalacao_tem_margem_limitada():
+    job = pipeline_job()
+    assert job["runs-on"] == "ubuntu-24.04"
+    step = next(s for s in job["steps"] if s.get("name") == "Instalar FFmpeg")
+    script = step["run"]
+    assert script.index("command -v ffmpeg") < script.index("apt-get")
+    assert "-filters" in script and "-encoders" in script and "DejaVu" in script
+    assert "600s" in script and step["timeout-minutes"] == 15
+
+
 def pipeline_job():
     return yaml.safe_load((BASE_DIR / ".github/workflows/pipeline.yml").read_text(encoding="utf-8"))["jobs"]["gerar-e-publicar"]
 

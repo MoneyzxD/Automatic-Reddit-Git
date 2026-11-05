@@ -26,7 +26,7 @@ timeout() {
   [[ "$1" == --kill-after=*s ]] || return 90
   shift
   bound="${1%s}"
-  [[ "$bound" =~ ^[0-9]+$ && "$bound" -gt 0 && "$bound" -le 300 ]] || return 91
+  [[ "$bound" =~ ^[0-9]+$ && "$bound" -gt 0 && "$bound" -le 600 ]] || return 91
   shift
   printf 'BOUND %s %s\n' "$bound" "$*" >&2
   if [[ "${FAIL_PHASE:-}" == update && "$*" == *apt-get*update* ]] ||
@@ -61,6 +61,14 @@ apt-get() {
   [[ "$*" == *'Acquire::https::Timeout=30'* ]] || return 98
 }
 ffmpeg() {
+  if [[ "$*" == *-filters* ]]; then
+    [[ "${RUNTIME_READY:-}" != 1 ]] || printf ' ... ass ASS subtitles\n'
+    return 0
+  fi
+  if [[ "$*" == *-encoders* ]]; then
+    [[ "${RUNTIME_READY:-}" != 1 ]] || printf ' V libx264 H264\n'
+    return 0
+  fi
   printf 'FFMPEG_VERSION\n'
   [[ "${FAIL_PHASE:-}" != ffmpeg ]]
 }
@@ -72,12 +80,12 @@ fuser() { return 99; }
 '''
 
 
-def _run(tmp_path, failure=""):
+def _run(tmp_path, failure="", runtime_ready=False):
     bash = shutil.which("bash") or "C:/Program Files/Git/bin/bash.exe"
     return subprocess.run(
         [bash, "-e", "-o", "pipefail", "-c", STUBS + _step()["run"]],
-        cwd=tmp_path, env=dict(os.environ, FAIL_PHASE=failure),
-        capture_output=True, text=True, timeout=10,
+        cwd=tmp_path, env=dict(os.environ, FAIL_PHASE=failure, RUNTIME_READY="1" if runtime_ready else "0"),
+        capture_output=True, text=True, encoding="utf-8", timeout=10,
     )
 
 
@@ -115,14 +123,27 @@ def test_timer_indisponivel_nao_esconde_erro_de_apt(tmp_path):
 
 def test_workflow_limita_preparacao_sem_ignorar_falha_do_step():
     step = _step()
-    assert 1 <= int(step.get("timeout-minutes", "0")) <= 10
+    assert 1 <= int(step.get("timeout-minutes", "0")) <= 15
     assert step.get("continue-on-error", "false") == "false"
 
 
 def test_instalacao_tem_margem_para_download_do_incidente_sem_exceder_step():
     # Run40351541446: mirror Azure ainda baixava os94MB quando venceu180s.
     step = _step()
-    assert "timeout --kill-after=10s 300s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get" in step["run"]
-    # Timers20, chrome10, update120, install300, ffmpeg10, fontes10;
+    assert "timeout --kill-after=10s 600s sudo -n env DEBIAN_FRONTEND=noninteractive apt-get" in step["run"]
+    # Probe30, timers20, chrome10, update120, install600, ffmpeg10, fontes10;
     # inclui kill-after e margem para shell/diagnóstico.
-    assert int(step["timeout-minutes"]) * 60 >= 550
+    assert int(step["timeout-minutes"]) * 60 >= 880
+
+
+def test_runtime_completo_nao_chama_apt(tmp_path):
+    result = _run(tmp_path, runtime_ready=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "instalação dispensada" in result.stdout
+    assert "APT " not in result.stdout
+
+
+def test_runtime_sem_fontes_nao_pula_instalacao(tmp_path):
+    result = _run(tmp_path, "fonts", runtime_ready=True)
+    assert result.returncode != 0
+    assert "APT " in result.stdout

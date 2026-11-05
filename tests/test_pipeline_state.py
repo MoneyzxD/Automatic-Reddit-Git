@@ -14,6 +14,20 @@ from test_pipeline_snapshot import snapshot_fixture, build
 REPO = "MoneyzxD/Automatic-Reddit-State"
 
 
+def test_publicacao_lista_assets_uma_vez_e_rele_no_proximo_checkpoint(snapshot_fixture):
+    client = store()
+    snapshot = build(snapshot_fixture)
+    client.publish(snapshot)
+    def listings():
+        return sum(method == "GET" and urlparse(url).path.endswith("/assets")
+                   for method, url, kwargs in client.session.calls)
+    assert listings() <= 2
+    before = listings()
+    client.publish(snapshot)
+    assert listings() > before
+
+
+
 def test_leitura_estado_repete_503_sem_repetir_post(monkeypatch):
     from utils.pipeline_state import PrivateStateStore
     waits, calls = [], []
