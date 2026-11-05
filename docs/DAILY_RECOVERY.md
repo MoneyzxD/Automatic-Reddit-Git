@@ -120,3 +120,12 @@ Suíte principal1587passou/14ignorados; seis casos isolados do reparo passaram.
 Revisão independente não encontrou achados bloqueantes nas correções e no reparo.
 As falhas Groq429 continuam dependência externa: estas alterações não ampliam
 cotas, trocam chaves nem liberam conteúdo sem revisão.
+
+Reparo42089688464 concluído: recibo ES cxV3V4z7Kwc confirmado e persistido,
+sem upload. Validação42089829043 passou preparo FFmpeg e testes, mas bloqueou
+na restauração com download interrompido. A mensagem antiga juntava erro local
+e de rede, portanto não permite atribuir a causa histórica com precisão.
+Transferências interrompidas por RequestException passam a reiniciar pelo ID
+até três vezes, com espera2/4s e truncamento do parcial. OSError não recebe
+retry e registra classe/errno sem mensagem, caminho ou URL assinada. Limites,
+hashes e bloqueio de restauração incompleta continuam obrigatórios.

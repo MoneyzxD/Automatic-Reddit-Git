@@ -67,6 +67,50 @@ class Response:
         pass
 
 
+@pytest.mark.parametrize("recover", [True, False])
+def test_download_repete_stream_interrompido_sem_concatenar(tmp_path, monkeypatch, recover):
+    from utils.pipeline_state import PrivateStateStore, StateError
+    client = PrivateStateStore(REPO, "SYNTHETIC", "validation-test")
+    calls, waits = [], []
+    class Broken(Response):
+        def iter_content(self, chunk_size=1024):
+            yield b"partial"
+            raise requests.ConnectionError("SYNTHETIC_SECRET signed-url")
+    def request(*args, **kwargs):
+        calls.append(1)
+        return Response(content=b"complete") if recover and len(calls) == 2 else Broken()
+    monkeypatch.setattr(client, "_request", request)
+    monkeypatch.setattr(time, "sleep", waits.append)
+    target = tmp_path / "asset.bin"
+    if recover:
+        client._download(123, target, 100)
+        assert target.read_bytes() == b"complete"
+        assert waits == [2]
+    else:
+        with pytest.raises(StateError) as caught:
+            client._download(123, target, 100)
+        assert "SYNTHETIC_SECRET" not in str(caught.value)
+        assert len(calls) == 3
+        assert waits == [2, 4]
+
+
+def test_download_nao_repete_erro_local(tmp_path, monkeypatch):
+    from utils.pipeline_state import PrivateStateStore, StateError
+    client = PrivateStateStore(REPO, "SYNTHETIC", "validation-test")
+    calls = []
+    class DiskFailure(Response):
+        def iter_content(self, chunk_size=1024):
+            raise OSError(28, "SYNTHETIC_SECRET")
+            yield b""
+    def request(*args, **kwargs):
+        calls.append(1)
+        return DiskFailure()
+    monkeypatch.setattr(client, "_request", request)
+    with pytest.raises(StateError, match="falha local"):
+        client._download(123, tmp_path / "asset.bin", 100)
+    assert calls == [1]
+
+
 class Session:
     """API mínima em memória; IDs/bytes têm as mesmas relações do GitHub."""
     def __init__(self):

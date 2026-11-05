@@ -162,6 +162,21 @@ class PrivateStateStore:
         return assets
 
     def _download(self, asset_id: int, destination: Path, limit: int) -> None:
+        for attempt in range(3):
+            try:
+                self._download_once(asset_id, destination, limit)
+                return
+            except requests.RequestException as error:
+                logging.getLogger(__name__).warning(
+                    "Transferência privada interrompida (%s); tentativa %d/3",
+                    type(error).__name__, attempt + 1)
+                if attempt == 2:
+                    raise StateError("Download de estado interrompido após três tentativas",
+                                     operation="GET", stage="download") from None
+                # Reabre pelo ID e trunca o parcial; nunca reutiliza URL assinada.
+                time.sleep(2 * (attempt + 1))
+
+    def _download_once(self, asset_id: int, destination: Path, limit: int) -> None:
         if not _integer(asset_id):
             raise StateError("ID de asset inválido")
         response = self._request("GET", self._url(f"/releases/assets/{asset_id}"), binary=True, stream=True)
@@ -184,8 +199,13 @@ class PrivateStateStore:
                     handle.write(chunk)
                 handle.flush()
                 os.fsync(handle.fileno())
-        except (OSError, requests.RequestException):
-            raise StateError("Download de estado interrompido") from None
+        except requests.RequestException:
+            raise
+        except OSError as error:
+            logging.getLogger(__name__).error(
+                "Falha local ao gravar estado (%s; errno=%s)", type(error).__name__, error.errno)
+            raise StateError("Download de estado interrompido por falha local",
+                             operation="GET", stage="download") from None
         finally:
             response.close()
 
