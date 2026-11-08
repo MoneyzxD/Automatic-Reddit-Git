@@ -95,6 +95,47 @@ def test_fixture_pipeline_nao_consulta_groq_real(pipeline, monkeypatch):
     client.assert_not_called()
 
 
+@pytest.mark.parametrize("stage", ["adaptation", "translation"])
+def test_contexto_local_excedido_quarentena_sem_bloquear_idioma(pipeline, monkeypatch, stage):
+    from stages.script_guardian import ScriptGuardian, ScriptReview, SemanticFailure
+    from utils.db import PipelineDB
+    original = ScriptGuardian.review_and_fix
+    def review(self, **kwargs):
+        if kwargs["stage"] == stage:
+            failure = SemanticFailure("context_limit", None, "chunk", 0, 36254)
+            raise QualityUnavailable(ScriptReview("unavailable", kwargs["candidate_text"],
+                (), (), 1, False, "", semantic_failure=failure))
+        return original(self, **kwargs)
+    monkeypatch.setattr(ScriptGuardian, "review_and_fix", review)
+    main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    assert not pipeline.audios and not pipeline.renders
+    db = PipelineDB(pipeline.root / "db" / "pipeline.db")
+    assert db.processing_languages("s1", ["pt"]) == []
+    assert db.retry_candidates(["pt"]) == []
+    assert list((pipeline.root / "data/quarantine/s1").glob("*.json"))
+
+
+@pytest.mark.parametrize("code,http,attempts,chars", [
+    ("context_limit", 413, 1, 36254),
+    ("rate_limit", 429, 1, 36254),
+    ("context_limit", None, 1, 36254),
+    ("context_limit", None, 0, 20000),
+])
+def test_limite_externo_ou_nao_comprovado_continua_retomavel(
+        pipeline, monkeypatch, code, http, attempts, chars):
+    from stages.script_guardian import ScriptGuardian, ScriptReview, SemanticFailure
+    from utils.db import PipelineDB
+    failure = SemanticFailure(code, http, "chunk", attempts, chars)
+    error = QualityUnavailable(ScriptReview("unavailable", "candidato", (), (), 1, False,
+                                           "", semantic_failure=failure))
+    monkeypatch.setattr(ScriptGuardian, "review_and_fix", Mock(side_effect=error))
+    with pytest.raises(QualityUnavailable):
+        main.run_pipeline(pipeline.config, ["pt"], test_story=True)
+    assert not pipeline.audios and not pipeline.renders
+    db = PipelineDB(pipeline.root / "db" / "pipeline.db")
+    assert db.processing_languages("s1", ["pt"]) == ["pt"]
+
+
 @pytest.fixture
 def pipeline(monkeypatch, tmp_path):
     from stages import (adapter, translator, naturalizer, titler, voice, subtitle, narrator_profile,

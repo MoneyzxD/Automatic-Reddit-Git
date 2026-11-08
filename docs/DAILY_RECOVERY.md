@@ -129,3 +129,22 @@ Transferências interrompidas por RequestException passam a reiniciar pelo ID
 até três vezes, com espera2/4s e truncamento do parcial. OSError não recebe
 retry e registra classe/errno sem mensagem, caminho ou URL assinada. Limites,
 hashes e bloqueio de restauração incompleta continuam obrigatórios.
+
+## Bloqueio de capacidade em07/11
+
+Verify42092061052 concluiu success após o retry de transferência. Nos runs de
+07/11, PT retomava1xixcg2 e parava na adaptação EN: contexto36254chars, limite
+local24000, modochunk, zero tentativas e nenhum HTTP. Não é prova de cota Groq.
+O lote tratava essa incompatibilidade determinística como indisponibilidade
+transitória, voltando à mesma fonte em execuções seguintes.
+
+Somente esse limite local comprovado recebe estado terminal rejected com motivo
+review_context_capacity. Quarentena mantém texto/fatos e o diagnóstico unavailable
+original; rejected aqui significa inelegível para revisão na capacidade atual,
+não julgamento factual. O lote pode tentar outra história. Na adaptação comum,
+encerra os idiomas ativos; em etapa localizada, apenas o idioma afetado.
+Sem truncar, ampliar orçamento, aprovar conteúdo ou apagar progresso. Reprocessar
+essa fonte exige futura reconciliação explícita após resolver sua capacidade.
+HTTP413,429, contexto não comprovado e falhas após tentativa seguem retomáveis.
+Regressões locais:1602passaram/14ignoradas; seis casos novos cobrem adaptação,
+tradução e preservação de bloqueios externos. Revisão independente sem achados.

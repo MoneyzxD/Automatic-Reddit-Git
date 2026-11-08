@@ -848,6 +848,13 @@ def run_pipeline(
             ), (), 0, False, "")
             raise (QualityUnavailable if result.status == "unavailable" else QualityRejected)(review) from None
 
+    def context_exceeds_capacity(error):
+        failure = error.review.semantic_failure
+        # Só limite local comprovado antes do envio; HTTP413/429 continuam indisponíveis.
+        return (failure is not None and failure.code == "context_limit"
+                and failure.http_status is None and failure.attempts == 0
+                and failure.context_chars > guardian.max_context_chars)
+
     def failed_review(error):
         nonlocal quality_skipped
         quality_skipped = True
@@ -857,7 +864,8 @@ def run_pipeline(
             source_text=context["source_text"], part_number=context["part_number"],
         )
         dependency = ""
-        if isinstance(error, QualityUnavailable):
+        oversized = isinstance(error, QualityUnavailable) and context_exceeds_capacity(error)
+        if isinstance(error, QualityUnavailable) and not oversized:
             origins = {issue.origin for issue in error.review.issues}
             dependency = ("Tradução" if "translation" in origins else
                           "LanguageTool" if any("LanguageTool" in issue.message for issue in error.review.issues)
@@ -868,7 +876,8 @@ def run_pipeline(
             "profile_confidence": f"{profile.confidence:.2f}",
             "issue_categories": ", ".join(sorted({issue.category for issue in error.review.issues})),
             "quarantine_path": str(quarantine_path.relative_to(BASE_DIR.resolve())),
-            "dependency": dependency, "reason": "Indisponibilidade obrigatória" if dependency else "Conteúdo reprovado",
+            "dependency": dependency, "reason": ("História excede capacidade de revisão; preservada em quarentena"
+                if oversized else "Indisponibilidade obrigatória" if dependency else "Conteúdo reprovado"),
         }, config)
 
     factual_context = ""
@@ -889,6 +898,11 @@ def run_pipeline(
             failed_review(error)
             return
         except QualityUnavailable as error:
+            if context_exceeds_capacity(error):
+                finish_active("rejected", "review_context_capacity")
+                failed_review(error)
+                logger.warning("Fonte preservada em quarentena por limite local de contexto; tentando outra história")
+                return
             finish_active("unavailable", error.review.semantic_failure.code if error.review.semantic_failure else "dependency_unavailable")
             failed_review(error)
             raise
@@ -1118,6 +1132,11 @@ def run_pipeline(
             failed_review(error)
             continue
         except QualityUnavailable as error:
+            if context_exceeds_capacity(error):
+                finish_language(lang, "rejected", "review_context_capacity")
+                failed_review(error)
+                logger.warning("Idioma %s preservado em quarentena por limite local de contexto", lang)
+                continue
             finish_active("unavailable", error.review.semantic_failure.code if error.review.semantic_failure else "dependency_unavailable")
             failed_review(error)
             raise
