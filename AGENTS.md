@@ -8,6 +8,10 @@ divergência está anotada em `KNOWN_ISSUES.md`.
 
 ## O que é este projeto
 
+**Troca de computador:** leia [CONFIGURACAO_NOTEBOOK](docs/CONFIGURACAO_NOTEBOOK.md).
+Notebook usa edição/GitHub e testes no Actions; desktop permite execução mista.
+Para testar sem gerar/publicar, use `testes.yml`; credenciais ficam na nuvem.
+
 Pipeline que transforma histórias do Reddit em vídeos curtos verticais (9:16)
 narrados e legendados, em três idiomas (português, inglês, espanhol), e os
 enfileira para publicação no YouTube/TikTok. Construído para rodar 100% em
